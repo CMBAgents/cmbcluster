@@ -145,6 +145,14 @@ docker-compose up --build
 
 ### Development Commands
 ```bash
+
+# Make the script executable
+chmod +x scripts/build-images.sh
+chmod +x scripts/setup-cluster.sh
+chmod +x scripts/deploy.sh
+chmod +x scripts/cleanup.sh
+chmod +x scripts/local-dev.sh
+
 # Build images
 make build
 
