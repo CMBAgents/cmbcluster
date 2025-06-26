@@ -18,7 +18,7 @@ spec:
         {{- include "cmbcluster.selectorLabels" . | nindent 8 }}
         app.kubernetes.io/component: backend
     spec:
-      serviceAccountName: {{ include "cmbcluster.serviceAccountName" . }}
+      serviceAccountName: {{ include "cmbcluster.fullname" . }}
       securityContext:
         runAsNonRoot: true
         runAsUser: 1000

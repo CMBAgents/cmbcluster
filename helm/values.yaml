@@ -1,9 +1,25 @@
 # Default values for cmbcluster
 global:
   imageRegistry: gcr.io
-  projectId: ""
-  domain: cmbcluster.example.com
+  projectId: cambridge-infosys
+  domain: cmbcluster.34.16.97.178.nip.io
   storageClass: standard-rwo
+
+# Name overrides
+nameOverride: ""
+fullnameOverride: ""
+
+# Service account configuration
+serviceAccount:
+  # Specifies whether a service account should be created
+  create: true
+  # Automatically mount a ServiceAccount's API credentials
+  automount: true
+  # Annotations to add to the service account
+  annotations: {}
+  # The name of the service account to use.
+  # If not set and create is true, a name is generated using the fullname template
+  name: ""
 
 # Backend configuration
 backend:
@@ -19,6 +35,14 @@ backend:
     port: 80
     targetPort: 8000
   
+  # Backend application configuration
+  config:
+    maxInactiveHours: 4
+    maxUserPods: 1
+    tokenExpireHours: 8
+    devMode: false
+    debug: false
+  
   resources:
     requests:
       cpu: 250m
@@ -26,13 +50,6 @@ backend:
     limits:
       cpu: 1000m
       memory: 1Gi
-  
-  config:
-    maxInactiveHours: 4
-    maxUserPods: 1
-    tokenExpireHours: 8
-    devMode: false
-    debug: false
 
 # Frontend configuration
 frontend:
@@ -74,14 +91,8 @@ userEnvironment:
   storage:
     size: 10Gi
     storageClass: standard-rwo
-  
-  # Security context for user pods
-  securityContext:
-    runAsNonRoot: true
-    runAsUser: 1000
-    fsGroup: 1000
 
-# Ingress configuration
+# Ingress configuration (THIS WAS MISSING!)
 ingress:
   enabled: true
   className: nginx
@@ -90,28 +101,19 @@ ingress:
     nginx.ingress.kubernetes.io/ssl-redirect: "true"
     nginx.ingress.kubernetes.io/use-regex: "true"
   
+  hosts:
+    - host: cmbcluster.34.16.97.178.nip.io
+      paths:
+        - path: /
+          pathType: Prefix
+    - host: api.cmbcluster.34.16.97.178.nip.io
+      paths:
+        - path: /
+          pathType: Prefix
+  
   tls:
     enabled: true
     secretName: cmbcluster-tls
-
-# OAuth configuration (set via secrets)
-oauth:
-  google:
-    clientId: ""  # Set via secret
-    clientSecret: ""  # Set via secret
-
-# Security
-security:
-  secretKey: ""  # Set via secret
-  jwtAlgorithm: HS256
-
-# Monitoring
-monitoring:
-  enabled: true
-  prometheus:
-    enabled: true
-  grafana:
-    enabled: true
 
 # Autoscaling
 autoscaling:
@@ -119,7 +121,6 @@ autoscaling:
   minReplicas: 1
   maxReplicas: 10
   targetCPUUtilizationPercentage: 70
-  targetMemoryUtilizationPercentage: 80
 
 # Pod disruption budgets
 podDisruptionBudget:
@@ -129,11 +130,9 @@ podDisruptionBudget:
 # Network policies
 networkPolicy:
   enabled: true
-  
+
 # Resource quotas
 resourceQuota:
   enabled: true
   hard:
-    requests.cpu: "10"
-    requests.memory: 20Gi
-    persistentvolumeclaims: "50"
+    requests
