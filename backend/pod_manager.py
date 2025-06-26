@@ -6,8 +6,8 @@ import structlog
 from kubernetes import client, config
 from kubernetes.client.rest import ApiException
 
-from .config import settings
-from .models import Environment, EnvironmentRequest, PodStatus
+from config import settings
+from models import Environment, EnvironmentRequest, PodStatus
 
 logger = structlog.get_logger()
 

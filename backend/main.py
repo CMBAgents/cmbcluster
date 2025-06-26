@@ -11,13 +11,13 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.security import HTTPBearer
 
-from .auth import get_current_user, oauth_router, get_user_info
-from .config import settings
-from .models import (
+from auth import get_current_user, oauth_router, get_user_info
+from config import settings
+from models import (
     Environment, EnvironmentRequest, ActivityLog, 
     HealthCheck, User, PodStatus
 )
-from .pod_manager import PodManager
+from pod_manager import PodManager
 
 # Configure structured logging
 structlog.configure(
