@@ -2,7 +2,7 @@
 
 Multi-tenant Streamlit Platform for Cosmology Research
 
-![License](https://img.ps://img.elds.io/badged-native, multi-tenant Streamlit platform designed specifically for cosmology research teams. Built on the proven JupyterHub architecture pattern, it provides isolated, persistent research environments for each user while maintaining enterprise-grade security and scalability.
+CMBCluster is a multi-tenant Streamlit platform designed specifically for cosmology research teams. Built on the proven JupyterHub architecture pattern, it provides isolated, persistent research environments for each user while maintaining enterprise-grade security and scalability.
 
 ### Architecture
 
