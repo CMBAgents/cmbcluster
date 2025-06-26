@@ -1,18 +1,15 @@
-version: '3.8'
-
 services:
   backend:
-    build: 
-      context: ./backend
-      dockerfile: Dockerfile
+    build: ./backend
     ports:
       - "8000:8000"
     environment:
       - DEV_MODE=true
       - DEBUG=true
+      - MOCK_KUBERNETES=true  # Add this line
       - API_URL=http://localhost:8000
       - FRONTEND_URL=http://localhost:8501
-      - SECRET_KEY=dev-secret-key-change-this
+      - SECRET_KEY=${SECRET_KEY:-dev-secret-key}
       - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
       - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET}
     volumes:
@@ -21,9 +18,7 @@ services:
     restart: unless-stopped
 
   frontend:
-    build: 
-      context: ./frontend
-      dockerfile: Dockerfile
+    build: ./frontend
     ports:
       - "8501:8501"
     environment:
@@ -36,9 +31,7 @@ services:
     restart: unless-stopped
 
   user-env:
-    build: 
-      context: ./user-environment
-      dockerfile: Dockerfile
+    build: ./user-environment
     ports:
       - "8502:8501"
     environment:

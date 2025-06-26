@@ -8,7 +8,7 @@ help: ## Show this help message
 
 dev: ## Start local development environment
 	@echo "Starting CMBCluster development environment..."
-	docker-compose up --build
+	docker compose up --build
 
 build: ## Build all Docker images
 	@echo "Building CMBCluster images..."
