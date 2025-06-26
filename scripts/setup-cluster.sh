@@ -13,11 +13,24 @@ if [ -z "$PROJECT_ID" ]; then
     exit 1
 fi
 
-echo "🚀 Setting up CMBCluster infrastructure..."
+echo "🚀 Setting up CMBCluster private GKE infrastructure..."
 echo "Project: $PROJECT_ID"
 echo "Cluster: $CLUSTER_NAME"
 echo "Region: $REGION"
 echo "Zone: $ZONE"
+
+# Get current external IP for master authorized networks
+echo "🌐 Getting current external IP for authorized networks..."
+MY_IP=$(curl -s ifconfig.me)
+echo "Current IP: $MY_IP"
+
+# Set up network variables
+NETWORK_NAME="${CLUSTER_NAME}-network"
+SUBNET_NAME="${CLUSTER_NAME}-subnet"
+PODS_RANGE="${CLUSTER_NAME}-pods"
+SERVICES_RANGE="${CLUSTER_NAME}-services"
+ROUTER_NAME="${CLUSTER_NAME}-nat-router"
+NAT_NAME="${CLUSTER_NAME}-nat-config"
 
 # Set the default project
 gcloud config set project $PROJECT_ID
@@ -28,15 +41,67 @@ gcloud services enable container.googleapis.com
 gcloud services enable compute.googleapis.com
 gcloud services enable storage.googleapis.com
 gcloud services enable cloudbuild.googleapis.com
-gcloud services enable artifactregistry.googleapis.com
 
-# Create GKE cluster
-echo "🏗️ Creating GKE cluster..."
-if ! gcloud container clusters describe $CLUSTER_NAME --zone=$ZONE >/dev/null 2>&1; then
+# Create VPC network if not exists
+if ! gcloud compute networks describe $NETWORK_NAME --project=$PROJECT_ID >/dev/null 2>&1; then
+    echo "🌐 Creating VPC network $NETWORK_NAME..."
+    gcloud compute networks create $NETWORK_NAME \
+        --subnet-mode=custom \
+        --project=$PROJECT_ID
+else
+    echo "✅ VPC network $NETWORK_NAME already exists"
+fi
+
+# Create subnet with secondary ranges if not exists
+if ! gcloud compute networks subnets describe $SUBNET_NAME --region=$REGION --project=$PROJECT_ID >/dev/null 2>&1; then
+    echo "🔗 Creating subnet $SUBNET_NAME with secondary ranges..."
+    gcloud compute networks subnets create $SUBNET_NAME \
+        --network=$NETWORK_NAME \
+        --region=$REGION \
+        --range=10.0.0.0/16 \
+        --secondary-range $PODS_RANGE=10.1.0.0/16,$SERVICES_RANGE=10.2.0.0/20 \
+        --enable-private-ip-google-access \
+        --project=$PROJECT_ID
+else
+    echo "✅ Subnet $SUBNET_NAME already exists"
+fi
+
+# Create firewall rules for internal communication
+echo "🔥 Creating firewall rules..."
+
+# Allow internal communication within the subnet
+gcloud compute firewall-rules create ${CLUSTER_NAME}-allow-internal \
+    --network=$NETWORK_NAME \
+    --allow=tcp,udp,icmp \
+    --source-ranges=10.0.0.0/8 \
+    --project=$PROJECT_ID \
+    --quiet || echo "Firewall rule already exists"
+
+# Allow Google health checks
+gcloud compute firewall-rules create ${CLUSTER_NAME}-allow-health-checks \
+    --network=$NETWORK_NAME \
+    --allow=tcp \
+    --source-ranges=130.211.0.0/22,35.191.0.0/16 \
+    --target-tags=gke-node \
+    --project=$PROJECT_ID \
+    --quiet || echo "Health check firewall rule already exists"
+
+# Create private GKE cluster
+echo "🏗️ Creating private GKE cluster..."
+if ! gcloud container clusters describe $CLUSTER_NAME --zone=$ZONE --project=$PROJECT_ID >/dev/null 2>&1; then
     gcloud container clusters create $CLUSTER_NAME \
+        --project=$PROJECT_ID \
         --zone=$ZONE \
+        --network=$NETWORK_NAME \
+        --subnetwork=$SUBNET_NAME \
+        --cluster-secondary-range-name=$PODS_RANGE \
+        --services-secondary-range-name=$SERVICES_RANGE \
+        --enable-ip-alias \
+        --enable-private-nodes \
+        --master-ipv4-cidr=172.16.0.0/28 \
+        --enable-master-authorized-networks \
+        --master-authorized-networks $MY_IP/32 \
         --num-nodes=3 \
-        --node-locations=$ZONE \
         --machine-type=n1-standard-2 \
         --disk-size=50GB \
         --disk-type=pd-standard \
@@ -46,7 +111,6 @@ if ! gcloud container clusters describe $CLUSTER_NAME --zone=$ZONE >/dev/null 2>
         --min-nodes=1 \
         --max-nodes=10 \
         --enable-network-policy \
-        --enable-ip-alias \
         --workload-pool=$PROJECT_ID.svc.id.goog \
         --addons=HorizontalPodAutoscaling,HttpLoadBalancing,GcePersistentDiskCsiDriver \
         --logging=SYSTEM,WORKLOAD \
@@ -55,9 +119,39 @@ else
     echo "✅ Cluster $CLUSTER_NAME already exists"
 fi
 
+# Create Cloud Router for NAT if not exists
+if ! gcloud compute routers describe $ROUTER_NAME --region=$REGION --project=$PROJECT_ID >/dev/null 2>&1; then
+    echo "🔄 Creating Cloud Router $ROUTER_NAME..."
+    gcloud compute routers create $ROUTER_NAME \
+        --network=$NETWORK_NAME \
+        --region=$REGION \
+        --project=$PROJECT_ID
+else
+    echo "✅ Cloud Router $ROUTER_NAME already exists"
+fi
+
+# Create Cloud NAT if not exists
+if ! gcloud compute routers nats describe $NAT_NAME --router=$ROUTER_NAME --router-region=$REGION --project=$PROJECT_ID >/dev/null 2>&1; then
+    echo "🌍 Creating Cloud NAT $NAT_NAME..."
+    gcloud compute routers nats create $NAT_NAME \
+        --router=$ROUTER_NAME \
+        --router-region=$REGION \
+        --nat-all-subnet-ip-ranges \
+        --auto-allocate-nat-external-ips \
+        --project=$PROJECT_ID
+else
+    echo "✅ Cloud NAT $NAT_NAME already exists"
+fi
+
 # Get cluster credentials
 echo "🔑 Getting cluster credentials..."
-gcloud container clusters get-credentials $CLUSTER_NAME --zone=$ZONE
+gcloud container clusters get-credentials $CLUSTER_NAME \
+    --zone=$ZONE \
+    --project=$PROJECT_ID
+
+# Verify cluster access
+echo "🔍 Verifying cluster access..."
+kubectl get nodes
 
 # Install NGINX Ingress Controller
 echo "🌐 Installing NGINX Ingress Controller..."
@@ -105,8 +199,8 @@ else
     echo "✅ cert-manager already installed"
 fi
 
-# Create storage class if needed
-echo "💾 Setting up storage..."
+# Create storage class for CMBCluster
+echo "💾 Setting up storage classes..."
 kubectl apply -f - <<EOF
 apiVersion: storage.k8s.io/v1
 kind: StorageClass
@@ -121,22 +215,23 @@ reclaimPolicy: Delete
 volumeBindingMode: WaitForFirstConsumer
 EOF
 
-# Deploy Terraform infrastructure if exists
-if [ -d "terraform" ]; then
-    echo "🏗️ Deploying Terraform infrastructure..."
-    cd terraform
-    terraform init
-    terraform plan -var="project_id=$PROJECT_ID"
-    terraform apply -var="project_id=$PROJECT_ID" -auto-approve
-    cd ..
-fi
-
-echo "✅ Cluster setup complete!"
+echo "✅ Private CMBCluster infrastructure setup complete!"
 echo ""
-echo "📋 Next steps:"
+echo "📋 Summary:"
+echo "- Network: $NETWORK_NAME"
+echo "- Subnet: $SUBNET_NAME"
+echo "- Cluster: $CLUSTER_NAME"
+echo "- Authorized IP: $MY_IP/32"
+echo "- Master CIDR: 172.16.0.0/28"
+echo "- Pods CIDR: 10.1.0.0/16"
+echo "- Services CIDR: 10.2.0.0/20"
+echo ""
+echo "📝 Next steps:"
 echo "1. Configure your domain DNS to point to the ingress IP"
 echo "2. Set up OAuth credentials in Google Cloud Console"
 echo "3. Run: ./scripts/deploy.sh $PROJECT_ID your-domain.com"
 echo ""
-echo "🔍 Get ingress IP:"
-echo "kubectl get service ingress-nginx-controller -n ingress-nginx"
+echo "🔍 Useful commands:"
+echo "kubectl get nodes"
+echo "kubectl get service -n ingress-nginx"
+echo "gcloud container clusters describe $CLUSTER_NAME --zone=$ZONE"
