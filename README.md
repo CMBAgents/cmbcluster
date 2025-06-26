@@ -101,7 +101,7 @@ vim .env
 
 Required environment variables:
 ```bash
-PROJECT_ID=your-gcp-project-id
+PROJECT_ID=cambridge-infosys
 BASE_DOMAIN=cmbcluster.yourdomain.com
 GOOGLE_CLIENT_ID=your-oauth-client-id
 GOOGLE_CLIENT_SECRET=your-oauth-secret
