@@ -1,7 +1,7 @@
 import requests
 import streamlit as st
 from typing import Dict, List, Optional, Any
-from ..config import settings
+from config import settings
 
 class CMBClusterAPIClient:
     """API client for CMBCluster backend"""

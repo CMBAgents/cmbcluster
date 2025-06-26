@@ -3,7 +3,8 @@ import jwt
 import time
 from datetime import datetime
 from typing import Optional, Dict
-from ..config import settings
+from config import settings
+
 
 def check_authentication() -> bool:
     """Check if user is authenticated"""
