@@ -1,0 +1,14 @@
+streamlit==1.28.1
+numpy==1.24.3
+scipy==1.11.4
+matplotlib==3.8.2
+pandas==2.1.3
+plotly==5.17.0
+seaborn==0.13.0
+jupyter==1.0.0
+ipython==8.17.2
+astropy==5.3.4
+healpy==1.16.6
+camb==1.4.4
+requests==2.31.0
+sympy==1.12

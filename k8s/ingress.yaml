@@ -1,0 +1,98 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: cmbcluster-ingress
+  namespace: cmbcluster
+  annotations:
+    kubernetes.io/ingress.class: "nginx"
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/use-regex: "true"
+    nginx.ingress.kubernetes.io/rewrite-target: /$2
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+    nginx.ingress.kubernetes.io/server-snippet: |
+      location ~* "^/user/([^/]+)(/.*)?$" {
+        set $user_id $1;
+        set $path $2;
+        proxy_pass http://service-$user_id.cmbcluster.svc.cluster.local$path;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Forwarded-Host $host;
+        proxy_set_header X-Forwarded-Port $server_port;
+      }
+spec:
+  tls:
+  - hosts:
+    - "DOMAIN"
+    - "api.DOMAIN"
+    - "*.DOMAIN"
+    secretName: cmbcluster-tls
+  rules:
+  # Frontend
+  - host: "DOMAIN"
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: cmbcluster-frontend-service
+            port:
+              number: 80
+  
+  # API Backend  
+  - host: "api.DOMAIN"
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: cmbcluster-backend-service
+            port:
+              number: 80
+  
+  # User environments - wildcard subdomain routing
+  - host: "*.DOMAIN"
+    http:
+      paths:
+      - path: /(.*)
+        pathType: Prefix
+        backend:
+          service:
+            name: cmbcluster-user-router
+            port:
+              number: 80
+---
+# Additional ingress for user environment routing
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: cmbcluster-user-ingress
+  namespace: cmbcluster
+  annotations:
+    kubernetes.io/ingress.class: "nginx"
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/configuration-snippet: |
+      set $user_id "";
+      if ($host ~* "^([^.]+)\.DOMAIN$") {
+        set $user_id $1;
+      }
+      proxy_pass http://service-$user_id.cmbcluster.svc.cluster.local;
+spec:
+  tls:
+  - hosts:
+    - "*.DOMAIN"
+    secretName: cmbcluster-user-tls
+  rules:
+  - host: "*.DOMAIN"
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: default-backend
+            port:
+              number: 80

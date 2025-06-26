@@ -1,0 +1,139 @@
+# Default values for cmbcluster
+global:
+  imageRegistry: gcr.io
+  projectId: ""
+  domain: cmbcluster.example.com
+  storageClass: standard-rwo
+
+# Backend configuration
+backend:
+  image:
+    repository: cmbcluster-backend
+    tag: latest
+    pullPolicy: Always
+  
+  replicaCount: 2
+  
+  service:
+    type: ClusterIP
+    port: 80
+    targetPort: 8000
+  
+  resources:
+    requests:
+      cpu: 250m
+      memory: 512Mi
+    limits:
+      cpu: 1000m
+      memory: 1Gi
+  
+  config:
+    maxInactiveHours: 4
+    maxUserPods: 1
+    tokenExpireHours: 8
+    devMode: false
+    debug: false
+
+# Frontend configuration
+frontend:
+  image:
+    repository: cmbcluster-frontend
+    tag: latest
+    pullPolicy: Always
+  
+  replicaCount: 2
+  
+  service:
+    type: ClusterIP
+    port: 80
+    targetPort: 8501
+  
+  resources:
+    requests:
+      cpu: 250m
+      memory: 512Mi
+    limits:
+      cpu: 1000m
+      memory: 1Gi
+
+# User environment configuration
+userEnvironment:
+  image:
+    repository: cmbcluster-user-env
+    tag: latest
+    pullPolicy: Always
+  
+  defaultResources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 2000m
+      memory: 4Gi
+  
+  storage:
+    size: 10Gi
+    storageClass: standard-rwo
+  
+  # Security context for user pods
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 1000
+    fsGroup: 1000
+
+# Ingress configuration
+ingress:
+  enabled: true
+  className: nginx
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/use-regex: "true"
+  
+  tls:
+    enabled: true
+    secretName: cmbcluster-tls
+
+# OAuth configuration (set via secrets)
+oauth:
+  google:
+    clientId: ""  # Set via secret
+    clientSecret: ""  # Set via secret
+
+# Security
+security:
+  secretKey: ""  # Set via secret
+  jwtAlgorithm: HS256
+
+# Monitoring
+monitoring:
+  enabled: true
+  prometheus:
+    enabled: true
+  grafana:
+    enabled: true
+
+# Autoscaling
+autoscaling:
+  enabled: true
+  minReplicas: 1
+  maxReplicas: 10
+  targetCPUUtilizationPercentage: 70
+  targetMemoryUtilizationPercentage: 80
+
+# Pod disruption budgets
+podDisruptionBudget:
+  enabled: true
+  minAvailable: 1
+
+# Network policies
+networkPolicy:
+  enabled: true
+  
+# Resource quotas
+resourceQuota:
+  enabled: true
+  hard:
+    requests.cpu: "10"
+    requests.memory: 20Gi
+    persistentvolumeclaims: "50"

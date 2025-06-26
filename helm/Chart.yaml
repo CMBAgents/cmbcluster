@@ -1,0 +1,19 @@
+apiVersion: v2
+name: cmbcluster
+description: Multi-tenant Streamlit Platform for Cosmology Research
+type: application
+version: 1.0.0
+appVersion: "1.0.0"
+home: https://github.com/archetana/cmbcluster
+sources:
+  - https://github.com/archetana/cmbcluster
+maintainers:
+  - name: CMBCluster Team
+    email: admin@cmbcluster.io
+keywords:
+  - streamlit
+  - cosmology
+  - research
+  - kubernetes
+  - multi-tenant
+dependencies: []

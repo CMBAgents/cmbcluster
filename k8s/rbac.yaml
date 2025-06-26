@@ -1,0 +1,63 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: cmbcluster-sa
+  namespace: cmbcluster
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: cmbcluster-user-sa
+  namespace: cmbcluster
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: cmbcluster-pod-manager
+rules:
+- apiGroups: [""]
+  resources: ["pods", "services", "persistentvolumeclaims"]
+  verbs: ["create", "delete", "get", "list", "patch", "update", "watch"]
+- apiGroups: ["apps"]
+  resources: ["deployments"]
+  verbs: ["create", "delete", "get", "list", "patch", "update", "watch"]
+- apiGroups: ["networking.k8s.io"]
+  resources: ["ingresses"]
+  verbs: ["create", "delete", "get", "list", "patch", "update", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: cmbcluster-pod-manager-binding
+subjects:
+- kind: ServiceAccount
+  name: cmbcluster-sa
+  namespace: cmbcluster
+roleRef:
+  kind: ClusterRole
+  name: cmbcluster-pod-manager
+  apiGroup: rbac.authorization.k8s.io
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  namespace: cmbcluster
+  name: cmbcluster-user-role
+rules:
+- apiGroups: [""]
+  resources: ["pods", "persistentvolumeclaims"]
+  verbs: ["get", "list"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: cmbcluster-user-binding
+  namespace: cmbcluster
+subjects:
+- kind: ServiceAccount
+  name: cmbcluster-user-sa
+  namespace: cmbcluster
+roleRef:
+  kind: Role
+  name: cmbcluster-user-role
+  apiGroup: rbac.authorization.k8s.io

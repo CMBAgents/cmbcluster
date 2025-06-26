@@ -1,0 +1,54 @@
+version: '3.8'
+
+services:
+  backend:
+    build: 
+      context: ./backend
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    environment:
+      - DEV_MODE=true
+      - DEBUG=true
+      - API_URL=http://localhost:8000
+      - FRONTEND_URL=http://localhost:8501
+      - SECRET_KEY=dev-secret-key-change-this
+      - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
+      - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET}
+    volumes:
+      - ./backend:/app
+      - ~/.kube:/root/.kube:ro
+    restart: unless-stopped
+
+  frontend:
+    build: 
+      context: ./frontend
+      dockerfile: Dockerfile
+    ports:
+      - "8501:8501"
+    environment:
+      - DEV_MODE=true
+      - API_URL=http://backend:8000
+    volumes:
+      - ./frontend:/app
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+  user-env:
+    build: 
+      context: ./user-environment
+      dockerfile: Dockerfile
+    ports:
+      - "8502:8501"
+    environment:
+      - USER_ID=dev-user
+      - USER_EMAIL=dev@cmbcluster.local
+      - HUB_URL=http://backend:8000
+    volumes:
+      - ./user-environment:/app
+    restart: unless-stopped
+
+networks:
+  default:
+    name: cmbcluster-network

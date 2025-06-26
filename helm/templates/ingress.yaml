@@ -1,0 +1,96 @@
+{{- if .Values.ingress.enabled -}}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ include "cmbcluster.fullname" . }}-ingress
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "cmbcluster.labels" . | nindent 4 }}
+  annotations:
+    kubernetes.io/ingress.class: {{ .Values.ingress.className }}
+    {{- with .Values.ingress.annotations }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+spec:
+  {{- if .Values.ingress.tls.enabled }}
+  tls:
+  - hosts:
+    - "{{ .Values.global.domain }}"
+    - "api.{{ .Values.global.domain }}"
+    - "*.{{ .Values.global.domain }}"
+    secretName: {{ .Values.ingress.tls.secretName }}
+  {{- end }}
+  rules:
+  # Main frontend
+  - host: "{{ .Values.global.domain }}"
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: {{ include "cmbcluster.fullname" . }}-frontend
+            port:
+              number: {{ .Values.frontend.service.port }}
+  
+  # API backend
+  - host: "api.{{ .Values.global.domain }}"
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: {{ include "cmbcluster.fullname" . }}-backend
+            port:
+              number: {{ .Values.backend.service.port }}
+{{- end }}
+---
+{{- if .Values.ingress.enabled }}
+# User environment ingress with wildcard subdomain
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ include "cmbcluster.fullname" . }}-user-ingress
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "cmbcluster.labels" . | nindent 4 }}
+  annotations:
+    kubernetes.io/ingress.class: {{ .Values.ingress.className }}
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/server-snippet: |
+      # Extract user ID from subdomain
+      set $user_id "";
+      if ($host ~* "^([^.]+)\.{{ .Values.global.domain | replace "." "\\." }}$") {
+        set $user_id $1;
+      }
+      
+      # Route to user service
+      location / {
+        proxy_pass http://service-$user_id.{{ .Release.Namespace }}.svc.cluster.local;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Forwarded-Host $host;
+        proxy_set_header X-Forwarded-Port $server_port;
+      }
+spec:
+  {{- if .Values.ingress.tls.enabled }}
+  tls:
+  - hosts:
+    - "*.{{ .Values.global.domain }}"
+    secretName: {{ include "cmbcluster.fullname" . }}-user-tls
+  {{- end }}
+  rules:
+  - host: "*.{{ .Values.global.domain }}"
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: {{ include "cmbcluster.fullname" . }}-default-backend
+            port:
+              number: 80
+{{- end }}

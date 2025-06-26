@@ -1,0 +1,117 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cmbcluster-backend
+  namespace: cmbcluster
+  labels:
+    app: cmbcluster-backend
+    component: backend
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: cmbcluster-backend
+  template:
+    metadata:
+      labels:
+        app: cmbcluster-backend
+        component: backend
+    spec:
+      serviceAccountName: cmbcluster-sa
+      containers:
+      - name: backend
+        image: gcr.io/PROJECT_ID/cmbcluster-backend:latest
+        ports:
+        - containerPort: 8000
+          name: http
+        env:
+        - name: PROJECT_ID
+          valueFrom:
+            configMapKeyRef:
+              name: cmbcluster-config
+              key: PROJECT_ID
+        - name: BASE_DOMAIN
+          valueFrom:
+            configMapKeyRef:
+              name: cmbcluster-config
+              key: BASE_DOMAIN
+        - name: API_URL
+          valueFrom:
+            configMapKeyRef:
+              name: cmbcluster-config
+              key: API_URL
+        - name: FRONTEND_URL
+          valueFrom:
+            configMapKeyRef:
+              name: cmbcluster-config
+              key: FRONTEND_URL
+        - name: NAMESPACE
+          valueFrom:
+            configMapKeyRef:
+              name: cmbcluster-config
+              key: NAMESPACE
+        - name: REGISTRY_URL
+          valueFrom:
+            configMapKeyRef:
+              name: cmbcluster-config
+              key: REGISTRY_URL
+        - name: GOOGLE_CLIENT_ID
+          valueFrom:
+            secretKeyRef:
+              name: cmbcluster-secrets
+              key: google-client-id
+        - name: GOOGLE_CLIENT_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: cmbcluster-secrets
+              key: google-client-secret
+        - name: SECRET_KEY
+          valueFrom:
+            secretKeyRef:
+              name: cmbcluster-secrets
+              key: secret-key
+        resources:
+          requests:
+            cpu: 250m
+            memory: 512Mi
+          limits:
+            cpu: 1000m
+            memory: 1Gi
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          initialDelaySeconds: 5
+          periodSeconds: 5
+          timeoutSeconds: 5
+        securityContext:
+          runAsNonRoot: true
+          runAsUser: 1000
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: cmbcluster-backend-service
+  namespace: cmbcluster
+  labels:
+    app: cmbcluster-backend
+spec:
+  type: ClusterIP
+  ports:
+  - port: 80
+    targetPort: 8000
+    protocol: TCP
+    name: http
+  selector:
+    app: cmbcluster-backend
