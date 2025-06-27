@@ -3,15 +3,14 @@ services:
     build: ./backend
     ports:
       - "8000:8000"
+    # Loads sensitive variables from the .env file in the project root
+    env_file: .env
     environment:
       - DEV_MODE=true
       - DEBUG=true
-      - MOCK_KUBERNETES=true  # Add this line
+      - MOCK_KUBERNETES=true
       - API_URL=http://localhost:8000
       - FRONTEND_URL=http://localhost:8501
-      - SECRET_KEY=${SECRET_KEY:-dev-secret-key}
-      - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
-      - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET}
     volumes:
       - ./backend:/app
       - ~/.kube:/root/.kube:ro

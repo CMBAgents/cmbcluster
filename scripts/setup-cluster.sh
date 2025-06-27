@@ -1,23 +1,45 @@
 #!/bin/bash
 set -e
 
-# Configuration
-PROJECT_ID=${1:-$(gcloud config get-value project)}
-CLUSTER_NAME=${2:-"cmbcluster"}
-REGION=${3:-"us-central1"}
-ZONE=${4:-"us-central1-a"}
+# --- Configuration Loading ---
+# 1. Load defaults from .env file if it exists.
+# 2. Allow overrides from command-line arguments.
+# 3. Set final defaults for any remaining unset variables.
 
+if [ -f .env ]; then
+    echo "📝 Loading environment variables from .env file..."
+    set -o allexport
+    source .env
+    set +o allexport
+fi
+
+# --- Variable Definitions & Precedence ---
+# Command-line arguments override .env file values.
+PROJECT_ID=${1:-$PROJECT_ID}
+CLUSTER_NAME=${2:-$CLUSTER_NAME}
+REGION=${3:-$REGION}
+ZONE=${4:-$ZONE}
+
+# Set final defaults if variables are still not set
+PROJECT_ID=${PROJECT_ID:-$(gcloud config get-value project)}
+CLUSTER_NAME=${CLUSTER_NAME:-"cmbcluster"}
+REGION=${REGION:-"us-central1"}
+ZONE=${ZONE:-"${ZONE}"}
+
+# Validate required variables
 if [ -z "$PROJECT_ID" ]; then
-    echo "Error: PROJECT_ID is required"
-    echo "Usage: $0 <PROJECT_ID> [CLUSTER_NAME] [REGION] [ZONE]"
+    echo "Error: PROJECT_ID is required. Set it in .env or pass as an argument."
+    echo "Usage: $0 [PROJECT_ID] [CLUSTER_NAME] [REGION] [ZONE]"
     exit 1
 fi
 
 echo "🚀 Setting up CMBCluster private GKE infrastructure..."
-echo "Project: $PROJECT_ID"
-echo "Cluster: $CLUSTER_NAME"
-echo "Region: $REGION"
-echo "Zone: $ZONE"
+echo "--------------------------------------------------"
+echo "Project:      $PROJECT_ID"
+echo "Cluster:      $CLUSTER_NAME"
+echo "Region:       $REGION"
+echo "Zone:         $ZONE"
+echo "--------------------------------------------------"
 
 # Get current external IP for master authorized networks
 echo "🌐 Getting current external IP for authorized networks..."
@@ -217,7 +239,13 @@ if ! kubectl get namespace cert-manager >/dev/null 2>&1; then
         --for=condition=ready pod \
         --selector=app.kubernetes.io/instance=cert-manager \
         --timeout=300s
-        
+
+    if [ -z "$LETSENCRYPT_EMAIL" ] || [ "$LETSENCRYPT_EMAIL" == "your-email@example.com" ]; then
+        echo "❌ Error: LETSENCRYPT_EMAIL is not set or is the default value."
+        echo "Please set a valid email in your .env file for Let's Encrypt notifications."
+        exit 1
+    fi
+
     # Create ClusterIssuer for Let's Encrypt
     cat <<EOF | kubectl apply -f -
 apiVersion: cert-manager.io/v1
@@ -227,8 +255,7 @@ metadata:
 spec:
   acme:
     server: https://acme-v02.api.letsencrypt.org/directory
-    # IMPORTANT: Replace with a real email address for Let's Encrypt notifications
-    email: your-email@example.com
+    email: ${LETSENCRYPT_EMAIL}
     privateKeySecretRef: # This secret will be created by cert-manager
       name: letsencrypt-prod
     solvers:

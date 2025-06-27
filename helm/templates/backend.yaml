@@ -31,44 +31,33 @@ spec:
         - name: http
           containerPort: 8000
           protocol: TCP
+        # Mounts non-sensitive configuration from values passed by deploy.sh
         env:
         - name: PROJECT_ID
-          value: "{{ .Values.global.projectId }}"
-        - name: BASE_DOMAIN
-          value: "{{ .Values.global.domain }}"
+          value: {{ .Values.global.projectId | quote }}
         - name: API_URL
-          value: "https://api.{{ .Values.global.domain }}"
+          value: {{ .Values.backend.config.apiUrl | quote }}
         - name: FRONTEND_URL
-          value: "https://{{ .Values.global.domain }}"
+          value: {{ .Values.backend.config.frontendUrl | quote }}
         - name: NAMESPACE
-          value: "{{ .Release.Namespace }}"
-        - name: REGISTRY_URL
-          value: "{{ .Values.global.imageRegistry }}/{{ .Values.global.projectId }}"
-        - name: MAX_INACTIVE_HOURS
-          value: "{{ .Values.backend.config.maxInactiveHours }}"
-        - name: MAX_USER_PODS
-          value: "{{ .Values.backend.config.maxUserPods }}"
+          value: {{ .Release.Namespace | quote }}
+        - name: JWT_ALGORITHM
+          value: {{ .Values.backend.config.jwtAlgorithm | quote }}
         - name: TOKEN_EXPIRE_HOURS
-          value: "{{ .Values.backend.config.tokenExpireHours }}"
+          value: {{ .Values.backend.config.tokenExpireHours | quote }}
+        - name: MAX_INACTIVE_HOURS
+          value: {{ .Values.backend.config.maxInactiveHours | quote }}
+        - name: MAX_USER_PODS
+          value: {{ .Values.backend.config.maxUserPods | quote }}
         - name: DEV_MODE
-          value: "{{ .Values.backend.config.devMode }}"
+          value: {{ .Values.backend.config.devMode | quote }}
         - name: DEBUG
-          value: "{{ .Values.backend.config.debug }}"
-        - name: GOOGLE_CLIENT_ID
-          valueFrom:
-            secretKeyRef:
-              name: {{ include "cmbcluster.fullname" . }}-secrets
-              key: google-client-id
-        - name: GOOGLE_CLIENT_SECRET
-          valueFrom:
-            secretKeyRef:
-              name: {{ include "cmbcluster.fullname" . }}-secrets
-              key: google-client-secret
-        - name: SECRET_KEY
-          valueFrom:
-            secretKeyRef:
-              name: {{ include "cmbcluster.fullname" . }}-secrets
-              key: secret-key
+          value: {{ .Values.backend.config.debug | quote }}
+        # Mounts sensitive values (SECRET_KEY, GOOGLE_CLIENT_ID, etc.)
+        # from the Kubernetes secret created by deploy.sh.
+        envFrom:
+        - secretRef:
+            name: {{ .Values.backend.secretName }}
         livenessProbe:
           httpGet:
             path: /health
@@ -108,7 +97,8 @@ spec:
   type: {{ .Values.backend.service.type }}
   ports:
   - port: {{ .Values.backend.service.port }}
-    targetPort: {{ .Values.backend.service.targetPort }}
+    # Reference the named port in the deployment for better maintainability
+    targetPort: http
     protocol: TCP
     name: http
   selector:

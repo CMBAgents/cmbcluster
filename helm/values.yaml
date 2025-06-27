@@ -2,8 +2,11 @@
 # This is a YAML-formatted file.
 
 global:
+  # IMPORTANT: These are placeholder values. They MUST be overridden by the deploy.sh script.
   projectId: "your-gcp-project-id"
   domain: "cmbcluster.example.com"
+  imageRegistry: "us-central1-docker.pkg.dev/your-gcp-project-id/cmbcluster-images"
+  imageTag: "latest"
 
 # Workload Identity configuration
 workloadIdentity:
@@ -19,19 +22,59 @@ serviceAccount:
   name: "cmbcluster-ksa"
 
 backend:
+  service:
+    type: ClusterIP
+    port: 8000
+    targetPort: http
+  replicaCount: 1
   image:
-    repository: gcr.io/your-gcp-project-id/cmbcluster-backend
+    repository: us-central1-docker.pkg.dev/your-gcp-project-id/cmbcluster-images/cmbcluster-backend
     tag: "latest"
     pullPolicy: IfNotPresent
+  config:
+    apiUrl: "https://api.cmbcluster.example.com"
+    frontendUrl: "https://cmbcluster.example.com"
+    googleClientId: ""
+    jwtAlgorithm: "HS256"
+    tokenExpireHours: 8
+    maxInactiveHours: 4
+    maxUserPods: 1
+    devMode: false
+    debug: false
+  # The name of the Kubernetes secret containing sensitive environment variables
+  # like SECRET_KEY and GOOGLE_CLIENT_SECRET, created by deploy.sh.
+  secretName: "cmbcluster-backend-secrets"
+
+ingress:
+  # If true, an Ingress resource will be created to expose the services.
+  enabled: true
+  # The class of the Ingress controller. For GKE, use "gce". For others (e.g., NGINX), change accordingly.
+  className: "gce"
+  # The email address for Let's Encrypt registration. Required for automatic SSL.
+  letsencryptEmail: "22yash.tiwari@gmail.com"
+  tls:
+    # If true, TLS will be configured for the Ingress using cert-manager.
+    enabled: true
+    # The name of the secret that will store the TLS certificate.
+    # This is typically overridden by the deploy script (e.g., to "$DOMAIN-tls").
+    secretName: "cmbcluster-tls"
+    # The name of the cert-manager ClusterIssuer to use.
+    clusterIssuer: "letsencrypt-prod"
+
 
 frontend:
+  service:
+    type: ClusterIP
+    port: 8501
+    targetPort: streamlit
   image:
-    repository: gcr.io/your-gcp-project-id/cmbcluster-frontend
+    repository: us-central1-docker.pkg.dev/your-gcp-project-id/cmbcluster-images/cmbcluster-frontend
     tag: "latest"
     pullPolicy: IfNotPresent
+  replicaCount: 1
 
 userEnvironment:
   image:
-    repository: gcr.io/your-gcp-project-id/cmbcluster-user-env
+    repository: us-central1-docker.pkg.dev/your-gcp-project-id/cmbcluster-images/cmbcluster-user-env
     tag: "latest"
     pullPolicy: IfNotPresent
