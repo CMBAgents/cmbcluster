@@ -18,13 +18,14 @@ spec:
         {{- include "cmbcluster.selectorLabels" . | nindent 8 }}
         app.kubernetes.io/component: frontend
     spec:
+      serviceAccountName: {{ .Values.serviceAccount.name }}
       securityContext:
         runAsNonRoot: true
         runAsUser: 1000
         fsGroup: 1000
       containers:
       - name: frontend
-        image: "{{ .Values.global.imageRegistry }}/{{ .Values.global.projectId }}/{{ .Values.frontend.image.repository }}:{{ .Values.frontend.image.tag }}"
+        image: "{{ .Values.frontend.image.repository }}:{{ .Values.frontend.image.tag }}"
         imagePullPolicy: {{ .Values.frontend.image.pullPolicy }}
         ports:
         - name: streamlit

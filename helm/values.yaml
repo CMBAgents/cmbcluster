@@ -1,134 +1,37 @@
-# Default values for cmbcluster
+# Default values for cmbcluster.
+# This is a YAML-formatted file.
+
 global:
-  imageRegistry: gcr.io
-  projectId: cambridge-infosys
-  domain: cmbcluster.34.16.97.178.nip.io
-  storageClass: standard-rwo
-  serviceAccount: 705834355085-compute@developer.gserviceaccount.com
+  projectId: "your-gcp-project-id"
+  domain: "cmbcluster.example.com"
 
-# Name overrides
-nameOverride: ""
-fullnameOverride: ""
+# Workload Identity configuration
+workloadIdentity:
+  # The email of the Google Service Account to be impersonated by the pods.
+  # This is set by the deploy.sh script.
+  gsaEmail: ""
 
-# Service account configuration
+# Kubernetes Service Account configuration
 serviceAccount:
+  # Specifies whether a service account should be created
   create: true
-  automount: true
-  annotations: {}
-  name: ""
+  # The name of the service account to use.
+  name: "cmbcluster-ksa"
 
-# Backend configuration
 backend:
   image:
-    repository: cmbcluster-backend
-    tag: latest
-    pullPolicy: Always
-  
-  replicaCount: 2
-  
-  service:
-    type: ClusterIP
-    port: 80
-    targetPort: 8000
-  
-  # Backend application configuration
-  config:
-    maxInactiveHours: 4
-    maxUserPods: 1
-    tokenExpireHours: 8
-    devMode: false
-    debug: false
-  
-  resources:
-    requests:
-      cpu: 250m
-      memory: 512Mi
-    limits:
-      cpu: 1000m
-      memory: 1Gi
+    repository: gcr.io/your-gcp-project-id/cmbcluster-backend
+    tag: "latest"
+    pullPolicy: IfNotPresent
 
-# Frontend configuration
 frontend:
   image:
-    repository: cmbcluster-frontend
-    tag: latest
-    pullPolicy: Always
-  
-  replicaCount: 2
-  
-  service:
-    type: ClusterIP
-    port: 80
-    targetPort: 8501
-  
-  resources:
-    requests:
-      cpu: 250m
-      memory: 512Mi
-    limits:
-      cpu: 1000m
-      memory: 1Gi
+    repository: gcr.io/your-gcp-project-id/cmbcluster-frontend
+    tag: "latest"
+    pullPolicy: IfNotPresent
 
-# User environment configuration
 userEnvironment:
   image:
-    repository: cmbcluster-user-env
-    tag: latest
-    pullPolicy: Always
-  
-  defaultResources:
-    requests:
-      cpu: 100m
-      memory: 256Mi
-    limits:
-      cpu: 2000m
-      memory: 4Gi
-  
-  storage:
-    size: 10Gi
-    storageClass: standard-rwo
-
-# Ingress configuration (THIS WAS MISSING!)
-ingress:
-  enabled: true
-  className: nginx
-  annotations:
-    cert-manager.io/cluster-issuer: letsencrypt-prod
-    nginx.ingress.kubernetes.io/ssl-redirect: "true"
-    nginx.ingress.kubernetes.io/use-regex: "true"
-  
-  hosts:
-    - host: cmbcluster.34.16.97.178.nip.io
-      paths:
-        - path: /
-          pathType: Prefix
-    - host: api.cmbcluster.34.16.97.178.nip.io
-      paths:
-        - path: /
-          pathType: Prefix
-  
-  tls:
-    enabled: true
-    secretName: cmbcluster-tls
-
-# Autoscaling
-autoscaling:
-  enabled: true
-  minReplicas: 1
-  maxReplicas: 10
-  targetCPUUtilizationPercentage: 70
-
-# Pod disruption budgets
-podDisruptionBudget:
-  enabled: true
-  minAvailable: 1
-
-# Network policies
-networkPolicy:
-  enabled: true
-
-# Resource quotas
-resourceQuota:
-  enabled: true
-  hard:
-    requests
+    repository: gcr.io/your-gcp-project-id/cmbcluster-user-env
+    tag: "latest"
+    pullPolicy: IfNotPresent

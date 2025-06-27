@@ -5,7 +5,7 @@ set -e
 PROJECT_ID=${1:-$(gcloud config get-value project)}
 CLUSTER_NAME=${2:-"cmbcluster"}
 REGION=${3:-"us-central1"}
-ZONE=${4:-"us-central1-b"}
+ZONE=${4:-"us-central1-a"}
 
 if [ -z "$PROJECT_ID" ]; then
     echo "Error: PROJECT_ID is required"
@@ -41,6 +41,7 @@ gcloud services enable container.googleapis.com
 gcloud services enable compute.googleapis.com
 gcloud services enable storage.googleapis.com
 gcloud services enable cloudbuild.googleapis.com
+gcloud services enable artifactregistry.googleapis.com
 
 # Create VPC network if not exists
 if ! gcloud compute networks describe $NETWORK_NAME --project=$PROJECT_ID >/dev/null 2>&1; then
@@ -50,6 +51,19 @@ if ! gcloud compute networks describe $NETWORK_NAME --project=$PROJECT_ID >/dev/
         --project=$PROJECT_ID
 else
     echo "✅ VPC network $NETWORK_NAME already exists"
+fi
+
+# Create Artifact Registry repository if not exists
+ARTIFACT_REGISTRY_NAME="${CLUSTER_NAME}-images"
+if ! gcloud artifacts repositories describe $ARTIFACT_REGISTRY_NAME --location=$REGION --project=$PROJECT_ID >/dev/null 2>&1; then
+    echo "📦 Creating Artifact Registry repository '$ARTIFACT_REGISTRY_NAME'..."
+    gcloud artifacts repositories create $ARTIFACT_REGISTRY_NAME \
+        --repository-format=docker \
+        --location=$REGION \
+        --description="Docker images for CMBCluster" \
+        --project=$PROJECT_ID
+else
+    echo "✅ Artifact Registry repository '$ARTIFACT_REGISTRY_NAME' already exists"
 fi
 
 # Create subnet with secondary ranges if not exists
@@ -70,25 +84,51 @@ fi
 echo "🔥 Creating firewall rules..."
 
 # Allow internal communication within the subnet
-gcloud compute firewall-rules create ${CLUSTER_NAME}-allow-internal \
-    --network=$NETWORK_NAME \
-    --allow=tcp,udp,icmp \
-    --source-ranges=10.0.0.0/8 \
-    --project=$PROJECT_ID \
-    --quiet || echo "Firewall rule already exists"
+if ! gcloud compute firewall-rules describe ${CLUSTER_NAME}-allow-internal --project=$PROJECT_ID >/dev/null 2>&1; then
+    echo "Creating firewall rule ${CLUSTER_NAME}-allow-internal..."
+    gcloud compute firewall-rules create ${CLUSTER_NAME}-allow-internal \
+        --network=$NETWORK_NAME \
+        --allow=tcp,udp,icmp \
+        --source-ranges=10.0.0.0/8 \
+        --project=$PROJECT_ID \
+        --quiet
+else
+    echo "✅ Firewall rule ${CLUSTER_NAME}-allow-internal already exists"
+fi
 
 # Allow Google health checks
-gcloud compute firewall-rules create ${CLUSTER_NAME}-allow-health-checks \
-    --network=$NETWORK_NAME \
-    --allow=tcp \
-    --source-ranges=130.211.0.0/22,35.191.0.0/16 \
-    --target-tags=gke-node \
-    --project=$PROJECT_ID \
-    --quiet || echo "Health check firewall rule already exists"
+if ! gcloud compute firewall-rules describe ${CLUSTER_NAME}-allow-health-checks --project=$PROJECT_ID >/dev/null 2>&1; then
+    echo "Creating firewall rule ${CLUSTER_NAME}-allow-health-checks..."
+    gcloud compute firewall-rules create ${CLUSTER_NAME}-allow-health-checks \
+        --network=$NETWORK_NAME \
+        --allow=tcp \
+        --source-ranges=130.211.0.0/22,35.191.0.0/16 \
+        --target-tags=gke-node \
+        --project=$PROJECT_ID \
+        --quiet
+else
+    echo "✅ Firewall rule ${CLUSTER_NAME}-allow-health-checks already exists"
+fi
+
+# Allow master to communicate with nodes (CRITICAL for webhooks and probes in private clusters)
+if ! gcloud compute firewall-rules describe ${CLUSTER_NAME}-allow-master --project=$PROJECT_ID >/dev/null 2>&1; then
+    echo "Creating firewall rule to allow master communication to nodes..."
+    gcloud compute firewall-rules create ${CLUSTER_NAME}-allow-master \
+        --network=$NETWORK_NAME \
+        --allow=tcp,udp,icmp \
+        --source-ranges=172.16.0.0/28 \
+        --project=$PROJECT_ID \
+        --quiet
+else
+    echo "✅ Firewall rule for master communication already exists"
+fi
 
 # Create private GKE cluster
 echo "🏗️ Creating private GKE cluster..."
 if ! gcloud container clusters describe $CLUSTER_NAME --zone=$ZONE --project=$PROJECT_ID >/dev/null 2>&1; then
+    # Using e2-standard-2 for better cost/performance than n1-standard-2
+    # Using pd-balanced for node disk type for better performance than pd-standard
+    # Note: The 'cmbcluster-ssd' StorageClass is for PVCs, not node boot disks.
     gcloud container clusters create $CLUSTER_NAME \
         --project=$PROJECT_ID \
         --zone=$ZONE \
@@ -102,9 +142,9 @@ if ! gcloud container clusters describe $CLUSTER_NAME --zone=$ZONE --project=$PR
         --enable-master-authorized-networks \
         --master-authorized-networks $MY_IP/32 \
         --num-nodes=3 \
-        --machine-type=n1-standard-2 \
+        --machine-type=e2-standard-2 \
         --disk-size=50GB \
-        --disk-type=pd-standard \
+        --disk-type=pd-balanced \
         --enable-autorepair \
         --enable-autoupgrade \
         --enable-autoscaling \
@@ -187,8 +227,9 @@ metadata:
 spec:
   acme:
     server: https://acme-v02.api.letsencrypt.org/directory
-    email: admin@$PROJECT_ID.iam.gserviceaccount.com
-    privateKeySecretRef:
+    # IMPORTANT: Replace with a real email address for Let's Encrypt notifications
+    email: your-email@example.com
+    privateKeySecretRef: # This secret will be created by cert-manager
       name: letsencrypt-prod
     solvers:
     - http01:
@@ -198,6 +239,30 @@ EOF
 else
     echo "✅ cert-manager already installed"
 fi
+
+# Set up Workload Identity Service Account
+echo "🔑 Setting up Workload Identity Service Account..."
+WORKLOAD_SA_NAME="${CLUSTER_NAME}-workload-sa"
+WORKLOAD_SA_EMAIL="${WORKLOAD_SA_NAME}@${PROJECT_ID}.iam.gserviceaccount.com"
+
+if ! gcloud iam service-accounts describe $WORKLOAD_SA_EMAIL --project=$PROJECT_ID >/dev/null 2>&1; then
+    echo "Creating Google Service Account: $WORKLOAD_SA_EMAIL..."
+    gcloud iam service-accounts create $WORKLOAD_SA_NAME \
+        --display-name="CMBCluster Workload Identity SA" \
+        --project=$PROJECT_ID
+else
+    echo "✅ Google Service Account $WORKLOAD_SA_EMAIL already exists"
+fi
+
+# Grant Storage Object Viewer role for image pulling
+echo "Granting roles/storage.objectViewer to $WORKLOAD_SA_EMAIL..."
+gcloud projects add-iam-policy-binding $PROJECT_ID \
+    --member="serviceAccount:$WORKLOAD_SA_EMAIL" \
+    --role="roles/storage.objectViewer" \
+    --quiet || echo "✅ roles/storage.objectViewer already granted to $WORKLOAD_SA_EMAIL"
+
+# Note: The Kubernetes Service Account (KSA) and the IAM policy binding between KSA and GSA
+# will be handled during deployment (e.g., in Helm chart or deploy.sh).
 
 # Create storage class for CMBCluster
 echo "💾 Setting up storage classes..."
@@ -223,13 +288,15 @@ echo "- Subnet: $SUBNET_NAME"
 echo "- Cluster: $CLUSTER_NAME"
 echo "- Authorized IP: $MY_IP/32"
 echo "- Master CIDR: 172.16.0.0/28"
-echo "- Pods CIDR: 10.1.0.0/16"
-echo "- Services CIDR: 10.2.0.0/20"
+echo "- Pods CIDR: 10.1.0.0/16 (via secondary range)"
+echo "- Services CIDR: 10.2.0.0/20 (via secondary range)"
+echo "- Workload Identity SA: $WORKLOAD_SA_EMAIL"
 echo ""
 echo "📝 Next steps:"
 echo "1. Configure your domain DNS to point to the ingress IP"
 echo "2. Set up OAuth credentials in Google Cloud Console"
-echo "3. Run: ./scripts/deploy.sh $PROJECT_ID your-domain.com"
+echo "3. Ensure your Helm chart or deployment manifests use the Kubernetes Service Account 'cmbcluster-ksa' (or similar) and annotate it with 'iam.gke.io/gcp-service-account=$WORKLOAD_SA_EMAIL'."
+echo "4. Run: ./scripts/deploy.sh $PROJECT_ID your-domain.com"
 echo ""
 echo "🔍 Useful commands:"
 echo "kubectl get nodes"
