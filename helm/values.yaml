@@ -4,6 +4,7 @@ global:
   projectId: cambridge-infosys
   domain: cmbcluster.34.16.97.178.nip.io
   storageClass: standard-rwo
+  serviceAccount: 705834355085-compute@developer.gserviceaccount.com
 
 # Name overrides
 nameOverride: ""
@@ -11,14 +12,9 @@ fullnameOverride: ""
 
 # Service account configuration
 serviceAccount:
-  # Specifies whether a service account should be created
   create: true
-  # Automatically mount a ServiceAccount's API credentials
   automount: true
-  # Annotations to add to the service account
   annotations: {}
-  # The name of the service account to use.
-  # If not set and create is true, a name is generated using the fullname template
   name: ""
 
 # Backend configuration

@@ -20,7 +20,8 @@ setup: ## Setup GKE cluster and infrastructure
 
 deploy: ## Deploy to Kubernetes
 	@echo "Deploying CMBCluster..."
-	./scripts/deploy.sh $(PROJECT_ID) $(DOMAIN)
+	./scripts/deploy.sh $(PROJECT_ID) $(DOMAIN) latest $(SKIP_BUILD)
+	
 
 test: ## Run tests
 	@echo "Running tests..."
