@@ -7,7 +7,7 @@ class Settings(BaseSettings):
     project_id: str = "cmbcluster-dev"
     cluster_name: str = "cmbcluster"
     region: str = "us-central1"
-    zone: str = "us-central1-b"
+    zone: str = "us-central1-a"
     
     # Domain settings
     base_domain: str = "cmbcluster.local"

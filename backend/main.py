@@ -12,6 +12,7 @@ from fastapi.responses import JSONResponse
 from fastapi.security import HTTPBearer
 
 from auth import get_current_user, oauth_router, get_user_info
+from starlette.middleware.sessions import SessionMiddleware
 from config import settings
 from models import (
     Environment, EnvironmentRequest, ActivityLog, 
@@ -84,6 +85,12 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Add SessionMiddleware LAST - Required for OAuth
+app.add_middleware(
+    SessionMiddleware, 
+    secret_key=settings.secret_key,
+    max_age=settings.token_expire_hours * 3600  # Convert hours to seconds
+)
 # Security
 security = HTTPBearer()
 

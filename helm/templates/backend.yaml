@@ -53,6 +53,10 @@ spec:
           value: {{ .Values.backend.config.devMode | quote }}
         - name: DEBUG
           value: {{ .Values.backend.config.debug | quote }}
+        - name: PYTHONHTTPSVERIFY
+          value: 0
+        - name: REQUESTS_CA_BUNDLE
+          value: ""  
         # Mounts sensitive values (SECRET_KEY, GOOGLE_CLIENT_ID, etc.)
         # from the Kubernetes secret created by deploy.sh.
         envFrom:

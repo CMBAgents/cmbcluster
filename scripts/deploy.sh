@@ -30,7 +30,7 @@ CLUSTER_NAME=${CLUSTER_NAME:-"cmbcluster"}
 REGION=${REGION:-"us-central1"}
 ZONE=${ZONE:-"${ZONE}"}
 TAG=${TAG:-"latest"}
-SKIP_BUILD=${SKIP_BUILD:-"true"}
+SKIP_BUILD=${SKIP_BUILD:-"false"}
 
 # Validate required variables
 if [ -z "$PROJECT_ID" ] || [ -z "$DOMAIN" ]; then
