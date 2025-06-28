@@ -10,13 +10,13 @@ The platform follows the JupyterHub architecture pattern with these key componen
 
 ```mermaid
 graph TB
-    Users[👥 Users] --> Proxy[🌐 Proxyproxy-&lt;hash&gt;]
-    Proxy --> Hub[🎯 Hubhub-&lt;hash&gt;Authenticate user]
+    Users[👥 Users] --> Proxy[🌐 Proxy]
+    Proxy --> Hub[🎯 Hub - Authenticate user]
     
-    Hub --> PV[💾 Pods + Volumesjupyter-&lt;username&gt;-&lt;hash&gt;IMAGE PULL / USER SESSION]
+    Hub --> PV[💾 Pods + Volumes / USER SESSION]
     
-    CloudVolumes[☁️ Cloud VolumesProvides persistent storage] --> PV
-    ImageRegistry[📦 Image RegistryProvides environment images] --> PV
+    CloudVolumes[☁️ Cloud Volumes] --> PV
+    ImageRegistry[📦 Image Registry] --> PV
     
     Proxy -.->|ROUTE INFOSEND| Hub
     Hub -.->|SIGNED OUTUSER REDIRECT| Proxy
