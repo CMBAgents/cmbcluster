@@ -47,7 +47,7 @@ build: ## Build and push container images to Artifact Registry
 
 deploy: ## Deploy the application to the GKE cluster
 	@echo "⚙️ Deploying to GKE cluster '$(CLUSTER_NAME)'..."
-	@./scripts/deploy.sh
+	@./scripts/deploy.sh $(PROJECT_ID) $(CLUSTER_NAME) $(DOMAIN) latest $(SKIP_BUILD)
 
 setup: ## Create the GKE cluster and all required infrastructure
 	@echo "🏗️ Setting up GKE infrastructure..."
