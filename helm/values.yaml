@@ -32,8 +32,8 @@ backend:
     tag: "latest"
     pullPolicy: IfNotPresent
   config:
-    apiUrl: "https://api.cmbcluster.example.com"
-    frontendUrl: "https://cmbcluster.example.com"
+    apiUrl: "http://api.cmbcluster.example.com"
+    frontendUrl: "http://cmbcluster.example.com"
     googleClientId: ""
     jwtAlgorithm: "HS256"
     tokenExpireHours: 8
@@ -50,11 +50,13 @@ ingress:
   enabled: true
   # The class of the Ingress controller. For GKE, use "gce". For others (e.g., NGINX), change accordingly.
   className: "gce"
+  annotations:
+      nginx.ingress.kubernetes.io/ssl-redirect: "false"  
   # The email address for Let's Encrypt registration. Required for automatic SSL.
   letsencryptEmail: "22yash.tiwari@gmail.com"
   tls:
     # If true, TLS will be configured for the Ingress using cert-manager.
-    enabled: true
+    enabled: false
     # The name of the secret that will store the TLS certificate.
     # This is typically overridden by the deploy script (e.g., to "$DOMAIN-tls").
     secretName: "cmbcluster-tls"

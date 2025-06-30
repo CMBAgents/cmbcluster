@@ -38,10 +38,6 @@ spec:
           value: "{{ .Values.global.domain }}"
         - name: DEV_MODE
           value: "false"
-        - name: PYTHONHTTPSVERIFY
-          value: 0
-        - name: REQUESTS_CA_BUNDLE
-          value: ""    
         livenessProbe:
           httpGet:
             path: /_stcore/health
