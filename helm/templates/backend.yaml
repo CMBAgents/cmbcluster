@@ -39,6 +39,8 @@ spec:
           value: {{ .Values.backend.config.apiUrl | quote }}
         - name: FRONTEND_URL
           value: {{ .Values.backend.config.frontendUrl | quote }}
+        - name: REGISTRY_URL
+          value: {{ .Values.global.imageRegistry | quote }}
         - name: NAMESPACE
           value: {{ .Release.Namespace | quote }}
         - name: JWT_ALGORITHM
