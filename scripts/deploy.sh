@@ -65,7 +65,7 @@ echo "🔑 Setting up Workload Identity bindings..."
 # Define service account names, ensuring they match setup-cluster.sh
 GSA_NAME="${CLUSTER_NAME}-workload-sa"
 GSA_EMAIL="${GSA_NAME}@${PROJECT_ID}.iam.gserviceaccount.com"
-KSA_NAME="${CLUSTER_NAME}-ksa"
+KSA_NAME="${CLUSTER_NAME}-sa"
 
 # Allow the Kubernetes Service Account to impersonate the Google Service Account.
 # This is the core of Workload Identity. It grants the KSA the 'workloadIdentityUser' role on the GSA.

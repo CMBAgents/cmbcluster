@@ -33,7 +33,7 @@ spec:
           protocol: TCP
         env:
         - name: API_URL
-          value: "https://api.{{ .Values.global.domain }}"
+          value: "http://api.{{ .Values.global.domain }}"
         - name: BASE_DOMAIN
           value: "{{ .Values.global.domain }}"
         - name: DEV_MODE
