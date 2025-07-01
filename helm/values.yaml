@@ -2,10 +2,8 @@
 # This is a YAML-formatted file.
 
 global:
-  # IMPORTANT: These are placeholder values. They MUST be overridden by the deploy.sh script.
   projectId: "your-gcp-project-id"
-  domain: "cmbcluster.example.com"
-  imageRegistry: "us-central1-docker.pkg.dev/your-gcp-project-id/cmbcluster-images"
+  registryUrl: "us-central1-docker.pkg.dev/your-gcp-project-id/cmbcluster-images"
   imageTag: "latest"
 
 # Workload Identity configuration
@@ -30,7 +28,7 @@ backend:
   image:
     repository: us-central1-docker.pkg.dev/your-gcp-project-id/cmbcluster-images/cmbcluster-backend
     tag: "latest"
-    pullPolicy: IfNotPresent
+    pullPolicy: Always
   config:
     apiUrl: "http://api.cmbcluster.example.com"
     frontendUrl: "http://cmbcluster.example.com"
@@ -44,25 +42,24 @@ backend:
   # The name of the Kubernetes secret containing sensitive environment variables
   # like SECRET_KEY and GOOGLE_CLIENT_SECRET, created by deploy.sh.
   secretName: "cmbcluster-backend-secrets"
+  resources: {}
 
 ingress:
-  # If true, an Ingress resource will be created to expose the services.
   enabled: true
-  # The class of the Ingress controller. For GKE, use "gce". For others (e.g., NGINX), change accordingly.
-  className: "gce"
+  className: "nginx"
+  # The cert-manager ClusterIssuer to use for TLS certificates.
+  clusterIssuer: "letsencrypt-prod"
   annotations:
-      nginx.ingress.kubernetes.io/ssl-redirect: "false"  
-  # The email address for Let's Encrypt registration. Required for automatic SSL.
-  letsencryptEmail: "22yash.tiwari@gmail.com"
-  tls:
-    # If true, TLS will be configured for the Ingress using cert-manager.
-    enabled: false
-    # The name of the secret that will store the TLS certificate.
-    # This is typically overridden by the deploy script (e.g., to "$DOMAIN-tls").
-    secretName: "cmbcluster-tls"
-    # The name of the cert-manager ClusterIssuer to use.
-    clusterIssuer: "letsencrypt-prod"
+    {}
+  # The base domain for the application.
+  baseDomain: "cmbcluster.local"
 
+  tls:
+    enabled: true
+    # The name of the secret for the main application (e.g., cmbcluster.local, api.cmbcluster.local)
+    mainSecretName: "cmbcluster-main-tls"
+    # The name of the secret for the wildcard user environments (e.g., *.cmbcluster.local)
+    usersSecretName: "cmbcluster-users-wildcard-tls"
 
 frontend:
   service:
@@ -72,11 +69,15 @@ frontend:
   image:
     repository: us-central1-docker.pkg.dev/your-gcp-project-id/cmbcluster-images/cmbcluster-frontend
     tag: "latest"
-    pullPolicy: IfNotPresent
+    pullPolicy: Always
   replicaCount: 1
+  resources: {}
 
 userEnvironment:
   image:
     repository: us-central1-docker.pkg.dev/your-gcp-project-id/cmbcluster-images/cmbcluster-user-env
     tag: "latest"
-    pullPolicy: IfNotPresent
+    pullPolicy: Always
+  serviceAccount:
+    # The name of the low-privilege service account for user-created pods.
+    name: "cmbcluster-user-sa"

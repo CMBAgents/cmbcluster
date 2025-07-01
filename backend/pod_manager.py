@@ -1,5 +1,7 @@
 import asyncio
 import time
+import re
+import uuid
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional
 import structlog
@@ -10,6 +12,16 @@ from config import settings
 from models import Environment, EnvironmentRequest, PodStatus
 
 logger = structlog.get_logger()
+
+def _sanitize_for_dns(name: str) -> str:
+    """Sanitizes a string to be a valid DNS-1123 subdomain.
+    Must be lowercase, max 63 chars, start/end with alphanum, and contain only a-z, 0-9, and -.
+    """
+    name = name.lower()
+    name = re.sub(r'[^a-z0-9-]', '-', name)
+    name = name.strip('-')
+    return name[:63]
+
 
 class PodManager:
     """Manages Kubernetes pods for user environments"""
@@ -43,35 +55,42 @@ class PodManager:
         user_email: str, 
         config: EnvironmentRequest
     ) -> Environment:
-        """Create a new user environment pod"""
-        pod_name = self._generate_pod_name(user_id)
+        """Create a new user environment pod (multi-env per user)"""
+        safe_user_id = _sanitize_for_dns(user_email)
+        env_id = str(uuid.uuid4())[:8]  # Short unique ID for this environment
+        pod_name = self._generate_pod_name(safe_user_id, env_id)
         namespace = settings.namespace
         
         logger.info("Creating user environment", 
-                   user_id=user_id, 
-                   pod_name=pod_name)
+                    user_id=user_id, 
+                    user_email=user_email,
+                    safe_user_id=safe_user_id,
+                    env_id=env_id,
+                    pod_name=pod_name)
         
         try:
             # Create PVC for user workspace
-            await self._create_user_pvc(user_id)
+            await self._create_user_pvc(safe_user_id, env_id)
             
             # Create pod
-            pod_spec = self._build_pod_spec(user_id, user_email, pod_name, config)
+            pod_spec = self._build_pod_spec(user_id, safe_user_id, env_id, user_email, pod_name, config)
             self.k8s_client.create_namespaced_pod(
                 namespace=namespace, 
                 body=pod_spec
             )
             
             # Create service
-            await self._create_user_service(user_id, pod_name)
+            await self._create_user_service(safe_user_id, env_id)
             
             # Create environment record
             environment = Environment(
-                id=f"{user_id}-{int(time.time())}",
+                id=f"{user_id}-{env_id}",
                 user_id=user_id,
+                user_email=user_email,
+                env_id=env_id,
                 pod_name=pod_name,
                 status=PodStatus.PENDING,
-                url=f"https://{user_id}.{settings.base_domain}",
+                url=f"https://{safe_user_id}-{env_id}.{settings.base_domain}",
                 created_at=datetime.utcnow(),
                 last_activity=datetime.utcnow(),
                 resource_config={
@@ -81,30 +100,37 @@ class PodManager:
                 }
             )
             
-            self.user_environments[user_id] = environment
+            self.user_environments[f"{user_id}:{env_id}"] = environment
             
             logger.info("User environment created successfully", 
-                       user_id=user_id, 
-                       pod_name=pod_name)
+                        user_id=user_id, 
+                        user_email=user_email,
+                        safe_user_id=safe_user_id,
+                        env_id=env_id,
+                        url=environment.url,
+                        pod_name=pod_name)
             
             return environment
             
         except Exception as e:
             logger.error("Failed to create user environment", 
                         user_id=user_id, 
+                        user_email=user_email,
+                        env_id=env_id,
                         error=str(e))
             raise
     
-    def _generate_pod_name(self, user_id: str) -> str:
+    def _generate_pod_name(self, safe_user_id: str, env_id: str) -> str:
         """Generate unique pod name for user"""
         timestamp = int(time.time())
         # Kubernetes names must be lowercase and contain only letters, numbers, and hyphens
-        safe_user_id = user_id.lower().replace('_', '-')[:20]
-        return f"user-{safe_user_id}-{timestamp}"
+        return f"user-{safe_user_id[:20]}-{env_id}-{timestamp}"
     
     def _build_pod_spec(
         self, 
         user_id: str, 
+        safe_user_id: str,
+        env_id: str,
         user_email: str, 
         pod_name: str, 
         config: EnvironmentRequest
@@ -120,11 +146,13 @@ class PodManager:
                 "namespace": settings.namespace,
                 "labels": {
                     "app": "cmbcluster-user-env",
-                    "user-id": user_id,
+                    "user-id": safe_user_id,
+                    "env-id": env_id,
                     "component": "user-pod"
                 },
                 "annotations": {
                     "user.email": user_email,
+                    "env.id": env_id,
                     "created.at": datetime.utcnow().isoformat(),
                     "managed.by": "cmbcluster"
                 }
@@ -137,6 +165,7 @@ class PodManager:
                     "env": [
                         {"name": "USER_ID", "value": user_id},
                         {"name": "USER_EMAIL", "value": user_email},
+                        {"name": "ENV_ID", "value": env_id},
                         {"name": "HUB_URL", "value": settings.api_url},
                         {"name": "WORKSPACE_DIR", "value": "/workspace"}
                     ],
@@ -174,17 +203,17 @@ class PodManager:
                 "volumes": [{
                     "name": "user-workspace",
                     "persistentVolumeClaim": {
-                        "claimName": f"workspace-{user_id}"
+                        "claimName": f"workspace-{safe_user_id}-{env_id}"
                     }
                 }],
                 "restartPolicy": "Never",
-                "serviceAccountName": "cmbcluster-user-sa"
+                "serviceAccountName": settings.user_pod_sa_name
             }
         }
     
-    async def _create_user_pvc(self, user_id: str):
+    async def _create_user_pvc(self, safe_user_id: str, env_id: str):
         """Create persistent volume claim for user"""
-        pvc_name = f"workspace-{user_id}"
+        pvc_name = f"workspace-{safe_user_id}-{env_id}"
         namespace = settings.namespace
         
         pvc_spec = {
@@ -195,7 +224,8 @@ class PodManager:
                 "namespace": namespace,
                 "labels": {
                     "app": "cmbcluster-user-env",
-                    "user-id": user_id
+                    "user-id": safe_user_id,
+                    "env-id": env_id
                 }
             },
             "spec": {
@@ -212,16 +242,16 @@ class PodManager:
                 namespace=namespace, 
                 body=pvc_spec
             )
-            logger.info("Created PVC for user", user_id=user_id, pvc_name=pvc_name)
+            logger.info("Created PVC for user", user_id=safe_user_id, env_id=env_id, pvc_name=pvc_name)
         except ApiException as e:
             if e.status == 409:  # Already exists
-                logger.info("PVC already exists", user_id=user_id, pvc_name=pvc_name)
+                logger.info("PVC already exists", user_id=safe_user_id, env_id=env_id, pvc_name=pvc_name)
             else:
                 raise
     
-    async def _create_user_service(self, user_id: str, pod_name: str):
+    async def _create_user_service(self, safe_user_id: str, env_id: str):
         """Create Kubernetes service for user pod"""
-        service_name = f"service-{user_id}"
+        service_name = f"service-{safe_user_id}-{env_id}"
         namespace = settings.namespace
         
         service_spec = {
@@ -232,11 +262,12 @@ class PodManager:
                 "namespace": namespace,
                 "labels": {
                     "app": "cmbcluster-user-env",
-                    "user-id": user_id
+                    "user-id": safe_user_id,
+                    "env-id": env_id
                 }
             },
             "spec": {
-                "selector": {"user-id": user_id},
+                "selector": {"user-id": safe_user_id, "env-id": env_id},
                 "ports": [{
                     "port": 80,
                     "targetPort": 8501,
@@ -251,10 +282,10 @@ class PodManager:
                 namespace=namespace,
                 body=service_spec
             )
-            logger.info("Created service for user", user_id=user_id, service_name=service_name)
+            logger.info("Created service for user", user_id=safe_user_id, env_id=env_id, service_name=service_name)
         except ApiException as e:
             if e.status == 409:  # Already exists
-                logger.info("Service already exists", user_id=user_id, service_name=service_name)
+                logger.info("Service already exists", user_id=safe_user_id, env_id=env_id, service_name=service_name)
             else:
                 raise
     
@@ -302,12 +333,16 @@ class PodManager:
         
         return environment
     
-    async def delete_user_environment(self, user_id: str):
+    async def delete_user_environment(self, user_id: str, user_email: str = None):
         """Delete user environment and associated resources"""
         if user_id not in self.user_environments:
             return
-        
         environment = self.user_environments[user_id]
+        # Always use the stored user_email for DNS/subdomain naming
+        if user_email is None:
+            user_email = environment.user_email
+        safe_user_id = _sanitize_for_dns(user_email)
+        env_id = environment.env_id
         namespace = settings.namespace
         
         logger.info("Deleting user environment", 
@@ -327,7 +362,7 @@ class PodManager:
             
             # Delete service
             try:
-                service_name = f"service-{user_id}"
+                service_name = f"service-{safe_user_id}-{env_id}"
                 self.k8s_client.delete_namespaced_service(
                     name=service_name,
                     namespace=namespace

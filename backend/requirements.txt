@@ -14,10 +14,9 @@ pydantic-settings==2.1.0
 python-dotenv==1.0.0
 asyncio-mqtt==0.16.1
 structlog==23.2.0
-httpx==0.27.0  # Add this line
 
 # Testing dependencies
 pytest==7.4.3
 pytest-asyncio==0.21.1
 pytest-mock==3.12.0
-httpx==0.27.0  # For TestClient
+httpx==0.27.0  # For TestClient and OAuth client

@@ -36,11 +36,13 @@ spec:
         - name: PROJECT_ID
           value: {{ .Values.global.projectId | quote }}
         - name: API_URL
-          value: {{ .Values.backend.config.apiUrl | quote }}
+          value: "https://api.{{ .Values.ingress.baseDomain }}"
         - name: FRONTEND_URL
-          value: {{ .Values.backend.config.frontendUrl | quote }}
+          value: "https://{{ .Values.ingress.baseDomain }}"
+        - name: BASE_DOMAIN
+          value: {{ .Values.ingress.baseDomain | quote }}
         - name: REGISTRY_URL
-          value: {{ .Values.global.imageRegistry | quote }}
+          value: {{ .Values.global.registryUrl | quote }}
         - name: NAMESPACE
           value: {{ .Release.Namespace | quote }}
         - name: JWT_ALGORITHM
@@ -53,6 +55,8 @@ spec:
           value: {{ .Values.backend.config.maxUserPods | quote }}
         - name: DEV_MODE
           value: {{ .Values.backend.config.devMode | quote }}
+        - name: USER_POD_SA_NAME
+          value: {{ .Values.userEnvironment.serviceAccount.name | quote }}
         - name: DEBUG
           value: {{ .Values.backend.config.debug | quote }}
         # Mounts sensitive values (SECRET_KEY, GOOGLE_CLIENT_ID, etc.)

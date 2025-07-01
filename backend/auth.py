@@ -141,11 +141,14 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(s
     
     if settings.dev_mode and token == "dev-token":
         # Development mode bypass
+        exp = datetime.utcnow() + timedelta(hours=settings.token_expire_hours)
         return {
             "sub": "dev-user-123",
             "email": "dev@cmbcluster.local",
             "name": "Dev User",
-            "role": "user"
+            "role": "user",
+            "exp": exp.timestamp(),
+            "iat": datetime.utcnow().timestamp()
         }
     
     return verify_token(token)

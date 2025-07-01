@@ -20,17 +20,27 @@ echo "Project: $PROJECT_ID"
 echo "Repository: $IMAGE_REPO"
 echo "Tag: $TAG"
 
-# Build backend image
-echo "📦 Building backend image..."
-gcloud builds submit "$PROJECT_ROOT/backend" --tag "$IMAGE_REPO/cmbcluster-backend:$TAG" --project=$PROJECT_ID
+# Authenticate Docker with Google Artifact Registry for the target region
+echo "🔐 Authenticating Docker with Artifact Registry..."
+REGISTRY_HOSTNAME=$(echo "$IMAGE_REPO" | cut -d'/' -f1)
+gcloud auth configure-docker "$REGISTRY_HOSTNAME" --quiet
 
-# Build frontend image
-echo "📦 Building frontend image..."
-gcloud builds submit "$PROJECT_ROOT/frontend" --tag "$IMAGE_REPO/cmbcluster-frontend:$TAG" --project=$PROJECT_ID
+#SERVICES=("backend" "frontend" "user-environment")
+#SERVICES=("backend" "frontend" )
+SERVICES=("backend" )
+# SERVICES=("frontend" )
+for SERVICE in "${SERVICES[@]}"; do
+    CONTEXT_PATH="$PROJECT_ROOT/$SERVICE"
+    IMAGE_NAME="cmbcluster-$SERVICE"
+    FULL_IMAGE_TAG="$IMAGE_REPO/$IMAGE_NAME:$TAG"
 
-# Build user environment image
-echo "📦 Building user environment image..."
-gcloud builds submit "$PROJECT_ROOT/user-environment" --tag "$IMAGE_REPO/cmbcluster-user-env:$TAG" --project=$PROJECT_ID
+    echo "--------------------------------------------------"
+    echo "📦 Building $SERVICE image locally: $FULL_IMAGE_TAG"
+    docker build --no-cache -t "$FULL_IMAGE_TAG" "$CONTEXT_PATH"
+
+    echo "🚀 Pushing $SERVICE image..."
+    docker push "$FULL_IMAGE_TAG"
+done
 
 echo "✅ All images built and pushed successfully!"
 echo ""

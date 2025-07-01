@@ -7,7 +7,21 @@ import pandas as pd
 from config import settings
 from components.auth import check_authentication, show_login_screen, show_user_info, require_auth
 from components.api_client import api_client
+import ssl
+import requests
+import urllib3
 
+# Disable all SSL warnings
+urllib3.disable_warnings()
+
+# Create unverified context
+ssl._create_default_https_context = ssl._create_unverified_context
+
+# Set environment variables
+import os
+os.environ['PYTHONHTTPSVERIFY'] = '0'
+os.environ['CURL_CA_BUNDLE'] = ''
+os.environ['REQUESTS_CA_BUNDLE'] = ''
 # Page configuration
 st.set_page_config(
     page_title=settings.app_title,

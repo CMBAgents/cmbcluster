@@ -33,11 +33,15 @@ spec:
           protocol: TCP
         env:
         - name: API_URL
-          value: "http://api.{{ .Values.global.domain }}"
+          value: "https://api.{{ .Values.ingress.baseDomain }}"
         - name: BASE_DOMAIN
-          value: "{{ .Values.global.domain }}"
+          value: "{{ .Values.ingress.baseDomain }}"
         - name: DEV_MODE
           value: "false"
+        - name: XDG_CONFIG_HOME
+          value: "/tmp/.config"
+        - name: XDG_DATA_HOME
+          value: "/tmp/.local/share"
         livenessProbe:
           httpGet:
             path: /_stcore/health

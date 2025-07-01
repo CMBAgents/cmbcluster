@@ -28,6 +28,8 @@ class Settings(BaseSettings):
     registry_url: str = "gcr.io/cmbcluster-dev"
     max_inactive_hours: int = 4
     max_user_pods: int = 1
+    storage_class_name: str = "standard-rwo"
+    user_pod_sa_name: str = "cmbcluster-user-sa"
     
     # Environment settings
     dev_mode: bool = False

@@ -214,10 +214,11 @@ async def get_environment_status(current_user: Dict = Depends(get_current_user))
 async def delete_environment(current_user: Dict = Depends(get_current_user)):
     """Delete user's environment"""
     user_id = current_user["sub"]
+    user_email = current_user["email"]
     pod_manager = app_state["pod_manager"]
     
     try:
-        await pod_manager.delete_user_environment(user_id)
+        await pod_manager.delete_user_environment(user_id, user_email)
         await log_activity(user_id, "environment_deleted", "Environment deleted successfully")
         
         return {
@@ -270,6 +271,22 @@ async def get_user_activity(
 async def get_current_user_info(current_user: Dict = Depends(get_current_user)):
     """Get current user information"""
     return get_user_info(current_user)
+
+@app.get("/environments/list", tags=["environments"])
+async def list_user_environments(current_user: Dict = Depends(get_current_user)):
+    """List all environments for the current user (multi-environment support)"""
+    user_id = current_user["sub"]
+    pod_manager = app_state["pod_manager"]
+    try:
+        # Filter all environments for this user
+        envs = [env for key, env in pod_manager.user_environments.items() if env.user_id == user_id]
+        return {"environments": envs}
+    except Exception as e:
+        logger.error("Failed to list environments", user_id=user_id, error=str(e))
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to list environments"
+        )
 
 # Background tasks
 async def monitor_environment(user_id: str):

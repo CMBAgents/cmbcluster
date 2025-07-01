@@ -1,98 +1,101 @@
+{{- if .Values.ingress.enabled -}}
+# Ingress for the main frontend and backend API
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
-  name: cmbcluster-ingress
-  namespace: cmbcluster
+  name: {{ include "cmbcluster.fullname" . }}-main
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "cmbcluster.labels" . | nindent 4 }}
   annotations:
-    kubernetes.io/ingress.class: "nginx"
+    {{- if .Values.ingress.tls.enabled }}
+    cert-manager.io/cluster-issuer: {{ .Values.ingress.clusterIssuer | quote }}
     nginx.ingress.kubernetes.io/ssl-redirect: "true"
-    nginx.ingress.kubernetes.io/use-regex: "true"
-    nginx.ingress.kubernetes.io/rewrite-target: /$2
-    cert-manager.io/cluster-issuer: "letsencrypt-prod"
-    nginx.ingress.kubernetes.io/server-snippet: |
-      location ~* "^/user/([^/]+)(/.*)?$" {
-        set $user_id $1;
-        set $path $2;
-        proxy_pass http://service-$user_id.cmbcluster.svc.cluster.local$path;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-        proxy_set_header X-Forwarded-Host $host;
-        proxy_set_header X-Forwarded-Port $server_port;
-      }
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+    {{- end }}
+    {{- with .Values.ingress.annotations -}}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
 spec:
+  ingressClassName: {{ .Values.ingress.className }}
+  {{- if .Values.ingress.tls.enabled }}
   tls:
   - hosts:
-    - "DOMAIN"
-    - "api.DOMAIN"
-    - "*.DOMAIN"
-    secretName: cmbcluster-tls
+    - {{ .Values.ingress.baseDomain | quote }}
+    - "api.{{ .Values.ingress.baseDomain }}"
+    secretName: {{ .Values.ingress.tls.mainSecretName }}
+  {{- end }}
   rules:
-  # Frontend
-  - host: "DOMAIN"
+  - host: "api.{{ .Values.ingress.baseDomain }}"
     http:
       paths:
       - path: /
         pathType: Prefix
         backend:
           service:
-            name: cmbcluster-frontend-service
+            name: {{ include "cmbcluster.fullname" . }}-backend
             port:
-              number: 80
-  
-  # API Backend  
-  - host: "api.DOMAIN"
+              number: {{ .Values.backend.service.port }}
+  - host: {{ .Values.ingress.baseDomain | quote }}
     http:
       paths:
       - path: /
         pathType: Prefix
         backend:
           service:
-            name: cmbcluster-backend-service
+            name: {{ include "cmbcluster.fullname" . }}-frontend
             port:
-              number: 80
-  
-  # User environments - wildcard subdomain routing
-  - host: "*.DOMAIN"
-    http:
-      paths:
-      - path: /(.*)
-        pathType: Prefix
-        backend:
-          service:
-            name: cmbcluster-user-router
-            port:
-              number: 80
+              number: {{ .Values.frontend.service.port }}
 ---
-# Additional ingress for user environment routing
+# Ingress for the dynamic user environments
+# NOTE: The subdomain (e.g., jane-doe-google-com) must match the sanitized user email (safe_user_id) used in backend pod/service naming and environment URL.
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
-  name: cmbcluster-user-ingress
-  namespace: cmbcluster
+  name: {{ include "cmbcluster.fullname" . }}-users
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "cmbcluster.labels" . | nindent 4 }}
   annotations:
-    kubernetes.io/ingress.class: "nginx"
+    {{- if .Values.ingress.tls.enabled }}
+    cert-manager.io/cluster-issuer: {{ .Values.ingress.clusterIssuer | quote }}
     nginx.ingress.kubernetes.io/ssl-redirect: "true"
-    nginx.ingress.kubernetes.io/configuration-snippet: |
-      set $user_id "";
-      if ($host ~* "^([^.]+)\.DOMAIN$") {
-        set $user_id $1;
-      }
-      proxy_pass http://service-$user_id.cmbcluster.svc.cluster.local;
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+    {{- end }}
+    {{- with .Values.ingress.annotations -}}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+    # Use a Lua script to dynamically set the upstream service based on the subdomain.
+    # This is the most robust way to avoid NGINX configuration conflicts.
+    nginx.ingress.kubernetes.io/rewrite-by-lua-block: |
+      local host = ngx.var.host
+      local m, err = ngx.re.match(host, "^([a-z0-9\\-]+-[a-z0-9]+)\\.{{ .Values.ingress.baseDomain }}$", "ijo")
+      if m then
+        ngx.var.proxy_upstream_name = "{{ .Release.Namespace }}-service-" .. m[1]
+      else
+        return ngx.exit(404)
+      end
+    # These annotations are necessary for WebSocket support (used by Streamlit)
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
 spec:
+  ingressClassName: {{ .Values.ingress.className }}
+  {{- if .Values.ingress.tls.enabled }}
   tls:
   - hosts:
-    - "*.DOMAIN"
-    secretName: cmbcluster-user-tls
+    - "*.{{ .Values.ingress.baseDomain }}"
+    secretName: {{ .Values.ingress.tls.usersSecretName }}
+  {{- end }}
   rules:
-  - host: "*.DOMAIN"
+  - host: "*.{{ .Values.ingress.baseDomain }}"
     http:
       paths:
       - path: /
         pathType: Prefix
         backend:
+          # This backend is a placeholder. The actual upstream is set by the Lua script.
           service:
-            name: default-backend
+            name: {{ include "cmbcluster.fullname" . }}-backend
             port:
-              number: 80
+              number: {{ .Values.backend.service.port }}
+{{- end }}

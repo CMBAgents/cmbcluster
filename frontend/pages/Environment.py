@@ -63,12 +63,21 @@ st.markdown("""
 
 @require_auth
 def main():
-    """Main environment management page"""
-    
-    # Header
+    """Main environment management page (multi-environment)"""
     st.markdown("# 🚀 Environment Management")
-    st.markdown("Manage your research environment, resources, and configuration")
-    
+    st.markdown("Manage your research environments, resources, and configuration")
+
+    # List all environments for the user
+    envs_data = api_client.list_environments()
+    environments = envs_data.get("environments", [])
+
+    if not environments:
+        st.info("No environments found. Launch a new environment to get started.")
+    else:
+        st.markdown("## 🗂️ Your Environments")
+        for env in environments:
+            show_active_environment_details(env)
+
     # Get environment status
     status_data = get_environment_status()
     

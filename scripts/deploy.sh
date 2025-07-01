@@ -102,38 +102,33 @@ kubectl create secret generic cmbcluster-backend-secrets \
 echo "⚙️ Deploying with Helm..."
 # Pass configuration from .env and other scripts to the Helm chart.
 # This ensures the backend gets all required environment variables and prevents Pydantic validation errors.
-helm upgrade --install cmbcluster ./helm \
+helm upgrade --install cmbcluster  ./helm \
     --namespace $K8S_NAMESPACE \
     --wait \
     --timeout=10m \
     --disable-openapi-validation \
     --set global.projectId=$PROJECT_ID \
-    --set global.domain=$DOMAIN \
-    --set global.imageRegistry=$IMAGE_REPO \
+    --set ingress.baseDomain=$DOMAIN \
+    --set global.registryUrl=$IMAGE_REPO \
     --set global.imageTag=$TAG \
     --set ingress.enabled=true \
     --set ingress.className=nginx \
     --set ingress.tls.enabled=true \
-    --set ingress.tls.secretName="$DOMAIN-tls" \
-    --set ingress.tls.clusterIssuer=letsencrypt-prod \
+    --set ingress.tls.mainSecretName="$DOMAIN-main-tls" \
+    --set ingress.tls.usersSecretName="$DOMAIN-users-wildcard-tls" \
     --set backend.image.repository=$IMAGE_REPO/cmbcluster-backend \
     --set backend.image.tag=$TAG \
     --set frontend.image.repository=$IMAGE_REPO/cmbcluster-frontend \
     --set frontend.image.tag=$TAG \
     --set userEnvironment.image.repository=$IMAGE_REPO/cmbcluster-user-env \
     --set userEnvironment.image.tag=$TAG \
-    --set frontend.service.port=8501 \
-    --set backend.service.port=8000 \
     --set backend.secretName=cmbcluster-backend-secrets \
-    --set-string backend.config.apiUrl="$API_URL" \
-    --set-string backend.config.frontendUrl="$FRONTEND_URL" \
     --set-string backend.config.tokenExpireHours="$TOKEN_EXPIRE_HOURS" \
     --set-string backend.config.maxInactiveHours="$MAX_INACTIVE_HOURS" \
     --set-string backend.config.maxUserPods="$MAX_USER_PODS" \
     --set-string backend.config.devMode="$DEV_MODE" \
     --set-string backend.config.debug="$DEBUG" \
     --set serviceAccount.name=$KSA_NAME \
-    --set serviceAccount.create=true \
     --set workloadIdentity.gsaEmail=$GSA_EMAIL
 
 # Wait for deployments to be ready
@@ -146,9 +141,9 @@ kubectl wait --for=condition=available --timeout=300s \
 echo "✅ CMBCluster deployed successfully!"
 echo ""
 echo "🌐 Access your deployment:"
-echo "Frontend: http://$DOMAIN"
-echo "API: http://api.$DOMAIN"
-echo "Docs: http://api.$DOMAIN/docs"
+echo "Frontend: https://$DOMAIN"
+echo "API: https://api.$DOMAIN"
+echo "Docs: https://api.$DOMAIN/docs"
 echo ""
 echo "📋 Useful commands:"
 echo "kubectl get pods -n cmbcluster"

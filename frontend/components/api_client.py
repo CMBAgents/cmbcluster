@@ -81,5 +81,11 @@ class CMBClusterAPIClient:
         response = self.session.get(url)
         return self._handle_response(response)
 
+    def list_environments(self) -> Dict[str, Any]:
+        """List all environments for the current user"""
+        url = f"{self.base_url}/environments/list"
+        response = self.session.get(url, headers=self._get_headers())
+        return self._handle_response(response)
+
 # Global API client instance
 api_client = CMBClusterAPIClient()

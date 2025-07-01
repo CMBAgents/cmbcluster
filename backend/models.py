@@ -27,6 +27,8 @@ class User(BaseModel):
 class Environment(BaseModel):
     id: str
     user_id: str
+    user_email: str  # Added field for correct DNS/subdomain naming
+    env_id: str      # Unique environment/session ID for multi-env support
     pod_name: str
     status: PodStatus
     url: Optional[str] = None

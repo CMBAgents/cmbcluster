@@ -1,13 +1,19 @@
 {{- if .Values.ingress.enabled -}}
+# Ingress for the main frontend and backend API
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
-  name: {{ include "cmbcluster.fullname" . }}-ingress
+  name: {{ include "cmbcluster.fullname" . }}-main
   namespace: {{ .Release.Namespace }}
   labels:
     {{- include "cmbcluster.labels" . | nindent 4 }}
   annotations:
-    {{- with .Values.ingress.annotations }}
+    {{- if .Values.ingress.tls.enabled }}
+    cert-manager.io/cluster-issuer: {{ .Values.ingress.clusterIssuer | quote }}
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+    {{- end }}
+    {{- with .Values.ingress.annotations -}}
     {{- toYaml . | nindent 4 }}
     {{- end }}
 spec:
@@ -15,32 +21,83 @@ spec:
   {{- if .Values.ingress.tls.enabled }}
   tls:
   - hosts:
-    - "{{ .Values.global.domain }}"
-    - "api.{{ .Values.global.domain }}"
-    secretName: {{ .Values.ingress.tls.secretName }}
+    - {{ .Values.ingress.baseDomain | quote }}
+    - "api.{{ .Values.ingress.baseDomain }}"
+    secretName: {{ .Values.ingress.tls.mainSecretName }}
   {{- end }}
   rules:
-  # Frontend - main domain
-  - host: "{{ .Values.global.domain }}"
+  - host: "api.{{ .Values.ingress.baseDomain }}"
     http:
       paths:
       - path: /
         pathType: Prefix
         backend:
           service:
-            name: {{ include "cmbcluster.frontend.fullname" . }}
+            name: {{ include "cmbcluster.fullname" . }}-backend
+            port:
+              number: {{ .Values.backend.service.port }}
+  - host: {{ .Values.ingress.baseDomain | quote }}
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: {{ include "cmbcluster.fullname" . }}-frontend
             port:
               number: {{ .Values.frontend.service.port }}
-  
-  # API Backend - api subdomain
-  - host: "api.{{ .Values.global.domain }}"
+---
+# Ingress for the dynamic user environments
+# NOTE: The subdomain (e.g., jane-doe-google-com) must match the sanitized user email (safe_user_id) used in backend pod/service naming and environment URL.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ include "cmbcluster.fullname" . }}-users
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "cmbcluster.labels" . | nindent 4 }}
+  annotations:
+    {{- if .Values.ingress.tls.enabled }}
+    cert-manager.io/cluster-issuer: {{ .Values.ingress.clusterIssuer | quote }}
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+    {{- end }}
+    {{- with .Values.ingress.annotations -}}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+    # Use a Lua script to dynamically set the upstream service based on the subdomain.
+    # This is the most robust way to avoid NGINX configuration conflicts.
+    nginx.ingress.kubernetes.io/rewrite-by-lua-block: |
+      local host = ngx.var.host
+      local m, err = ngx.re.match(host, "^([a-z0-9\\-]+-[a-z0-9]+)\\.cmbcluster.34.16.97.178.nip.io$", "ijo")
+      if m then
+        ngx.var.proxy_upstream_name = "cmbcluster-service-" .. m[1] .. "-80"
+      else
+        ngx.status = 404
+        ngx.say("Not found")
+        ngx.exit(ngx.HTTP_NOT_FOUND)
+      end  
+    # These annotations are necessary for WebSocket support (used by Streamlit)
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
+spec:
+  ingressClassName: {{ .Values.ingress.className }}
+  {{- if .Values.ingress.tls.enabled }}
+  tls:
+  - hosts:
+    - "*.{{ .Values.ingress.baseDomain }}"
+    secretName: {{ .Values.ingress.tls.usersSecretName }}
+  {{- end }}
+  rules:
+  - host: "*.{{ .Values.ingress.baseDomain }}"
     http:
       paths:
       - path: /
         pathType: Prefix
         backend:
+          # This backend is a placeholder. The actual upstream is set by the Lua script.
           service:
-            name: {{ include "cmbcluster.backend.fullname" . }}
+            name: {{ include "cmbcluster.fullname" . }}-backend
             port:
               number: {{ .Values.backend.service.port }}
 {{- end }}
