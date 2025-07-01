@@ -69,11 +69,14 @@ metadata:
     # This is the most robust way to avoid NGINX configuration conflicts.
     nginx.ingress.kubernetes.io/rewrite-by-lua-block: |
       local host = ngx.var.host
-      local m, err = ngx.re.match(host, "^([a-z0-9\\-]+-[a-z0-9]+)\\.{{ .Values.ingress.baseDomain }}$", "ijo")
+      local m, err = ngx.re.match(host, "^([a-z0-9\\-]+-[a-z0-9]+)\\.cmbcluster.34.16.97.178.nip.io$", "ijo")
       if m then
-        ngx.var.proxy_upstream_name = "{{ .Release.Namespace }}-service-" .. m[1]
+        ngx.var.service_name = "service-" .. m[1]
+        ngx.var.service_port = "80"
       else
-        return ngx.exit(404)
+        ngx.status = 404
+        ngx.say("Not found")
+        ngx.exit(ngx.HTTP_NOT_FOUND)
       end
     # These annotations are necessary for WebSocket support (used by Streamlit)
     nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
