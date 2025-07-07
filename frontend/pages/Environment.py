@@ -62,60 +62,201 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 @require_auth
+
 def main():
-    """Main environment management page (multi-environment)"""
+    """Main environment management page (multi-environment support)"""
+    # Clear only specific page-related session state to prevent stacking
+    # but preserve important state like authentication and configuration
+    page_keys_to_clear = [
+        'env_logs_last_refresh', 'env_logs_auto_refresh', 'confirm_delete_env'
+    ]
+    for key in page_keys_to_clear:
+        if key in st.session_state:
+            del st.session_state[key]
+    
+    # Clear the main container
+    st.empty()
+    
     st.markdown("# 🚀 Environment Management")
     st.markdown("Manage your research environments, resources, and configuration")
 
-    # List all environments for the user
-    envs_data = api_client.list_environments()
-    environments = envs_data.get("environments", [])
+    if settings.multi_environment_enabled:
+        # Multi-environment: fetch all environments
+        try:
+            env_list_data = api_client.list_environments()
+            environments = env_list_data.get("environments", [])
+        except Exception as e:
+            st.error(f"Failed to fetch environments: {e}")
+            environments = []
 
-    if not environments:
-        st.info("No environments found. Launch a new environment to get started.")
+        if not environments:
+            st.info("No environments found. Launch a new environment to get started.")
+            st.markdown("#### 🚀 Launch New Environment")
+            preset = st.selectbox("Environment Preset", [
+                "Standard Research (2 CPU, 4GB RAM)",
+                "Heavy Computation (4 CPU, 8GB RAM)",
+                "Light Analysis (1 CPU, 2GB RAM)",
+                "Custom Configuration"
+            ], key="multi_env_launch_preset")
+            if st.button("🚀 Launch Environment", type="primary", use_container_width=True, key="multi_env_launch_btn"):
+                launch_environment_with_config(preset)
+        else:
+            # Debug: Show raw environment data
+            st.markdown("#### 🐛 Debug: Raw Environment Data")
+            st.json(environments)
+            
+            # Show environments in a table
+            env_df = pd.DataFrame(environments)
+            st.dataframe(env_df, use_container_width=True, hide_index=True)
+
+            # Select environment to manage
+            # Try both 'id' and 'env_id' fields
+            env_ids = []
+            for env in environments:
+                if 'id' in env:
+                    env_ids.append(env['id'])
+                elif 'env_id' in env:
+                    env_ids.append(env['env_id'])
+                else:
+                    st.error(f"Environment missing ID field: {env}")
+            
+            if env_ids:
+                selected_env_id = st.selectbox("Select Environment", env_ids, format_func=lambda eid: eid, key="multi_env_selectbox")
+                # Find environment by either id or env_id
+                selected_env = None
+                for env in environments:
+                    if env.get("id") == selected_env_id or env.get("env_id") == selected_env_id:
+                        selected_env = env
+                        break
+                
+                if selected_env:
+                    st.markdown("#### 🐛 Debug: Selected Environment")
+                    st.json(selected_env)
+                    show_active_environment_details(selected_env)
+                    show_environment_actions_multi(selected_env)
+            
+            st.markdown("---")
+            st.markdown("#### 🚀 Launch New Environment")
+            preset = st.selectbox("Environment Preset (New)", [
+                "Standard Research (2 CPU, 4GB RAM)",
+                "Heavy Computation (4 CPU, 8GB RAM)",
+                "Light Analysis (1 CPU, 2GB RAM)",
+                "Custom Configuration"
+            ], key="multi_env_launch_preset_new")
+            if st.button("🚀 Launch Another Environment", type="primary", use_container_width=True, key="multi_env_launch_btn_new"):
+                launch_environment_with_config(preset)
     else:
-        st.markdown("## 🗂️ Your Environments")
-        for env in environments:
-            show_active_environment_details(env)
-
-    # Get environment status
-    status_data = get_environment_status()
-    
-    # Main layout
-    tab1, tab2, tab3, tab4 = st.tabs(["🏠 Overview", "⚙️ Configuration", "📊 Monitoring", "📋 Logs"])
-    
-    with tab1:
-        show_environment_overview(status_data)
-    
-    with tab2:
+        # Single environment (legacy)
+        status_data = get_environment_status()
+        col1, col2 = st.columns([2, 1])
+        with col1:
+            show_environment_overview(status_data)
+        with col2:
+            show_environment_actions(status_data)
+            show_quick_stats(status_data)
+        st.divider()
         show_environment_configuration(status_data)
-    
-    with tab3:
+        st.divider()
         show_environment_monitoring(status_data)
-    
-    with tab4:
+        st.divider()
         show_environment_logs(status_data)
 
-def show_environment_overview(status_data):
-    """Environment overview tab"""
+
+# New: Multi-environment actions
+def show_environment_actions_multi(env_info):
+    """Display action buttons for a specific environment (multi-env)"""
+    status = env_info.get("status", "unknown").lower()
+    # Try both 'id' and 'env_id' fields
+    env_id = env_info.get("id") or env_info.get("env_id")
+    st.markdown(f"#### Actions for Environment `{env_id}`")
     
-    col1, col2 = st.columns([2, 1])
+    # Debug info
+    st.caption(f"Debug: env_id={env_id}, status={status}, available_keys={list(env_info.keys())}")
     
+    col1, col2, col3 = st.columns(3)
     with col1:
-        st.markdown("### 🎯 Current Environment Status")
-        
-        if status_data.get("active"):
-            env_info = status_data.get("environment", {})
-            show_active_environment_details(env_info)
-        else:
-            show_inactive_environment_state()
-    
+        if st.button("🔄 Restart", key=f"restart_{env_id}"):
+            try:
+                st.info(f"🔄 Starting restart for environment {env_id}...")
+                
+                # Progress tracking for restart
+                progress_bar = st.progress(0)
+                status_text = st.empty()
+                
+                # Step 1: Stop environment
+                progress_bar.progress(25)
+                status_text.text("⏹️ Stopping current environment...")
+                st.write(f"Debug: Calling delete_environment with env_id={env_id}")
+                
+                delete_result = api_client.delete_environment(env_id)
+                st.write(f"Debug: Delete result: {delete_result}")
+                time.sleep(2)
+                
+                # Step 2: Clean up resources
+                progress_bar.progress(50)
+                status_text.text("🧹 Cleaning up resources...")
+                time.sleep(2)
+                
+                # Step 3: Create new environment
+                progress_bar.progress(75)
+                status_text.text("🚀 Creating new environment...")
+                st.write("Debug: Calling create_environment...")
+                
+                create_result = api_client.create_environment()
+                st.write(f"Debug: Create result: {create_result}")
+                
+                # Step 4: Complete
+                progress_bar.progress(100)
+                status_text.text("✅ Restart complete!")
+                time.sleep(1)
+                
+                # Clear progress
+                progress_bar.empty()
+                status_text.empty()
+                
+                if create_result.get("status") in ["created", "existing"]:
+                    st.success("✅ Environment restarted successfully!")
+                    st.rerun()
+                else:
+                    st.error(f"❌ Failed to restart environment. Create status: {create_result.get('status')}")
+            except Exception as e:
+                st.error(f"❌ Error restarting environment: {str(e)}")
+                st.write(f"Debug: Exception details: {type(e).__name__}: {str(e)}")
+                import traceback
+                st.code(traceback.format_exc())
+                
     with col2:
-        st.markdown("### 🛠️ Environment Actions")
-        show_environment_actions(status_data)
-        
-        st.markdown("### 📊 Quick Stats")
-        show_quick_stats(status_data)
+        if st.button("⏹️ Stop", key=f"stop_{env_id}"):
+            try:
+                st.info(f"⏹️ Stopping environment {env_id}...")
+                st.write(f"Debug: Calling delete_environment with env_id={env_id}")
+                
+                result = api_client.delete_environment(env_id)
+                st.write(f"Debug: Stop result: {result}")
+                
+                st.success("✅ Environment stopped successfully!")
+                st.rerun()
+            except Exception as e:
+                st.error(f"❌ Error stopping environment: {str(e)}")
+                st.write(f"Debug: Exception details: {type(e).__name__}: {str(e)}")
+                import traceback
+                st.code(traceback.format_exc())
+                
+    with col3:
+        env_url = env_info.get("url")
+        if env_url and st.button("🔗 Open", key=f"open_{env_id}"):
+            st.markdown(f'<meta http-equiv="refresh" content="0;URL={env_url}" target="_blank">', unsafe_allow_html=True)
+
+def show_environment_overview(status_data):
+    """Environment overview section"""
+    
+    st.markdown("### 🎯 Environment Status")
+    
+    if status_data.get("active"):
+        env_info = status_data.get("environment", {})
+        show_active_environment_details(env_info)
+    else:
+        show_inactive_environment_state()
 
 def show_active_environment_details(env_info):
     """Display active environment details"""
@@ -184,7 +325,7 @@ def show_environment_actions(status_data):
             "Custom Configuration"
         ])
         
-        if st.button("🚀 Launch Environment", type="primary", use_container_width=True):
+        if st.button("🚀 Launch Environment", type="primary", use_container_width=True, key="env_launch_btn"):
             launch_environment_with_config(preset)
     
     else:
@@ -193,26 +334,26 @@ def show_environment_actions(status_data):
         col1, col2 = st.columns(2)
         
         with col1:
-            if st.button("🔄 Restart", use_container_width=True):
+            if st.button("🔄 Restart", use_container_width=True, key="env_restart_btn"):
                 restart_environment()
         
         with col2:
-            if st.button("⏹️ Stop", use_container_width=True):
+            if st.button("⏹️ Stop", use_container_width=True, key="env_stop_btn"):
                 delete_environment()
         
         env_url = status_data.get("environment", {}).get("url")
         if env_url:
-            if st.button("🔗 Open Environment", type="primary", use_container_width=True):
+            if st.button("🔗 Open Environment", type="primary", use_container_width=True, key="env_open_btn"):
                 st.markdown(f'<meta http-equiv="refresh" content="0;URL={env_url}" target="_blank">', 
                            unsafe_allow_html=True)
         
         # Advanced actions
         st.markdown("#### 🔧 Advanced Actions")
         
-        if st.button("💓 Send Heartbeat", use_container_width=True):
+        if st.button("💓 Send Heartbeat", use_container_width=True, key="env_heartbeat_btn"):
             send_heartbeat()
         
-        if st.button("📊 Force Refresh Status", use_container_width=True):
+        if st.button("📊 Force Refresh Status", use_container_width=True, key="env_refresh_btn"):
             get_environment_status.clear()
             st.rerun()
 
@@ -291,7 +432,7 @@ def show_environment_configuration(status_data):
                                 height=100,
                                 value="JUPYTER_ENABLE_LAB=yes\nPYTHONPATH=/workspace")
         
-        submitted = st.form_submit_button("💾 Save Configuration", type="primary")
+        submitted = st.form_submit_button("💾 Save Configuration", type="primary", key="env_save_config_btn")
         
         if submitted:
             config = {
@@ -399,16 +540,20 @@ def show_environment_logs(status_data):
     with col2:
         log_lines = st.selectbox("Number of Lines", [50, 100, 200, 500])
     
-    with col3:
-        if st.button("🔄 Refresh Logs"):
+    with col2:
+        if st.button("🔄 Refresh Logs", key="env_refresh_logs_btn"):
             st.rerun()
     
     # Auto-refresh option
-    auto_refresh_logs = st.checkbox("Auto-refresh logs (10s)")
+    auto_refresh_logs = st.checkbox("Auto-refresh logs (10s)", key="env_logs_auto_refresh")
     
     if auto_refresh_logs:
-        time.sleep(10)
-        st.rerun()
+        # Use session state to manage auto-refresh
+        last_refresh = st.session_state.get("env_logs_last_refresh", 0)
+        current_time = time.time()
+        if current_time - last_refresh > 10:
+            st.session_state.env_logs_last_refresh = current_time
+            st.rerun()
     
     # Mock log entries
     log_entries = [
@@ -457,7 +602,7 @@ def show_environment_logs(status_data):
     col1, col2 = st.columns(2)
     
     with col1:
-        if st.button("📋 Copy to Clipboard"):
+        if st.button("📋 Copy to Clipboard", key="env_copy_logs_btn"):
             log_text = "\n".join([f"{entry['timestamp']} [{entry['level']}] {entry['message']}" 
                                  for entry in log_entries])
             st.code(log_text)
@@ -467,64 +612,158 @@ def show_environment_logs(status_data):
                              for entry in log_entries])
         st.download_button("💾 Download Logs", log_text, 
                           file_name=f"cmbcluster-logs-{datetime.now().strftime('%Y%m%d-%H%M%S')}.txt",
-                          mime="text/plain")
+                          mime="text/plain",
+                          key="env_download_logs_btn")
 
 # Helper functions
-@st.cache_data(ttl=30)
+@st.cache_data(ttl=10, show_spinner=False)  # Reduced TTL and disable spinner for better UX
 def get_environment_status():
     """Get environment status with caching"""
     try:
         return api_client.get_environment_status()
     except Exception as e:
-        st.error(f"Failed to get environment status: {str(e)}")
-        return {"active": False}
+        # Don't show error in UI for failed status checks, just log and return default
+        st.session_state.setdefault("api_errors", []).append(f"Status check failed: {str(e)}")
+        return {"active": False, "environment": None}
 
 def launch_environment_with_config(preset):
-    """Launch environment with selected configuration"""
-    with st.spinner("🚀 Launching environment..."):
-        try:
-            # Map preset to configuration
-            config_map = {
-                "Standard Research (2 CPU, 4GB RAM)": {"cpu_limit": 2.0, "memory_limit": "4Gi"},
-                "Heavy Computation (4 CPU, 8GB RAM)": {"cpu_limit": 4.0, "memory_limit": "8Gi"},
-                "Light Analysis (1 CPU, 2GB RAM)": {"cpu_limit": 1.0, "memory_limit": "2Gi"},
-                "Custom Configuration": st.session_state.get("env_config", {})
-            }
-            
-            config = config_map.get(preset, {"cpu_limit": 2.0, "memory_limit": "4Gi"})
-            
-            result = api_client.create_environment(config)
+    """Launch environment with selected configuration and progress tracking"""
+    try:
+        # Map preset to configuration
+        config_map = {
+            "Standard Research (2 CPU, 4GB RAM)": {"cpu_limit": 2.0, "memory_limit": "4Gi"},
+            "Heavy Computation (4 CPU, 8GB RAM)": {"cpu_limit": 4.0, "memory_limit": "8Gi"},
+            "Light Analysis (1 CPU, 2GB RAM)": {"cpu_limit": 1.0, "memory_limit": "2Gi"},
+            "Custom Configuration": st.session_state.get("env_config", {})
+        }
+        
+        config = config_map.get(preset, {"cpu_limit": 2.0, "memory_limit": "4Gi"})
+        
+        # Check if user is authenticated
+        token = st.session_state.get("access_token")
+        if not token:
+            st.error("❌ Authentication required. Please login again.")
+            return
+        
+        # Create progress container
+        progress_container = st.container()
+        
+        with progress_container:
+            # Initial launch request
+            with st.spinner("🚀 Initiating environment launch..."):
+                result = api_client.create_environment(config)
             
             if result.get("status") in ["created", "existing"]:
-                st.success(f"✅ Environment {result['status']} with {preset}!")
+                if result.get("status") == "existing":
+                    st.success(f"✅ Environment already exists with {preset}!")
+                    env_url = result.get("environment", {}).get("url")
+                    if env_url:
+                        st.info(f"🔗 Access your environment: {env_url}")
+                    
+                    # Clear cache and refresh
+                    if hasattr(get_environment_status, 'clear'):
+                        get_environment_status.clear()
+                    time.sleep(1)
+                    st.rerun()
+                    return
+                
+                # New environment - show progress tracking
+                st.info(f"🚀 Environment creation initiated with {preset}!")
+                
+                # Progress tracking
+                progress_bar = st.progress(0)
+                status_text = st.empty()
+                
+                # Step 1: Pod Creation
+                progress_bar.progress(20)
+                status_text.text("📦 Creating pod and allocating resources...")
+                time.sleep(2)
+                
+                # Step 2: Image Pull
+                progress_bar.progress(40)
+                status_text.text("🔄 Pulling container image...")
+                time.sleep(3)
+                
+                # Step 3: Container Start
+                progress_bar.progress(60)
+                status_text.text("🐳 Starting container...")
+                time.sleep(2)
+                
+                # Step 4: Service Setup
+                progress_bar.progress(80)
+                status_text.text("🔧 Setting up services and networking...")
+                time.sleep(2)
+                
+                # Step 5: Final checks and completion
+                progress_bar.progress(100)
+                status_text.text("✅ Environment ready!")
+                time.sleep(1)
+                
+                # Clear progress and show success
+                progress_bar.empty()
+                status_text.empty()
+                
+                st.success(f"✅ Environment created successfully with {preset}!")
                 env_url = result.get("environment", {}).get("url")
                 if env_url:
                     st.info(f"🔗 Access your environment: {env_url}")
                 
-                get_environment_status.clear()
-                time.sleep(2)
+                # Clear cache and refresh the page to show new environment
+                if hasattr(get_environment_status, 'clear'):
+                    get_environment_status.clear()
+                time.sleep(1)
                 st.rerun()
             else:
-                st.error("Failed to launch environment")
+                st.error(f"❌ Failed to launch environment. Status: {result.get('status', 'Unknown')}")
         
-        except Exception as e:
-            st.error(f"Error launching environment: {str(e)}")
+    except Exception as e:
+        st.error(f"❌ Error launching environment: {str(e)}")
 
 def restart_environment():
-    """Restart environment"""
-    with st.spinner("🔄 Restarting environment..."):
-        try:
+    """Restart environment with progress tracking"""
+    try:
+        # Create progress container
+        progress_container = st.container()
+        
+        with progress_container:
+            # Progress tracking for restart
+            progress_bar = st.progress(0)
+            status_text = st.empty()
+            
+            # Step 1: Stop environment
+            progress_bar.progress(25)
+            status_text.text("⏹️ Stopping current environment...")
             api_client.delete_environment()
-            time.sleep(3)
+            time.sleep(2)
+            
+            # Step 2: Clean up resources
+            progress_bar.progress(50)
+            status_text.text("🧹 Cleaning up resources...")
+            time.sleep(2)
+            
+            # Step 3: Create new environment
+            progress_bar.progress(75)
+            status_text.text("🚀 Creating new environment...")
             result = api_client.create_environment()
+            
+            # Step 4: Complete
+            progress_bar.progress(100)
+            status_text.text("✅ Restart complete!")
+            time.sleep(1)
+            
+            # Clear progress
+            progress_bar.empty()
+            status_text.empty()
             
             if result.get("status") == "created":
                 st.success("✅ Environment restarted successfully!")
                 get_environment_status.clear()
                 st.rerun()
-        
-        except Exception as e:
-            st.error(f"Error restarting environment: {str(e)}")
+            else:
+                st.error("❌ Failed to restart environment")
+    
+    except Exception as e:
+        st.error(f"❌ Error restarting environment: {str(e)}")
 
 def delete_environment():
     """Delete environment with confirmation"""
@@ -543,7 +782,7 @@ def delete_environment():
                 st.error(f"Error stopping environment: {str(e)}")
     else:
         st.warning("⚠️ This will stop your environment. Your workspace data will be preserved.")
-        if st.button("🗑️ Confirm Stop"):
+        if st.button("🗑️ Confirm Stop", key="env_confirm_stop_btn"):
             st.session_state.confirm_delete_env = True
             st.rerun()
 

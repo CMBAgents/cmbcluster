@@ -25,10 +25,16 @@ rules:
   - pods/status
   - services
   - persistentvolumeclaims
+  - secrets
   verbs: ["create", "delete", "get", "list", "patch", "update", "watch"]
-# Note: The original rbac1.yaml included permissions for Deployments and Ingresses.
-# The current pod_manager.py does not manage these resources, so they are omitted
-# for security (least privilege). Add them back if functionality changes.
+- apiGroups: ["apps"]
+  resources:
+  - deployments
+  verbs: ["create", "delete", "get", "list", "patch", "update", "watch"]
+- apiGroups: ["networking.k8s.io"]
+  resources:
+  - ingresses
+  verbs: ["create", "delete", "get", "list", "patch", "update", "watch"]
 ---
 # Binds the main backend service account to the pod-manager role.
 apiVersion: rbac.authorization.k8s.io/v1

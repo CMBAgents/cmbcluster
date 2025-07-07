@@ -31,6 +31,11 @@ class Settings(BaseSettings):
     storage_class_name: str = "standard-rwo"
     user_pod_sa_name: str = "cmbcluster-user-sa"
     
+    # Ingress and TLS settings
+    ingress_class_name: str = "nginx"
+    tls_enabled: bool = True
+    cluster_issuer: str = "letsencrypt-prod"
+    
     # Environment settings
     dev_mode: bool = False
     debug: bool = False

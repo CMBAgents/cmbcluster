@@ -26,8 +26,9 @@ REGISTRY_HOSTNAME=$(echo "$IMAGE_REPO" | cut -d'/' -f1)
 gcloud auth configure-docker "$REGISTRY_HOSTNAME" --quiet
 
 #SERVICES=("backend" "frontend" "user-environment")
-SERVICES=("backend" "frontend" )
-#SERVICES=("backend" )
+
+# SERVICES=("backend" "frontend" )
+SERVICES=("backend" )
 # SERVICES=("frontend" )
 for SERVICE in "${SERVICES[@]}"; do
     CONTEXT_PATH="$PROJECT_ROOT/$SERVICE"

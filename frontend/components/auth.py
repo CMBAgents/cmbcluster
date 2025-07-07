@@ -1,13 +1,13 @@
 import streamlit as st
 import jwt
 import time
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Optional, Dict
 from config import settings
 
 
 def check_authentication() -> bool:
-    """Check if user is authenticated"""
+    """Check if user is authenticated with session timeout handling"""
     # Check for token in URL params (OAuth callback)
     query_params = st.query_params
     if "token" in query_params:
@@ -17,14 +17,29 @@ def check_authentication() -> bool:
             st.query_params.clear()
             st.rerun()
     
-    # Check existing session
+    # Check existing session and token expiry
+    if st.session_state.get("authenticated", False):
+        # Check if token is still valid
+        token_exp = st.session_state.get("token_expiry")
+        if token_exp and datetime.now() > token_exp:
+            st.warning("Session expired. Please login again.")
+            logout()
+            return False
+        
+        # Refresh token if needed (within 5 minutes of expiry)
+        if token_exp and (token_exp - datetime.now()).total_seconds() < 300:
+            try:
+                refresh_token()
+            except Exception:
+                pass  # If refresh fails, continue with existing token
+    
     return st.session_state.get("authenticated", False)
 
 def validate_and_store_token(token: str) -> bool:
-    """Validate JWT token and store user info"""
+    """Validate JWT token and store user info with expiry tracking"""
     try:
         if settings.dev_mode:
-            # Development mode - accept any token
+            # Development mode - accept any token with long expiry
             st.session_state.user_info = {
                 "name": "Dev User",
                 "email": "dev@cmbcluster.local",
@@ -32,14 +47,24 @@ def validate_and_store_token(token: str) -> bool:
             }
             st.session_state.access_token = token
             st.session_state.authenticated = True
+            st.session_state.token_expiry = datetime.now() + timedelta(hours=8)  # 8 hour session
+            st.session_state.last_activity = datetime.now()
             return True
         
         # Decode JWT token (skip signature verification for now)
         payload = jwt.decode(token, options={"verify_signature": False})
         
         # Check expiration
-        if payload.get("exp") and payload["exp"] < time.time():
-            return False
+        exp_timestamp = payload.get("exp")
+        if exp_timestamp:
+            exp_datetime = datetime.fromtimestamp(exp_timestamp)
+            if exp_datetime < datetime.now():
+                st.error("Token has expired. Please login again.")
+                return False
+            st.session_state.token_expiry = exp_datetime
+        else:
+            # No expiry in token, set default 8 hours
+            st.session_state.token_expiry = datetime.now() + timedelta(hours=8)
         
         # Store user info and token
         st.session_state.user_info = {
@@ -49,6 +74,7 @@ def validate_and_store_token(token: str) -> bool:
         }
         st.session_state.access_token = token
         st.session_state.authenticated = True
+        st.session_state.last_activity = datetime.now()
         
         return True
         
@@ -64,14 +90,37 @@ def get_auth_headers() -> Dict[str, str]:
     return {}
 
 def logout():
-    """Clear authentication session"""
+    """Clear authentication session and all cached data"""
     keys_to_clear = [
-        "authenticated", "access_token", "user_info", 
-        "environment_status", "activity_log"
+        "authenticated", "access_token", "user_info", "token_expiry",
+        "last_activity", "environment_status", "activity_log",
+        "confirm_delete", "confirm_stop", "confirm_restart"
     ]
     for key in keys_to_clear:
         if key in st.session_state:
             del st.session_state[key]
+    
+    # Clear any cached data keys
+    cache_keys = [key for key in st.session_state.keys() if key.startswith('cache_')]
+    for key in cache_keys:
+        del st.session_state[key]
+
+def refresh_token():
+    """Refresh authentication token to extend session"""
+    try:
+        # In a real implementation, this would call a refresh endpoint
+        # For now, just extend the current session
+        current_expiry = st.session_state.get("token_expiry")
+        if current_expiry:
+            st.session_state.token_expiry = current_expiry + timedelta(hours=2)
+            st.session_state.last_activity = datetime.now()
+    except Exception as e:
+        # If refresh fails, don't interrupt the user experience
+        pass
+
+def update_activity():
+    """Update last activity timestamp"""
+    st.session_state.last_activity = datetime.now()
 
 def require_auth(func):
     """Decorator to require authentication"""
@@ -114,13 +163,31 @@ def show_login_screen():
                         st.error("Invalid token")
 
 def show_user_info():
-    """Display user information in sidebar"""
+    """Display user information in sidebar with session info"""
     user_info = st.session_state.get("user_info", {})
     
     with st.sidebar:
         st.markdown("### 👤 User Profile")
         st.write(f"**Name:** {user_info.get('name', 'Unknown')}")
         st.write(f"**Email:** {user_info.get('email', 'Unknown')}")
+        
+        # Show session info
+        token_expiry = st.session_state.get("token_expiry")
+        if token_expiry:
+            time_left = token_expiry - datetime.now()
+            if time_left.total_seconds() > 0:
+                hours_left = int(time_left.total_seconds() // 3600)
+                minutes_left = int((time_left.total_seconds() % 3600) // 60)
+                st.caption(f"⏰ Session: {hours_left}h {minutes_left}m left")
+            else:
+                st.caption("⚠️ Session expired")
+        
+        # Extend session button if close to expiry
+        if token_expiry and (token_expiry - datetime.now()).total_seconds() < 1800:  # 30 minutes
+            if st.button("🔄 Extend Session", use_container_width=True):
+                refresh_token()
+                st.success("Session extended!")
+                st.rerun()
         
         if st.button("🚪 Logout", use_container_width=True):
             logout()

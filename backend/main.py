@@ -210,27 +210,43 @@ async def get_environment_status(current_user: Dict = Depends(get_current_user))
             detail="Failed to get environment status"
         )
 
+
+# Delete a specific environment by env_id (multi-env support)
+from fastapi import Query
+
 @app.delete("/environments", tags=["environments"])
-async def delete_environment(current_user: Dict = Depends(get_current_user)):
-    """Delete user's environment"""
+async def delete_environment(
+    env_id: str = Query(None, description="Environment ID to delete (optional, deletes latest if not provided)"),
+    current_user: Dict = Depends(get_current_user)
+):
+    """Delete user's environment (optionally by env_id)"""
     user_id = current_user["sub"]
     user_email = current_user["email"]
     pod_manager = app_state["pod_manager"]
     
+    # Debug logging
+    logger.info("Delete environment request", user_id=user_id, env_id=env_id, user_email=user_email)
+    
     try:
-        await pod_manager.delete_user_environment(user_id, user_email)
-        await log_activity(user_id, "environment_deleted", "Environment deleted successfully")
+        if env_id:
+            logger.info("Deleting specific environment", env_id=env_id)
+            await pod_manager.delete_user_environment(user_id, user_email, env_id=env_id)
+        else:
+            logger.info("Deleting latest environment")
+            await pod_manager.delete_user_environment(user_id, user_email)
+        await log_activity(user_id, "environment_deleted", f"Environment deleted (env_id={env_id})")
         
+        logger.info("Environment deletion successful", user_id=user_id, env_id=env_id)
         return {
             "status": "deleted",
             "message": "Environment deleted successfully"
         }
     except Exception as e:
-        logger.error("Failed to delete environment", user_id=user_id, error=str(e))
+        logger.error("Failed to delete environment", user_id=user_id, env_id=env_id, error=str(e), exc_info=True)
         await log_activity(user_id, "environment_deletion_failed", str(e))
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to delete environment"
+            detail=f"Failed to delete environment: {str(e)}"
         )
 
 @app.post("/environments/heartbeat", tags=["environments"])
@@ -277,15 +293,30 @@ async def list_user_environments(current_user: Dict = Depends(get_current_user))
     """List all environments for the current user (multi-environment support)"""
     user_id = current_user["sub"]
     pod_manager = app_state["pod_manager"]
+    
+    logger.info("List environments request", user_id=user_id)
+    
     try:
-        # Filter all environments for this user
-        envs = [env for key, env in pod_manager.user_environments.items() if env.user_id == user_id]
-        return {"environments": envs}
+        # Use the new method to get all environments with updated status
+        envs = await pod_manager.get_user_environments(user_id)
+        
+        # Convert Environment objects to dicts for JSON serialization
+        env_dicts = []
+        for env in envs:
+            env_dict = env.dict() if hasattr(env, 'dict') else env.__dict__
+            # Ensure both 'id' and 'env_id' are available for frontend compatibility
+            if 'env_id' in env_dict and 'id' not in env_dict:
+                env_dict['id'] = env_dict['env_id']
+            logger.info("Environment serialized", env_dict=env_dict)
+            env_dicts.append(env_dict)
+        
+        logger.info("Returning environments", count=len(env_dicts), user_id=user_id)
+        return {"environments": env_dicts}
     except Exception as e:
-        logger.error("Failed to list environments", user_id=user_id, error=str(e))
+        logger.error("Failed to list environments", user_id=user_id, error=str(e), exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to list environments"
+            detail=f"Failed to list environments: {str(e)}"
         )
 
 # Background tasks
