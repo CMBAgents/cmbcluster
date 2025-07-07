@@ -30,8 +30,8 @@ backend:
     tag: "latest"
     pullPolicy: Always
   config:
-    apiUrl: "http://api.cmbcluster.example.com"
-    frontendUrl: "http://cmbcluster.example.com"
+    apiUrl: "http://api.cmbagent.cloud"
+    frontendUrl: "http://cmbagent.cloud"
     googleClientId: ""
     jwtAlgorithm: "HS256"
     tokenExpireHours: 8
@@ -52,7 +52,7 @@ ingress:
   annotations:
     {}
   # The base domain for the application.
-  baseDomain: "cmbcluster.local"
+  baseDomain: "cmbagent.cloud"
 
   tls:
     enabled: true

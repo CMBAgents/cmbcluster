@@ -46,59 +46,69 @@ spec:
             name: {{ include "cmbcluster.fullname" . }}-frontend
             port:
               number: {{ .Values.frontend.service.port }}
----
-# Ingress for the dynamic user environments
-# NOTE: The subdomain (e.g., jane-doe-google-com) must match the sanitized user email (safe_user_id) used in backend pod/service naming and environment URL.
-apiVersion: networking.k8s.io/v1
-kind: Ingress
-metadata:
-  name: {{ include "cmbcluster.fullname" . }}-users
-  namespace: {{ .Release.Namespace }}
-  labels:
-    {{- include "cmbcluster.labels" . | nindent 4 }}
-  annotations:
-    {{- if .Values.ingress.tls.enabled }}
-    cert-manager.io/cluster-issuer: {{ .Values.ingress.clusterIssuer | quote }}
-    nginx.ingress.kubernetes.io/ssl-redirect: "true"
-    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
-    {{- end }}
-    {{- with .Values.ingress.annotations -}}
-    {{- toYaml . | nindent 4 }}
-    {{- end }}
-    # Dynamically set the upstream service based on the subdomain using set_by_lua_block.
-    nginx.ingress.kubernetes.io/configuration-snippet: |
-      set_by_lua_block $proxy_upstream_name {
-        local host = ngx.var.host
-        local m, err = ngx.re.match(host, "^([a-z0-9\\-]+-[a-z0-9]+)\\.{{ .Values.ingress.baseDomain }}$", "ijo")
-        if m then
-          return "service-" .. m[1]
-        else
-          ngx.status = 404
-          ngx.say("Subdomain not found")
-          ngx.exit(ngx.HTTP_NOT_FOUND)
-        end
-      }
-    # These annotations are necessary for WebSocket support (used by Streamlit)
-    nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
-    nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
-spec:
-  ingressClassName: {{ .Values.ingress.className }}
-  {{- if .Values.ingress.tls.enabled }}
-  tls:
-  - hosts:
-    - "*.{{ .Values.ingress.baseDomain }}"
-    secretName: {{ .Values.ingress.tls.usersSecretName }}
-  {{- end }}
-  rules:
-  - host: "*.{{ .Values.ingress.baseDomain }}"
+  - host: 22yash-tiwari-gmail-com-69124032.cmbcluster.34.16.97.178.nip.io
     http:
       paths:
       - path: /
         pathType: Prefix
         backend:
-          # This backend is a placeholder. The actual upstream is set by the Lua script.
           service:
-            name: {{ include "cmbcluster.fullname" . }}-backend
+            name: service-22yash-tiwari-gmail-com-69124032
             port:
-              number: {{ .Values.backend.service.port }}
+              number: 80            
+
+# # Ingress for the dynamic user environments
+# # NOTE: The subdomain (e.g., jane-doe-google-com) must match the sanitized user email (safe_user_id) used in backend pod/service naming and environment URL.
+# apiVersion: networking.k8s.io/v1
+# kind: Ingress
+# metadata:
+#   name: {{ include "cmbcluster.fullname" . }}-users
+#   namespace: {{ .Release.Namespace }}
+#   labels:
+#     {{- include "cmbcluster.labels" . | nindent 4 }}
+#   annotations:
+#     {{- if .Values.ingress.tls.enabled }}
+#     cert-manager.io/cluster-issuer: {{ .Values.ingress.clusterIssuer | quote }}
+#     nginx.ingress.kubernetes.io/ssl-redirect: "true"
+#     nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+#     {{- end }}
+#     {{- with .Values.ingress.annotations -}}
+#     {{- toYaml . | nindent 4 }}
+#     {{- end }}
+#     # Dynamically set the upstream service based on the subdomain using set_by_lua_block.
+#     nginx.ingress.kubernetes.io/configuration-snippet: |
+#       set_by_lua_block $proxy_upstream_name {
+#         local host = ngx.var.host
+#         local m, err = ngx.re.match(host, "^([a-z0-9\\-]+-[a-z0-9]+)\\.{{ .Values.ingress.baseDomain }}$", "ijo")
+#         if m then
+#           return "service-" .. m[1]
+#         else
+#           ngx.status = 404
+#           ngx.say("Subdomain not found")
+#           ngx.exit(ngx.HTTP_NOT_FOUND)
+#         end
+#       }
+#     # These annotations are necessary for WebSocket support (used by Streamlit)
+#     nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
+#     nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
+# spec:
+#   ingressClassName: {{ .Values.ingress.className }}
+#   {{- if .Values.ingress.tls.enabled }}
+#   tls:
+#   - hosts:
+#     - "*.{{ .Values.ingress.baseDomain }}"
+#     secretName: {{ .Values.ingress.tls.usersSecretName }}
+#   {{- end }}
+#   rules:
+#   - host: "*.{{ .Values.ingress.baseDomain }}"
+#     http:
+#       paths:
+#       - path: /
+#         pathType: Prefix
+#         backend:
+#           # This backend is a placeholder. The actual upstream is set by the Lua script.
+#           service:
+#             name: service-22yash-tiwari-gmail-com-189498ee
+#             port:
+#               number: 80
 {{- end }}
