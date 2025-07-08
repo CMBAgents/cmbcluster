@@ -241,6 +241,14 @@ async def delete_environment(
             "status": "deleted",
             "message": "Environment deleted successfully"
         }
+    except ValueError as e:
+        # Handle case where environment is not found
+        logger.warning("Environment not found for deletion", user_id=user_id, env_id=env_id, error=str(e))
+        await log_activity(user_id, "environment_deletion_failed", f"Environment not found: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Environment not found: {str(e)}"
+        )
     except Exception as e:
         logger.error("Failed to delete environment", user_id=user_id, env_id=env_id, error=str(e), exc_info=True)
         await log_activity(user_id, "environment_deletion_failed", str(e))

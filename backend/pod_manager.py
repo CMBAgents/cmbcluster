@@ -524,7 +524,7 @@ class PodManager:
         user_envs = [env for key, env in self.user_environments.items() if env.user_id == user_id]
         if not user_envs:
             logger.warning("No environments found for user", user_id=user_id)
-            return
+            raise ValueError(f"No environments found for user {user_id}")
         
         if env_id:
             # Handle both cases: short env_id (f5a0cb53) or combined id (user_id-env_id)
@@ -544,7 +544,7 @@ class PodManager:
                                  env_id=env_id,
                                  actual_env_id=actual_env_id,
                                  available_envs=[{"id": env.id, "env_id": env.env_id} for env in user_envs])
-                    return
+                    raise ValueError(f"Environment {env_id} not found for user {user_id}")
         else:
             environment = sorted(user_envs, key=lambda x: x.created_at, reverse=True)[0]
         

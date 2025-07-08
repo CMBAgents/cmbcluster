@@ -86,10 +86,10 @@ def main():
             del st.session_state[key]
     
     # Clear any environment-specific confirmation states
-    keys_to_remove = [key for key in st.session_state.keys() 
-                     if key.startswith(('confirm_restart_', 'confirm_stop_'))]
-    for key in keys_to_remove:
-        del st.session_state[key]
+    # keys_to_remove = [key for key in st.session_state.keys() 
+    #                  if key.startswith(('confirm_restart_', 'confirm_stop_'))]
+    # for key in keys_to_remove:
+    #     del st.session_state[key]
     
     # Clear page content to prevent stacking
     st.empty()
@@ -341,47 +341,55 @@ def launch_environment_with_progress(preset, config):
 def restart_environment(env_id):
     """Restart environment with simplified confirmation"""
     # Check if confirmation is pending
-    if st.session_state.get(f"confirm_restart_{env_id}"):
-        with st.spinner("🔄 Restarting environment..."):
-            try:
-                # Use the API client restart method
-                result = api_client.restart_environment(env_id=env_id)
+    with st.spinner("🔄 Restarting environment..."):
+        try:
+            # Use the API client restart method
+            result = api_client.restart_environment(env_id=env_id)
+            
+            if result.get("status") == "success":
+                st.success("✅ Environment restart initiated successfully!")
+                # Show stars instead of balloons
+                st.markdown("⭐ ⭐ ⭐ **Restart Initiated!** ⭐ ⭐ ⭐")
+                st.info("📊 Environment is restarting. Please check the Monitoring tab for status updates.")
                 
+                # Clear confirmation state
+                st.session_state[f"confirm_restart_{env_id}"] = False
+            elif result.get("status") == "error":
+                st.error(f"❌ Failed to restart environment")
+                st.warning(f"📝 Details: {result.get('message', 'Unknown error')}")
+                st.session_state[f"confirm_restart_{env_id}"] = False
+            else:
+                # Legacy handling for backward compatibility
                 if result.get("status") in ["created", "existing"]:
                     st.success("✅ Environment restart initiated successfully!")
-                    # Show stars instead of balloons
                     st.markdown("⭐ ⭐ ⭐ **Restart Initiated!** ⭐ ⭐ ⭐")
                     st.info("📊 Environment is restarting. Please check the Monitoring tab for status updates.")
-                    
-                    # Clear confirmation state
                     st.session_state[f"confirm_restart_{env_id}"] = False
                 else:
                     st.error(f"❌ Failed to restart environment. Status: {result.get('status', 'Unknown')}")
                     if result.get("message"):
                         st.warning(f"📝 Details: {result.get('message')}")
                     st.session_state[f"confirm_restart_{env_id}"] = False
-                    
-            except Exception as e:
-                st.error(f"❌ Error restarting environment: {str(e)}")
-                with st.expander("🔧 Debug Information"):
-                    st.write(f"Environment ID: {env_id}")
-                    st.write(f"Error type: {type(e).__name__}")
-                    st.write(f"Error details: {str(e)}")
-                st.session_state[f"confirm_restart_{env_id}"] = False
-    else:
-        st.warning("⚠️ This will restart your environment. Your workspace data will be preserved.")
-        if st.button("🔄 Confirm Restart", key=f"confirm_restart_button_{env_id}"):
-            st.session_state[f"confirm_restart_{env_id}"] = True
-            st.rerun()
+                
+        except Exception as e:
+            st.error(f"❌ Error restarting environment: {str(e)}")
+            with st.expander("🔧 Debug Information"):
+                st.write(f"Environment ID: {env_id}")
+                st.write(f"Error type: {type(e).__name__}")
+                st.write(f"Error details: {str(e)}")
+            st.session_state[f"confirm_restart_{env_id}"] = False
+
 
 def stop_environment(env_id):
     """Stop environment with simplified confirmation"""
     # Check if confirmation is pending
-    if st.session_state.get(f"confirm_stop_{env_id}"):
-        with st.spinner("🗑️ Stopping environment..."):
-            try:
-                # Use the API client stop method
-                result = api_client.stop_environment(env_id=env_id)
+    
+    with st.spinner("🗑️ Stopping environment..."):
+        try:
+            # Use the API client stop method
+            result = api_client.stop_environment(env_id=env_id)
+            
+            if result.get("status") == "success":
                 st.success("✅ Environment stop initiated successfully!")
                 # Show stars instead of balloons
                 st.markdown("⭐ ⭐ ⭐ **Stop Initiated!** ⭐ ⭐ ⭐")
@@ -389,19 +397,31 @@ def stop_environment(env_id):
                 
                 # Clear confirmation state
                 st.session_state[f"confirm_stop_{env_id}"] = False
-                
-            except Exception as e:
-                st.error(f"❌ Error stopping environment: {str(e)}")
-                with st.expander("🔧 Debug Information"):
-                    st.write(f"Environment ID: {env_id}")
-                    st.write(f"Error type: {type(e).__name__}")
-                    st.write(f"Error details: {str(e)}")
+            elif result.get("status") == "error":
+                st.error(f"❌ Failed to stop environment")
+                st.warning(f"📝 Details: {result.get('message', 'Unknown error')}")
                 st.session_state[f"confirm_stop_{env_id}"] = False
-    else:
-        st.warning("⚠️ This will stop your environment. Your workspace data will be preserved.")
-        if st.button("🗑️ Confirm Stop", key=f"confirm_stop_button_{env_id}"):
-            st.session_state[f"confirm_stop_{env_id}"] = True
-            st.rerun()
+            else:
+                # Legacy handling for backward compatibility
+                if result.get("status") == "deleted":
+                    st.success("✅ Environment stop initiated successfully!")
+                    st.markdown("⭐ ⭐ ⭐ **Stop Initiated!** ⭐ ⭐ ⭐")
+                    st.info("📊 Environment is stopping. Please refresh the page to see updated status.")
+                    st.session_state[f"confirm_stop_{env_id}"] = False
+                else:
+                    st.error(f"❌ Failed to stop environment. Status: {result.get('status', 'Unknown')}")
+                    if result.get("message"):
+                        st.warning(f"📝 Details: {result.get('message')}")
+                    st.session_state[f"confirm_stop_{env_id}"] = False
+            
+        except Exception as e:
+            st.error(f"❌ Error stopping environment: {str(e)}")
+            with st.expander("🔧 Debug Information"):
+                st.write(f"Environment ID: {env_id}")
+                st.write(f"Error type: {type(e).__name__}")
+                st.write(f"Error details: {str(e)}")
+            st.session_state[f"confirm_stop_{env_id}"] = False
+ 
 
 def check_environment_status(env_id):
     """Check and display environment status"""

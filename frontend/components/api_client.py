@@ -29,25 +29,35 @@ class CMBClusterAPIClient:
             if response.status_code == 401:
                 st.error("Authentication failed. Please login again.")
                 st.session_state.authenticated = False
+                raise e
             elif response.status_code == 403:
                 st.error("Access denied. Insufficient permissions.")
+                raise e
             elif response.status_code == 404:
-                # Don't show error for 404, just return empty response
-                return {"active": False, "environment": None}
+                # For 404, return error response instead of empty response
+                try:
+                    error_data = response.json()
+                    return {"status": "error", "message": error_data.get("detail", "Not found")}
+                except:
+                    return {"status": "error", "message": "Resource not found"}
             elif response.status_code == 500:
-                st.error("Server error. Please try again later.")
+                try:
+                    error_data = response.json()
+                    return {"status": "error", "message": error_data.get("detail", "Server error")}
+                except:
+                    return {"status": "error", "message": "Server error. Please try again later."}
             else:
-                st.error(f"API error: {response.status_code}")
-            raise e
+                try:
+                    error_data = response.json()
+                    return {"status": "error", "message": error_data.get("detail", f"API error: {response.status_code}")}
+                except:
+                    return {"status": "error", "message": f"API error: {response.status_code}"}
         except requests.exceptions.Timeout:
-            st.error("Request timeout. Please check your connection.")
-            raise
+            return {"status": "error", "message": "Request timeout. Please check your connection."}
         except requests.exceptions.ConnectionError:
-            st.error("Connection error. Please check if the backend is running.")
-            raise
+            return {"status": "error", "message": "Connection error. Please check if the backend is running."}
         except requests.exceptions.RequestException as e:
-            st.error(f"Network error: {str(e)}")
-            raise e
+            return {"status": "error", "message": f"Network error: {str(e)}"}
     
     def create_environment(self, config: Optional[Dict] = None) -> Dict[str, Any]:
         """Create a new user environment"""
@@ -113,18 +123,37 @@ class CMBClusterAPIClient:
 
     def stop_environment(self, env_id: str = None) -> Dict[str, Any]:
         """Stop user environment (graceful shutdown). If env_id is provided, stop that environment."""
-        return self.delete_environment(env_id=env_id)
+        try:
+            result = self.delete_environment(env_id=env_id)
+            if result.get("status") == "deleted":
+                return {"status": "success", "message": "Environment stopped successfully"}
+            else:
+                return {"status": "error", "message": f"Failed to stop environment: {result.get('message', 'Unknown error')}"}
+        except Exception as e:
+            return {"status": "error", "message": f"Error stopping environment: {str(e)}"}
     
 
     def restart_environment(self, env_id: str = None, config: Optional[Dict] = None) -> Dict[str, Any]:
         """Restart user environment. If env_id is provided, restart that environment."""
         try:
-            self.delete_environment(env_id=env_id)
+            # First, try to stop the environment
+            delete_result = self.delete_environment(env_id=env_id)
+            if delete_result.get("status") != "deleted":
+                return {"status": "error", "message": f"Failed to stop environment for restart: {delete_result.get('message', 'Unknown error')}"}
+            
+            # Wait a bit for cleanup
             import time
-            time.sleep(2)  # Brief pause between delete and create
-            return self.create_environment(config)
+            time.sleep(3)  # Longer pause for proper cleanup
+            
+            # Create new environment
+            create_result = self.create_environment(config)
+            if create_result.get("status") in ["created", "existing"]:
+                return {"status": "success", "message": "Environment restarted successfully", "environment": create_result}
+            else:
+                return {"status": "error", "message": f"Failed to create new environment: {create_result.get('message', 'Unknown error')}"}
+                
         except Exception as e:
-            return self.create_environment(config)
+            return {"status": "error", "message": f"Error restarting environment: {str(e)}"}
 
 # Global API client instance
 api_client = CMBClusterAPIClient()
