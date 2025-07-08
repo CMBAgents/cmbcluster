@@ -7,7 +7,7 @@ import sys
 import os
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from components.auth import check_authentication, show_login_screen, require_auth, logout
+from components.auth import check_authentication, show_login_screen, require_auth, logout, show_user_info
 from components.api_client import api_client
 from config import settings
 
@@ -42,6 +42,9 @@ st.markdown("""
 @require_auth
 def main():
     """Main settings page"""
+    
+    # Show user info in sidebar
+    show_user_info()
     
     # Clear only specific page-related session state (preserve auth and config)
     page_keys_to_clear = ['settings_temp_data']

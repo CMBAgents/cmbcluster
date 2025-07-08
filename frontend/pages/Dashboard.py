@@ -7,7 +7,7 @@ import sys
 import os
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from components.auth import check_authentication, show_login_screen, require_auth
+from components.auth import check_authentication, show_login_screen, require_auth, show_user_info
 from components.api_client import api_client
 
 # Page configuration
@@ -50,6 +50,9 @@ st.markdown("""
 def main():
     """Main dashboard page"""
     
+    # Show user info in sidebar
+    show_user_info()
+    
     # Clear only specific page-related session state (preserve auth and config)
     page_keys_to_clear = ['dashboard_temp_data']
     for key in page_keys_to_clear:
@@ -86,6 +89,25 @@ def main():
     
     with col1:
         show_environment_status(status_data)
+        
+        # Show additional environments if there are multiple
+        try:
+            response = api_client.list_environments()
+            environments = response.get("environments", [])
+            if len(environments) > 1:
+                st.markdown("---")
+                st.markdown("### 🌟 All Your Environments")
+                for i, env in enumerate(environments[:3]):  # Show up to 3 environments
+                    status_emoji = "🟢" if env.get("status", "").lower() == "running" else "🟡" if env.get("status", "").lower() == "pending" else "🔴"
+                    env_id = env.get("id", env.get("env_id", "unknown"))
+                    st.markdown(f"**{status_emoji} Environment {env_id[:8]}...** - {env.get('status', 'Unknown').title()}")
+                
+                if len(environments) > 3:
+                    st.markdown(f"*...and {len(environments) - 3} more environments*")
+                
+                st.info("💡 Go to the Environment page to manage all your environments")
+        except:
+            pass
     
     with col2:
         show_quick_actions(status_data)
@@ -96,7 +118,13 @@ def show_overview_metrics(status_data, user_info):
     
     with col1:
         env_active = status_data.get("active", False)
-        status_text = "🟢 Active" if env_active else "🔴 Inactive"
+        env_info = status_data.get("environment", {})
+        
+        if env_active:
+            status_text = f"🟢 {env_info.get('status', 'Active').title()}"
+        else:
+            status_text = "🔴 Inactive"
+            
         st.markdown(f"""
         <div class="metric-card">
             <h3>Environment Status</h3>
@@ -129,10 +157,18 @@ def show_overview_metrics(status_data, user_info):
     
     with col3:
         user_name = user_info.get("name", "User")
+        # Also show total environment count
+        try:
+            response = api_client.list_environments()
+            total_envs = len(response.get("environments", []))
+            metric_text = f"{user_name}<br><small>{total_envs} Env(s)</small>"
+        except:
+            metric_text = user_name
+            
         st.markdown(f"""
         <div class="metric-card">
             <h3>Welcome</h3>
-            <h2>{user_name}</h2>
+            <h2>{metric_text}</h2>
         </div>
         """, unsafe_allow_html=True)
 
@@ -155,9 +191,9 @@ def show_environment_status(status_data):
         
         with col1:
             st.markdown("**Environment Details:**")
-            st.write(f"**Pod Name:** `{env_info.get('pod_name', 'Unknown')}`")
+            st.write(f"**Environment ID:** `{env_info.get('id', env_info.get('env_id', 'Unknown'))[:8]}...`")
             st.write(f"**Status:** {env_info.get('status', 'Unknown').title()}")
-            st.write(f"**Created:** {env_info.get('created_at', 'Unknown')}")
+            st.write(f"**Created:** {format_datetime(env_info.get('created_at', 'Unknown'))}")
         
         with col2:
             env_url = env_info.get('url')
@@ -183,18 +219,21 @@ def show_quick_actions(status_data):
     st.markdown("### ⚡ Quick Actions")
     
     env_active = status_data.get("active", False)
+    env_info = status_data.get("environment", {})
     
     if not env_active:
-        if st.button("🚀 Launch Environment", type="primary", key="launch_env", use_container_width=True):
+        if st.button("🚀 Launch Environment", type="primary", key=f"dashboard_launch_{int(time.time())}", use_container_width=True):
             launch_environment()
     else:
+        env_id = env_info.get("id", env_info.get("env_id"))
+        
         if st.button("🔄 Restart Environment", key="restart_env", use_container_width=True):
-            restart_environment()
+            restart_environment(env_id)
         
         if st.button("⏹️ Stop Environment", key="stop_env", use_container_width=True):
-            delete_environment()
+            delete_environment(env_id)
         
-        env_url = status_data.get("environment", {}).get("url")
+        env_url = env_info.get("url")
         if env_url:
             if st.button("🔗 Open Environment", key="open_env", use_container_width=True):
                 st.markdown(f'<meta http-equiv="refresh" content="0;URL={env_url}" target="_blank">', 
@@ -202,9 +241,27 @@ def show_quick_actions(status_data):
 
 # Helper functions
 def get_environment_status():
-    """Get environment status"""
+    """Get environment status - updated for multi-environment support"""
     try:
-        return api_client.get_environment_status()
+        # Get all environments for the user
+        response = api_client.list_environments()
+        environments = response.get("environments", [])
+        
+        if not environments:
+            return {"active": False, "environment": None}
+        
+        # Find the most recent active environment
+        active_envs = [env for env in environments if env.get("status", "").lower() in ["running", "pending"]]
+        
+        if active_envs:
+            # Sort by creation time and get the most recent
+            latest_env = sorted(active_envs, key=lambda x: x.get("created_at", ""), reverse=True)[0]
+            return {"active": True, "environment": latest_env}
+        else:
+            # Return the most recent environment even if not active
+            latest_env = sorted(environments, key=lambda x: x.get("created_at", ""), reverse=True)[0]
+            return {"active": False, "environment": latest_env}
+            
     except Exception as e:
         return {"active": False, "environment": None}
 
@@ -220,7 +277,7 @@ def launch_environment():
                 if env_url:
                     st.info(f"🔗 Access your environment: {env_url}")
                 
-                time.sleep(2)
+                time.sleep(1)
                 st.rerun()
             else:
                 st.error("Failed to launch environment")
@@ -228,28 +285,35 @@ def launch_environment():
         except Exception as e:
             st.error(f"Error launching environment: {str(e)}")
 
-def restart_environment():
+def restart_environment(env_id=None):
     """Restart environment"""
     with st.spinner("🔄 Restarting environment..."):
         try:
             # Delete then create
-            api_client.delete_environment()
-            time.sleep(3)
+            if env_id:
+                api_client.delete_environment(env_id)
+            else:
+                api_client.delete_environment()
+            time.sleep(2)
             result = api_client.create_environment()
             
             if result.get("status") == "created":
                 st.success("✅ Environment restarted successfully!")
+                time.sleep(1)
                 st.rerun()
         
         except Exception as e:
             st.error(f"Error restarting environment: {str(e)}")
 
-def delete_environment():
+def delete_environment(env_id=None):
     """Delete environment with confirmation"""
     if st.session_state.get("confirm_delete_dashboard"):
         with st.spinner("🗑️ Stopping environment..."):
             try:
-                result = api_client.delete_environment()
+                if env_id:
+                    result = api_client.delete_environment(env_id)
+                else:
+                    result = api_client.delete_environment()
                 st.success("✅ Environment stopped successfully!")
                 
                 st.session_state.confirm_delete_dashboard = False
@@ -263,6 +327,16 @@ def delete_environment():
         if st.button("🗑️ Confirm Stop", key="dashboard_confirm_stop"):
             st.session_state.confirm_delete_dashboard = True
             st.rerun()
+
+def format_datetime(dt_str):
+    """Format datetime string for display"""
+    if not dt_str or dt_str == "Unknown":
+        return "N/A"
+    try:
+        dt = datetime.fromisoformat(dt_str.replace('Z', '+00:00'))
+        return dt.strftime("%Y-%m-%d %H:%M:%S")
+    except:
+        return dt_str
 
 if __name__ == "__main__":
     if not check_authentication():

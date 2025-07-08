@@ -58,19 +58,8 @@ class CMBClusterAPIClient:
             "storage_size": "10Gi"
         }
         
-        # Debug logging
-        print(f"DEBUG: create_environment called with config={config}")
-        print(f"DEBUG: URL={url}, data={data}")
-        print(f"DEBUG: Headers={self._get_headers()}")
-        
-        try:
-            response = self.session.post(url, json=data, headers=self._get_headers(), timeout=30)
-            print(f"DEBUG: Response status={response.status_code}")
-            print(f"DEBUG: Response text={response.text}")
-            return self._handle_response(response)
-        except Exception as e:
-            print(f"DEBUG: Exception in create_environment: {type(e).__name__}: {str(e)}")
-            raise
+        response = self.session.post(url, json=data, headers=self._get_headers(), timeout=30)
+        return self._handle_response(response)
     
     def get_environment_status(self) -> Dict[str, Any]:
         """Get current environment status"""
@@ -84,19 +73,8 @@ class CMBClusterAPIClient:
         url = f"{self.base_url}/environments"
         params = {"env_id": env_id} if env_id else None
         
-        # Debug logging
-        print(f"DEBUG: delete_environment called with env_id={env_id}")
-        print(f"DEBUG: URL={url}, params={params}")
-        print(f"DEBUG: Headers={self._get_headers()}")
-        
-        try:
-            response = self.session.delete(url, headers=self._get_headers(), params=params, timeout=20)
-            print(f"DEBUG: Response status={response.status_code}")
-            print(f"DEBUG: Response text={response.text}")
-            return self._handle_response(response)
-        except Exception as e:
-            print(f"DEBUG: Exception in delete_environment: {type(e).__name__}: {str(e)}")
-            raise
+        response = self.session.delete(url, headers=self._get_headers(), params=params, timeout=20)
+        return self._handle_response(response)
     
     def send_heartbeat(self) -> Dict[str, Any]:
         """Send heartbeat to keep environment alive"""
@@ -122,6 +100,15 @@ class CMBClusterAPIClient:
         url = f"{self.base_url}/environments/list"
         response = self.session.get(url, headers=self._get_headers())
         return self._handle_response(response)
+
+    def get_environment_by_id(self, env_id: str) -> Dict[str, Any]:
+        """Get specific environment status by ID"""
+        environments = self.list_environments()
+        if environments and "environments" in environments:
+            for env in environments["environments"]:
+                if env.get("id") == env_id or env.get("env_id") == env_id:
+                    return {"active": True, "environment": env}
+        return {"active": False, "environment": None}
 
 
     def stop_environment(self, env_id: str = None) -> Dict[str, Any]:

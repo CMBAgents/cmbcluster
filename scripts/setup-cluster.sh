@@ -151,32 +151,7 @@ if ! gcloud container clusters describe $CLUSTER_NAME --zone=$ZONE --project=$PR
     # Using e2-standard-2 for better cost/performance than n1-standard-2
     # Using pd-balanced for node disk type for better performance than pd-standard
     # Note: The 'cmbcluster-ssd' StorageClass is for PVCs, not node boot disks.
-    gcloud container clusters create $CLUSTER_NAME \
-        --project=$PROJECT_ID \
-        --zone=$ZONE \
-        --network=$NETWORK_NAME \
-        --subnetwork=$SUBNET_NAME \
-        --cluster-secondary-range-name=$PODS_RANGE \
-        --services-secondary-range-name=$SERVICES_RANGE \
-        --enable-ip-alias \
-        --enable-private-nodes \
-        --master-ipv4-cidr=172.16.0.0/28 \
-        --enable-master-authorized-networks \
-        --master-authorized-networks $MY_IP/32 \
-        --num-nodes=3 \
-        --machine-type=e2-standard-2 \
-        --disk-size=50GB \
-        --disk-type=pd-balanced \
-        --enable-autorepair \
-        --enable-autoupgrade \
-        --enable-autoscaling \
-        --min-nodes=1 \
-        --max-nodes=10 \
-        --enable-network-policy \
-        --workload-pool=$PROJECT_ID.svc.id.goog \
-        --addons=HorizontalPodAutoscaling,HttpLoadBalancing,GcePersistentDiskCsiDriver \
-        --logging=SYSTEM,WORKLOAD \
-        --monitoring=SYSTEM
+    g
 else
     echo "✅ Cluster $CLUSTER_NAME already exists"
 fi

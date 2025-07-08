@@ -178,7 +178,7 @@ def show_user_info():
             if time_left.total_seconds() > 0:
                 hours_left = int(time_left.total_seconds() // 3600)
                 minutes_left = int((time_left.total_seconds() % 3600) // 60)
-                st.caption(f"⏰ Session: {hours_left}h {minutes_left}m left")
+                
             else:
                 st.caption("⚠️ Session expired")
         

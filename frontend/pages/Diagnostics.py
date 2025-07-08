@@ -8,7 +8,7 @@ import sys
 import os
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from components.auth import check_authentication, show_login_screen, require_auth
+from components.auth import check_authentication, show_login_screen, require_auth, show_user_info
 from components.api_client import api_client
 from config import settings
 
@@ -23,6 +23,9 @@ st.set_page_config(
 @require_auth
 def main():
     """Diagnostics page to help debug API issues"""
+    
+    # Show user info in sidebar
+    show_user_info()
     
     # Clear only specific page-related session state (preserve auth and config)
     page_keys_to_clear = ['diag_temp_data']

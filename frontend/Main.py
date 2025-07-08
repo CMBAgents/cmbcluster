@@ -229,7 +229,7 @@ def show_welcome_content():
         
         with col2:
             # Quick stats
-            st.metric("Session Time", f"{7}h {59}m left")  # From auth session
+           
             if status_data.get("active"):
                 st.metric("Environment Status", "Running")
             else:

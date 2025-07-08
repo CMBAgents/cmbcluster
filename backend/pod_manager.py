@@ -527,10 +527,24 @@ class PodManager:
             return
         
         if env_id:
-            environment = next((env for env in user_envs if env.env_id == env_id), None)
+            # Handle both cases: short env_id (f5a0cb53) or combined id (user_id-env_id)
+            actual_env_id = env_id
+            if '-' in env_id and env_id.startswith(user_id):
+                # Extract the short env_id from combined id (user_id-env_id)
+                actual_env_id = env_id.split('-', 1)[1]
+                logger.info("Parsed combined env_id", original=env_id, parsed=actual_env_id)
+            
+            environment = next((env for env in user_envs if env.env_id == actual_env_id), None)
             if not environment:
-                logger.warning("Environment to delete not found", user_id=user_id, env_id=env_id)
-                return
+                # Also try matching by full id
+                environment = next((env for env in user_envs if env.id == env_id), None)
+                if not environment:
+                    logger.warning("Environment to delete not found", 
+                                 user_id=user_id, 
+                                 env_id=env_id,
+                                 actual_env_id=actual_env_id,
+                                 available_envs=[{"id": env.id, "env_id": env.env_id} for env in user_envs])
+                    return
         else:
             environment = sorted(user_envs, key=lambda x: x.created_at, reverse=True)[0]
         
