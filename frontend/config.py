@@ -8,8 +8,10 @@ class Settings:
     api_url: str = os.getenv("API_URL", "http://localhost:8000")
     dev_mode: bool = os.getenv("DEV_MODE", "false").lower() == "true"
     base_domain: str = os.getenv("BASE_DOMAIN", "cmbcluster.local")
-    app_title: str = "CMBCluster"
-    app_icon: str = "🚀"
+    app_title: str = "CMBAgent Cloud"
+    app_tagline: str = "Your gateway to cosmology research environments"
+    app_message: str = "Coming Soon"
+    app_icon: str = None
 
     # UI Settings
     sidebar_state: str = "expanded"

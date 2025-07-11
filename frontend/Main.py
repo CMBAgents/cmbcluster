@@ -21,6 +21,9 @@ os.environ['PYTHONHTTPSVERIFY'] = '0'
 os.environ['CURL_CA_BUNDLE'] = ''
 os.environ['REQUESTS_CA_BUNDLE'] = ''
 
+CAMBRIDGE_LOGO_URL = "./media/cambridge-logo.png"
+INFOSYS_LOGO_URL = "./media/infosys-logo.png"
+
 # Page configuration
 st.set_page_config(
     page_title=settings.app_title,
@@ -30,9 +33,17 @@ st.set_page_config(
     menu_items={
         'Get Help': None,
         'Report a bug': None,
-        'About': f"# {settings.app_title}\nMulti-tenant Streamlit Platform for Cosmology Research"
+        'About': f"# {settings.app_title}\nYour gateway to cosmology research environments"
     }
 )
+
+col1, col2, col3 = st.columns([1, 2, 1])
+
+with col1:
+    st.image(CAMBRIDGE_LOGO_URL, width=120)
+
+with col3:
+    st.image(INFOSYS_LOGO_URL, width=120) 
 
 # Custom CSS
 st.markdown("""
@@ -75,7 +86,7 @@ st.markdown("""
 
 def main():
     """Main page - Landing/Welcome page for multi-page app"""
-    # Check authentication
+    # Check authentication 
     if not check_authentication():
         show_login_screen()
         return
@@ -157,7 +168,7 @@ def show_welcome_content():
     # Welcome section
     st.markdown("""
     <div class="welcome-card">
-        <h2>🎉 Welcome to CMBCluster!</h2>
+        <h2>CMBAgent</h2>
         <p>Your gateway to cosmology research environments</p>
     </div>
     """, unsafe_allow_html=True)

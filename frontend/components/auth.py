@@ -133,11 +133,11 @@ def require_auth(func):
 
 def show_login_screen():
     """Display login interface"""
-    st.markdown("""
+    st.markdown(f"""
     <div style="text-align: center; padding: 2rem;">
-        <h1>🚀 CMBCluster</h1>
-        <h3>Multi-tenant Streamlit Platform</h3>
-        <p>Please authenticate to access your research environment</p>
+        <h1>{settings.app_title}</h1>
+        <h3>{settings.app_tagline}</h3>
+        <p>Coming soon</p>
     </div>
     """, unsafe_allow_html=True)
     
