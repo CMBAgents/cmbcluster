@@ -10,11 +10,50 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from components.auth import check_authentication, show_login_screen, require_auth, logout, show_user_info
 from components.api_client import api_client
 from config import settings
+import ssl
+import requests
+import urllib3
+
+# Disable all SSL warnings
+urllib3.disable_warnings()
+
+# Create unverified context
+ssl._create_default_https_context = ssl._create_unverified_context
+
+# Set environment variables
+import os
+os.environ['PYTHONHTTPSVERIFY'] = '0'
+os.environ['CURL_CA_BUNDLE'] = ''
+os.environ['REQUESTS_CA_BUNDLE'] = ''
+
+CAMBRIDGE_LOGO_URL = "./media/cambridge-logo.png"
+INFOSYS_LOGO_URL = "./media/infosys-logo.png"
 
 # Page configuration
 st.set_page_config(
-    page_title="Settings - CMBCluster",
-    page_icon="⚙️",
+    page_title=settings.app_title,
+    page_icon=settings.app_icon,
+    layout=settings.layout,
+    initial_sidebar_state=settings.sidebar_state,
+    menu_items={
+        'Get Help': None,
+        'Report a bug': None,
+        'About': f"# {settings.app_title}\n{settings.app_tagline}"
+    }
+)
+
+col1, col2, col3 = st.columns([1, 2, 1])
+
+with col1:
+    st.image(CAMBRIDGE_LOGO_URL, width=120)
+
+with col3:
+    st.image(INFOSYS_LOGO_URL, width=120) 
+
+# Page configuration
+st.set_page_config(
+    page_title=settings.app_title,
+    page_icon=None,
     layout="wide",
     initial_sidebar_state="expanded"
 )

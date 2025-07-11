@@ -9,7 +9,7 @@ class Settings:
     dev_mode: bool = os.getenv("DEV_MODE", "false").lower() == "true"
     base_domain: str = os.getenv("BASE_DOMAIN", "cmbcluster.local")
     app_title: str = "CMBAgent Cloud"
-    app_tagline: str = "Your gateway to cosmology research environments"
+    app_tagline: str = "Your gateway to autonomous research"
     app_message: str = "Coming Soon"
     app_icon: str = None
 
