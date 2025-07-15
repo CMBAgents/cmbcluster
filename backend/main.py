@@ -19,6 +19,7 @@ from models import (
     HealthCheck, User, PodStatus
 )
 from pod_manager import PodManager
+from database import DatabaseManager
 
 # Configure structured logging
 structlog.configure(
@@ -49,6 +50,13 @@ async def lifespan(app: FastAPI):
     # Startup
     logger.info("Starting CMBCluster API", version="1.0.0")
     app_state["start_time"] = time.time()
+    
+    # Initialize database
+    from database import get_database
+    app_state["db_manager"] = get_database()
+    logger.info("Database initialized", db_path=settings.database_path)
+    
+    # Initialize pod manager (it will use the global database instance)
     app_state["pod_manager"] = PodManager()
     
     # Background tasks
@@ -363,8 +371,13 @@ async def periodic_cleanup():
             logger.error("Error in periodic cleanup", error=str(e))
 
 async def log_activity(user_id: str, action: str, details: str):
-    """Log user activity"""
+    """Log user activity to database"""
     try:
+        db_manager = app_state.get("db_manager")
+        if not db_manager:
+            logger.error("Database manager not available for activity logging")
+            return
+            
         activity = ActivityLog(
             id=f"{user_id}_{int(time.time())}",
             user_id=user_id,
@@ -374,6 +387,8 @@ async def log_activity(user_id: str, action: str, details: str):
             status="success" if "failed" not in action.lower() else "error"
         )
         
+        await db_manager.log_activity(activity)
+        
         logger.info(
             "User activity logged",
             user_id=user_id,
@@ -381,28 +396,25 @@ async def log_activity(user_id: str, action: str, details: str):
             details=details
         )
         
-        # Store in persistent storage (implement based on your needs)
-        
     except Exception as e:
         logger.error("Failed to log activity", user_id=user_id, error=str(e))
 
 async def get_user_activity_log(user_id: str, limit: int = 50) -> List[Dict]:
-    """Get user activity log from storage"""
-    # Mock implementation - replace with actual storage
-    return [
-        {
-            "action": "environment_created",
-            "details": "Successfully created Streamlit environment",
-            "timestamp": "2025-06-26T08:00:00Z",
-            "status": "success"
-        },
-        {
-            "action": "heartbeat",
-            "details": "Environment activity updated",
-            "timestamp": "2025-06-26T08:05:00Z",
-            "status": "success"
-        }
-    ]
+    """Get user activity log from database"""
+    try:
+        db_manager = app_state.get("db_manager")
+        if not db_manager:
+            logger.error("Database manager not available for activity retrieval")
+            return []
+            
+        activities = await db_manager.get_user_activity(user_id, limit)
+        
+        # The database already returns the activities in the right format
+        return activities
+        
+    except Exception as e:
+        logger.error("Failed to get activity log", user_id=user_id, error=str(e))
+        return []
 
 if __name__ == "__main__":
     import uvicorn

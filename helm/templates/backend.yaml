@@ -7,7 +7,7 @@ metadata:
     {{- include "cmbcluster.labels" . | nindent 4 }}
     app.kubernetes.io/component: backend
 spec:
-  replicas: {{ .Values.backend.replicaCount }}
+  replicas: 1  # Force single replica for SQLite database consistency
   selector:
     matchLabels:
       {{- include "cmbcluster.selectorLabels" . | nindent 6 }}
@@ -17,6 +17,8 @@ spec:
       labels:
         {{- include "cmbcluster.selectorLabels" . | nindent 8 }}
         app.kubernetes.io/component: backend
+      annotations:
+        gke-gcsfuse/volumes: "true"
     spec:
       serviceAccountName: {{ .Values.serviceAccount.name }}
       securityContext:
@@ -31,6 +33,12 @@ spec:
         - name: http
           containerPort: 8000
           protocol: TCP
+        # Mount the database storage via Cloud Storage FUSE CSI driver
+        volumeMounts:
+        - name: gcs-fuse-volume
+          mountPath: /app/data
+        - name: tmp-storage
+          mountPath: /tmp
         # Mounts non-sensitive configuration from values passed by deploy.sh
         env:
         - name: PROJECT_ID
@@ -59,6 +67,10 @@ spec:
           value: {{ .Values.userEnvironment.serviceAccount.name | quote }}
         - name: DEBUG
           value: {{ .Values.backend.config.debug | quote }}
+        - name: DATABASE_PATH
+          value: "/app/data/cmbcluster.db"
+        - name: DATABASE_BUCKET
+          value: "{{ .Values.global.projectId }}-{{ .Release.Name }}-db"
         # Mounts sensitive values (SECRET_KEY, GOOGLE_CLIENT_ID, etc.)
         # from the Kubernetes secret created by deploy.sh.
         envFrom:
@@ -87,9 +99,19 @@ spec:
           capabilities:
             drop:
             - ALL
-          readOnlyRootFilesystem: true
+          readOnlyRootFilesystem: false  # Allow database writes
           runAsNonRoot: true
           runAsUser: 1000
+      volumes:
+      # Cloud Storage FUSE CSI volume for database storage
+      - name: gcs-fuse-volume
+        csi:
+          driver: gcsfuse.csi.storage.gke.io
+          volumeAttributes:
+            bucketName: "{{ .Values.global.projectId }}-{{ .Release.Name }}-db"
+            mountOptions: "implicit-dirs"
+      - name: tmp-storage
+        emptyDir: {}
 ---
 apiVersion: v1
 kind: Service

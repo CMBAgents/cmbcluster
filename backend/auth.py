@@ -12,6 +12,7 @@ import structlog
 
 from config import settings
 from models import User, UserRole
+from database import get_database
 
 logger = structlog.get_logger()
 security = HTTPBearer()
@@ -26,9 +27,6 @@ oauth.register(
     server_metadata_url='https://accounts.google.com/.well-known/openid-configuration',
     client_kwargs={'scope': 'openid email profile'}
 )
-
-# In-memory user store (replace with database in production)
-user_store: Dict[str, User] = {}
 
 @oauth_router.get("/login")
 async def oauth_login(request: Request):
@@ -54,7 +52,7 @@ async def oauth_callback(request: Request):
             )
         
         # Create or update user
-        user = create_or_update_user(user_info)
+        user = await create_or_update_user(user_info)
         
         # Create JWT access token
         access_token = create_access_token(user)
@@ -75,18 +73,24 @@ async def oauth_callback(request: Request):
             detail=f"Authentication failed: {str(e)}"
         )
 
-def create_or_update_user(user_info: Dict) -> User:
-    """Create or update user from OAuth info"""
+async def create_or_update_user(user_info: Dict) -> User:
+    """Create or update user from OAuth info using database"""
     user_id = user_info.get('sub')
     email = user_info.get('email')
     name = user_info.get('name', email)
     
-    if user_id in user_store:
-        # Update existing user
-        user = user_store[user_id]
-        user.last_login = datetime.utcnow()
-        user.name = name
-        user.email = email
+    db = get_database()
+    
+    # Try to get existing user
+    existing_user = await db.get_user(user_id)
+    
+    if existing_user:
+        # Update existing user's last login
+        await db.update_user_login(user_id)
+        existing_user.last_login = datetime.utcnow()
+        existing_user.name = name
+        existing_user.email = email
+        return existing_user
     else:
         # Create new user
         user = User(
@@ -98,7 +102,8 @@ def create_or_update_user(user_info: Dict) -> User:
             last_login=datetime.utcnow(),
             is_active=True
         )
-        user_store[user_id] = user
+        await db.create_user(user)
+        return user
     
     return user
 
@@ -153,12 +158,15 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(s
     
     return verify_token(token)
 
-def get_user_info(user_data: Dict) -> User:
-    """Get user info from token data"""
+async def get_user_info(user_data: Dict) -> User:
+    """Get user info from token data using database"""
     user_id = user_data["sub"]
     
-    if user_id in user_store:
-        return user_store[user_id]
+    db = get_database()
+    user = await db.get_user(user_id)
+    
+    if user:
+        return user
     
     # Create user if not exists (shouldn't happen in normal flow)
     user = User(
@@ -169,8 +177,7 @@ def get_user_info(user_data: Dict) -> User:
         created_at=datetime.utcnow(),
         is_active=True
     )
-    user_store[user_id] = user
-    
+    await db.create_user(user)
     return user
 
 def require_role(required_role: UserRole):

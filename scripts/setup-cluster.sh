@@ -88,6 +88,38 @@ else
     echo "✅ Artifact Registry repository '$ARTIFACT_REGISTRY_NAME' already exists"
 fi
 
+# Create Cloud Storage bucket for SQLite database storage
+BUCKET_NAME="${PROJECT_ID}-${CLUSTER_NAME}-db"
+if ! gsutil ls -b gs://$BUCKET_NAME >/dev/null 2>&1; then
+    echo "🪣 Creating Cloud Storage bucket '$BUCKET_NAME' for database storage..."
+    gsutil mb -p $PROJECT_ID -c STANDARD -l $REGION gs://$BUCKET_NAME
+    
+    # Enable versioning for backup/recovery
+    gsutil versioning set on gs://$BUCKET_NAME
+    
+    # Set lifecycle policy to manage versions (keep last 30 versions)
+    cat > /tmp/lifecycle.json << EOF
+{
+  "lifecycle": {
+    "rule": [
+      {
+        "action": {"type": "Delete"},
+        "condition": {
+          "numNewerVersions": 30
+        }
+      }
+    ]
+  }
+}
+EOF
+    gsutil lifecycle set /tmp/lifecycle.json gs://$BUCKET_NAME
+    rm /tmp/lifecycle.json
+    
+    echo "✅ Cloud Storage bucket '$BUCKET_NAME' created with versioning enabled"
+else
+    echo "✅ Cloud Storage bucket '$BUCKET_NAME' already exists"
+fi
+
 # Create subnet with secondary ranges if not exists
 if ! gcloud compute networks subnets describe $SUBNET_NAME --region=$REGION --project=$PROJECT_ID >/dev/null 2>&1; then
     echo "🔗 Creating subnet $SUBNET_NAME with secondary ranges..."
@@ -151,9 +183,45 @@ if ! gcloud container clusters describe $CLUSTER_NAME --zone=$ZONE --project=$PR
     # Using e2-standard-2 for better cost/performance than n1-standard-2
     # Using pd-balanced for node disk type for better performance than pd-standard
     # Note: The 'cmbcluster-ssd' StorageClass is for PVCs, not node boot disks.
-    g
+    gcloud container clusters create $CLUSTER_NAME \
+        --zone=$ZONE \
+        --network=$NETWORK_NAME \
+        --subnetwork=$SUBNET_NAME \
+        --cluster-ipv4-cidr=10.1.0.0/16 \
+        --services-ipv4-cidr=10.2.0.0/20 \
+        --enable-ip-alias \
+        --enable-private-nodes \
+        --master-ipv4-cidr=172.16.0.0/28 \
+        --enable-master-authorized-networks \
+        --master-authorized-networks=$MY_IP/32 \
+        --default-max-pods-per-node=110 \
+        --node-locations=$ZONE \
+        --num-nodes=1 \
+        --min-nodes=1 \
+        --max-nodes=3 \
+        --machine-type=e2-standard-2 \
+        --disk-type=pd-balanced \
+        --disk-size=50GB \
+        --image-type=COS_CONTAINERD \
+        --metadata=disable-legacy-endpoints=true \
+        --addons=GcsFuseCsiDriver \
+        --project=$PROJECT_ID
+
+    echo "⏳ Waiting for cluster $CLUSTER_NAME to be ready..."
+    gcloud container clusters wait $CLUSTER_NAME \
+        --zone=$ZONE \
+        --project=$PROJECT_ID \
+        --ready
 else
     echo "✅ Cluster $CLUSTER_NAME already exists"
+    
+    # Enable Cloud Storage FUSE CSI driver on existing cluster if not already enabled
+    echo "🔧 Ensuring Cloud Storage FUSE CSI driver is enabled..."
+    gcloud container clusters update $CLUSTER_NAME \
+        --zone=$ZONE \
+        --update-addons=GcsFuseCsiDriver=ENABLED \
+        --project=$PROJECT_ID \
+        --quiet || echo "ℹ️ CSI driver already enabled or update not needed"
 fi
 
 # Create Cloud Router for NAT if not exists
@@ -262,6 +330,17 @@ gcloud projects add-iam-policy-binding $PROJECT_ID \
     --member="serviceAccount:$WORKLOAD_SA_EMAIL" \
     --role="roles/storage.objectViewer" \
     --quiet || echo "✅ roles/storage.objectViewer already granted to $WORKLOAD_SA_EMAIL"
+
+# Grant Storage Object Admin role for database bucket access
+echo "Granting roles/storage.objectAdmin to $WORKLOAD_SA_EMAIL for database bucket..."
+gcloud projects add-iam-policy-binding $PROJECT_ID \
+    --member="serviceAccount:$WORKLOAD_SA_EMAIL" \
+    --role="roles/storage.objectAdmin" \
+    --quiet || echo "✅ roles/storage.objectAdmin already granted to $WORKLOAD_SA_EMAIL"
+
+# Grant bucket access specifically for the database bucket
+echo "Granting bucket-specific permissions for $BUCKET_NAME..."
+gsutil iam ch serviceAccount:$WORKLOAD_SA_EMAIL:objectAdmin gs://$BUCKET_NAME
 
 # Note: The Kubernetes Service Account (KSA) and the IAM policy binding between KSA and GSA
 # will be handled during deployment (e.g., in Helm chart or deploy.sh).

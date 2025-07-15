@@ -10,6 +10,7 @@ from kubernetes.client.rest import ApiException
 
 from config import settings
 from models import Environment, EnvironmentRequest, PodStatus
+from database import get_database
 
 logger = structlog.get_logger()
 
@@ -27,7 +28,7 @@ class PodManager:
     """Manages Kubernetes pods for user environments"""
     
     def __init__(self):
-        self.user_environments: Dict[str, Environment] = {}
+        self.db = get_database()
         self._setup_kubernetes()
     
     def _setup_kubernetes(self):
@@ -139,9 +140,8 @@ class PodManager:
                 }
             )
             
-            # Store environment with composite key to support multiple environments per user
-            env_key = f"{user_id}:{env_id}"
-            self.user_environments[env_key] = environment
+            # Store environment in database
+            await self.db.create_environment(environment)
             
             logger.info("User environment created successfully", 
                         user_id=user_id, 
@@ -442,7 +442,7 @@ class PodManager:
     
     async def user_has_active_pod(self, user_id: str) -> bool:
         """Check if user has an active pod"""
-        user_envs = [env for key, env in self.user_environments.items() if env.user_id == user_id]
+        user_envs = await self.db.get_user_environments(user_id)
         if not user_envs:
             return False
         
@@ -454,18 +454,17 @@ class PodManager:
                     namespace=settings.namespace
                 )
                 
-                # Update environment status
-                environment.status = PodStatus(pod.status.phase.lower())
+                # Update environment status in database
+                pod_status = PodStatus(pod.status.phase.lower())
+                await self.db.update_environment_status(environment.env_id, pod_status)
                 
                 if pod.status.phase in ["Running", "Pending"]:
                     return True
                     
             except ApiException as e:
                 if e.status == 404:
-                    # Pod doesn't exist, remove from tracking
-                    env_key = f"{environment.user_id}:{environment.env_id}"
-                    if env_key in self.user_environments:
-                        del self.user_environments[env_key]
+                    # Pod doesn't exist, update status to failed in database
+                    await self.db.update_environment_status(environment.env_id, PodStatus.FAILED)
                 else:
                     raise
         
@@ -474,13 +473,13 @@ class PodManager:
     async def get_user_environment(self, user_id: str) -> Optional[Environment]:
         """Get user environment info - returns the first active environment for the user"""
         # Find the most recent environment for this user
-        user_envs = [env for key, env in self.user_environments.items() if env.user_id == user_id]
+        user_envs = await self.db.get_user_environments(user_id)
         
         if not user_envs:
             return None
         
-        # Sort by creation time and get the most recent
-        environment = sorted(user_envs, key=lambda x: x.created_at, reverse=True)[0]
+        # Get the most recent environment (already sorted by created_at DESC in database query)
+        environment = user_envs[0]
         
         # Update pod status
         try:
@@ -488,9 +487,12 @@ class PodManager:
                 name=environment.pod_name,
                 namespace=settings.namespace
             )
-            environment.status = PodStatus(pod.status.phase.lower())
+            pod_status = PodStatus(pod.status.phase.lower())
+            await self.db.update_environment_status(environment.env_id, pod_status)
+            environment.status = pod_status
         except ApiException as e:
             if e.status == 404:
+                await self.db.update_environment_status(environment.env_id, PodStatus.FAILED)
                 environment.status = PodStatus.FAILED
             else:
                 environment.status = PodStatus.UNKNOWN
@@ -499,7 +501,7 @@ class PodManager:
     
     async def get_user_environments(self, user_id: str) -> List[Environment]:
         """Get all environments for a user"""
-        user_envs = [env for key, env in self.user_environments.items() if env.user_id == user_id]
+        user_envs = await self.db.get_user_environments(user_id)
         
         # Update pod statuses
         for environment in user_envs:
@@ -508,57 +510,43 @@ class PodManager:
                     name=environment.pod_name,
                     namespace=settings.namespace
                 )
-                environment.status = PodStatus(pod.status.phase.lower())
+                pod_status = PodStatus(pod.status.phase.lower())
+                await self.db.update_environment_status(environment.env_id, pod_status)
+                environment.status = pod_status
             except ApiException as e:
                 if e.status == 404:
+                    await self.db.update_environment_status(environment.env_id, PodStatus.FAILED)
                     environment.status = PodStatus.FAILED
                 else:
                     environment.status = PodStatus.UNKNOWN
         
-        # Sort by creation time (newest first)
-        return sorted(user_envs, key=lambda x: x.created_at, reverse=True)
+        return user_envs
     
     async def delete_user_environment(self, user_id: str, user_email: str = None, env_id: str = None):
         """Delete user environment and associated resources. If env_id is provided, delete that environment, else delete the most recent."""
         # Find the environment to delete
-        user_envs = [env for key, env in self.user_environments.items() if env.user_id == user_id]
-        if not user_envs:
-            logger.warning("No environments found for user", user_id=user_id)
-            raise ValueError(f"No environments found for user {user_id}")
-        
         if env_id:
-            # Handle both cases: short env_id (f5a0cb53) or combined id (user_id-env_id)
-            actual_env_id = env_id
-            if '-' in env_id and env_id.startswith(user_id):
-                # Extract the short env_id from combined id (user_id-env_id)
-                actual_env_id = env_id.split('-', 1)[1]
-                logger.info("Parsed combined env_id", original=env_id, parsed=actual_env_id)
-            
-            environment = next((env for env in user_envs if env.env_id == actual_env_id), None)
+            environment = await self.db.get_environment(user_id, env_id)
             if not environment:
-                # Also try matching by full id
-                environment = next((env for env in user_envs if env.id == env_id), None)
-                if not environment:
-                    logger.warning("Environment to delete not found", 
-                                 user_id=user_id, 
-                                 env_id=env_id,
-                                 actual_env_id=actual_env_id,
-                                 available_envs=[{"id": env.id, "env_id": env.env_id} for env in user_envs])
-                    raise ValueError(f"Environment {env_id} not found for user {user_id}")
+                logger.warning("Environment to delete not found", 
+                             user_id=user_id, 
+                             env_id=env_id)
+                raise ValueError(f"Environment {env_id} not found for user {user_id}")
         else:
-            environment = sorted(user_envs, key=lambda x: x.created_at, reverse=True)[0]
+            user_envs = await self.db.get_user_environments(user_id)
+            if not user_envs:
+                logger.warning("No environments found for user", user_id=user_id)
+                raise ValueError(f"No environments found for user {user_id}")
+            environment = user_envs[0]  # Most recent (already sorted)
         
-        # Use the correct key format that matches how environments are stored
-        env_key = f"{environment.user_id}:{environment.env_id}"
-        
-        # Always use the stored user_email for DNS/subdomain naming
+        # Use the correct user_email for DNS/subdomain naming
         if user_email is None:
             user_email = environment.user_email
         safe_user_id = _sanitize_for_dns(user_email)
         env_id = environment.env_id
         namespace = settings.namespace
         
-        logger.info("Deleting user environment", user_id=user_id, env_id=env_id, pod_name=environment.pod_name, env_key=env_key)
+        logger.info("Deleting user environment", user_id=user_id, env_id=env_id, pod_name=environment.pod_name)
         
         try:
             # Delete pod
@@ -601,18 +589,17 @@ class PodManager:
             
             # Note: Keep PVC for data persistence
             
-            # Remove from tracking
-            if env_key in self.user_environments:
-                del self.user_environments[env_key]
-                logger.info("Environment removed from tracking", env_key=env_key)
+            # Remove from database
+            deleted = await self.db.delete_environment(user_id, env_id)
+            if deleted:
+                logger.info("Environment removed from database", user_id=user_id, env_id=env_id)
             else:
-                logger.warning("Environment key not found in tracking", env_key=env_key, available_keys=list(self.user_environments.keys()))
+                logger.warning("Environment not found in database", user_id=user_id, env_id=env_id)
                 
             logger.info("User environment deleted successfully", user_id=user_id, env_id=env_id)
             
         except Exception as e:
             logger.error("Failed to delete user environment", user_id=user_id, env_id=env_id, error=str(e))
-            raise
             raise
     
     async def update_user_activity(self, user_id: str):

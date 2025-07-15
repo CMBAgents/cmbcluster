@@ -36,6 +36,10 @@ class Settings(BaseSettings):
     tls_enabled: bool = True
     cluster_issuer: str = "letsencrypt-prod"
     
+    # Database settings
+    database_path: str = "/app/data/cmbcluster.db"
+    database_bucket: str = ""
+    
     # Environment settings
     dev_mode: bool = False
     debug: bool = False
