@@ -66,15 +66,24 @@ echo "🔑 Setting up Workload Identity bindings..."
 GSA_NAME="${CLUSTER_NAME}-workload-sa"
 GSA_EMAIL="${GSA_NAME}@${PROJECT_ID}.iam.gserviceaccount.com"
 KSA_NAME="${CLUSTER_NAME}-sa"
+USER_KSA_NAME="cmbcluster-user-sa"
 
 # Allow the Kubernetes Service Account to impersonate the Google Service Account.
 # This is the core of Workload Identity. It grants the KSA the 'workloadIdentityUser' role on the GSA.
-echo "Binding KSA '$KSA_NAME' to GSA '$GSA_EMAIL'..."
+echo "Binding backend KSA '$KSA_NAME' to GSA '$GSA_EMAIL'..."
 gcloud iam service-accounts add-iam-policy-binding $GSA_EMAIL \
     --role="roles/iam.workloadIdentityUser" \
     --member="serviceAccount:${PROJECT_ID}.svc.id.goog[${K8S_NAMESPACE}/${KSA_NAME}]" \
     --project=$PROJECT_ID \
-    --quiet || echo "✅ IAM policy binding already exists."
+    --quiet || echo "✅ Backend IAM policy binding already exists."
+
+# Also bind user environment service account to the same Google Service Account
+echo "Binding user environment KSA '$USER_KSA_NAME' to GSA '$GSA_EMAIL'..."
+gcloud iam service-accounts add-iam-policy-binding $GSA_EMAIL \
+    --role="roles/iam.workloadIdentityUser" \
+    --member="serviceAccount:${PROJECT_ID}.svc.id.goog[${K8S_NAMESPACE}/${USER_KSA_NAME}]" \
+    --project=$PROJECT_ID \
+    --quiet || echo "✅ User environment IAM policy binding already exists."
 
 # Conditionally build images
 if [ "$SKIP_BUILD" != "true" ]; then

@@ -9,6 +9,7 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 
 from models import User, Environment, ActivityLog, UserRole, PodStatus
+from storage_models import UserStorage, StorageType, StorageStatus
 from config import settings
 
 logger = structlog.get_logger()
@@ -86,6 +87,41 @@ class DatabaseManager:
                     )
                 """)
                 
+                # Create user_storages table for cloud storage management
+                conn.execute("""
+                    CREATE TABLE IF NOT EXISTS user_storages (
+                        id TEXT PRIMARY KEY,
+                        user_id TEXT NOT NULL,
+                        bucket_name TEXT UNIQUE NOT NULL,
+                        display_name TEXT NOT NULL,
+                        storage_type TEXT NOT NULL DEFAULT 'cloud_storage',
+                        status TEXT NOT NULL DEFAULT 'creating',
+                        created_at TIMESTAMP NOT NULL,
+                        last_accessed TIMESTAMP,
+                        size_bytes INTEGER DEFAULT 0,
+                        object_count INTEGER DEFAULT 0,
+                        location TEXT NOT NULL,
+                        storage_class TEXT NOT NULL DEFAULT 'STANDARD',
+                        versioning_enabled BOOLEAN DEFAULT 1,
+                        metadata TEXT,  -- JSON string for additional metadata
+                        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        FOREIGN KEY (user_id) REFERENCES users (id)
+                    )
+                """)
+                
+                # Create environment_storages table to link environments with storage
+                conn.execute("""
+                    CREATE TABLE IF NOT EXISTS environment_storages (
+                        id TEXT PRIMARY KEY,
+                        environment_id TEXT NOT NULL,
+                        storage_id TEXT NOT NULL,
+                        mount_path TEXT NOT NULL DEFAULT '/workspace',
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        FOREIGN KEY (environment_id) REFERENCES environments (id),
+                        FOREIGN KEY (storage_id) REFERENCES user_storages (id)
+                    )
+                """)
+                
                 # Create indexes for better query performance
                 conn.execute("CREATE INDEX IF NOT EXISTS idx_users_email ON users (email)")
                 conn.execute("CREATE INDEX IF NOT EXISTS idx_environments_user_id ON environments (user_id)")
@@ -93,6 +129,13 @@ class DatabaseManager:
                 conn.execute("CREATE INDEX IF NOT EXISTS idx_environments_status ON environments (status)")
                 conn.execute("CREATE INDEX IF NOT EXISTS idx_activity_logs_user_id ON activity_logs (user_id)")
                 conn.execute("CREATE INDEX IF NOT EXISTS idx_activity_logs_timestamp ON activity_logs (timestamp)")
+                
+                # Storage-related indexes
+                conn.execute("CREATE INDEX IF NOT EXISTS idx_user_storages_user_id ON user_storages (user_id)")
+                conn.execute("CREATE INDEX IF NOT EXISTS idx_user_storages_bucket_name ON user_storages (bucket_name)")
+                conn.execute("CREATE INDEX IF NOT EXISTS idx_user_storages_status ON user_storages (status)")
+                conn.execute("CREATE INDEX IF NOT EXISTS idx_environment_storages_env_id ON environment_storages (environment_id)")
+                conn.execute("CREATE INDEX IF NOT EXISTS idx_environment_storages_storage_id ON environment_storages (storage_id)")
                 
                 conn.commit()
                 conn.close()
@@ -401,6 +444,179 @@ class DatabaseManager:
             deleted_count = cursor.rowcount
             if deleted_count > 0:
                 logger.info("Cleaned up old activity logs", deleted_count=deleted_count)
+    
+    # Storage management methods
+    async def create_storage(self, storage: UserStorage) -> None:
+        """Create a new user storage record"""
+        async with self.get_connection() as conn:
+            await asyncio.get_event_loop().run_in_executor(
+                None,
+                lambda: conn.execute(
+                    """
+                    INSERT INTO user_storages 
+                    (id, user_id, bucket_name, display_name, storage_type, status,
+                     created_at, last_accessed, size_bytes, object_count, location,
+                     storage_class, versioning_enabled, metadata)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (storage.id, storage.user_id, storage.bucket_name, storage.display_name,
+                     storage.storage_type.value, storage.status.value, storage.created_at.isoformat(),
+                     storage.last_accessed.isoformat() if storage.last_accessed else None,
+                     storage.size_bytes, storage.object_count, storage.location,
+                     storage.storage_class, storage.versioning_enabled, json.dumps(storage.metadata))
+                )
+            )
+            await asyncio.get_event_loop().run_in_executor(None, conn.commit)
+    
+    async def get_user_storages(self, user_id: str) -> List[UserStorage]:
+        """Get all storage buckets for a user"""
+        async with self.get_connection() as conn:
+            rows = await asyncio.get_event_loop().run_in_executor(
+                None,
+                lambda: conn.execute(
+                    """
+                    SELECT * FROM user_storages 
+                    WHERE user_id = ? 
+                    ORDER BY created_at DESC
+                    """,
+                    (user_id,)
+                ).fetchall()
+            )
+            
+            storages = []
+            for row in rows:
+                storage = UserStorage(
+                    id=row['id'],
+                    user_id=row['user_id'],
+                    bucket_name=row['bucket_name'],
+                    display_name=row['display_name'],
+                    storage_type=StorageType(row['storage_type']),
+                    status=StorageStatus(row['status']),
+                    created_at=datetime.fromisoformat(row['created_at']),
+                    last_accessed=datetime.fromisoformat(row['last_accessed']) if row['last_accessed'] else None,
+                    size_bytes=row['size_bytes'],
+                    object_count=row['object_count'],
+                    location=row['location'],
+                    storage_class=row['storage_class'],
+                    versioning_enabled=bool(row['versioning_enabled']),
+                    metadata=json.loads(row['metadata']) if row['metadata'] else {}
+                )
+                storages.append(storage)
+            
+            return storages
+    
+    async def get_storage_by_id(self, storage_id: str) -> Optional[UserStorage]:
+        """Get storage by ID"""
+        async with self.get_connection() as conn:
+            row = await asyncio.get_event_loop().run_in_executor(
+                None,
+                lambda: conn.execute(
+                    "SELECT * FROM user_storages WHERE id = ?",
+                    (storage_id,)
+                ).fetchone()
+            )
+            
+            if not row:
+                return None
+            
+            return UserStorage(
+                id=row['id'],
+                user_id=row['user_id'],
+                bucket_name=row['bucket_name'],
+                display_name=row['display_name'],
+                storage_type=StorageType(row['storage_type']),
+                status=StorageStatus(row['status']),
+                created_at=datetime.fromisoformat(row['created_at']),
+                last_accessed=datetime.fromisoformat(row['last_accessed']) if row['last_accessed'] else None,
+                size_bytes=row['size_bytes'],
+                object_count=row['object_count'],
+                location=row['location'],
+                storage_class=row['storage_class'],
+                versioning_enabled=bool(row['versioning_enabled']),
+                metadata=json.loads(row['metadata']) if row['metadata'] else {}
+            )
+    
+    async def update_storage_status(self, storage_id: str, status: StorageStatus) -> bool:
+        """Update storage status"""
+        async with self.get_connection() as conn:
+            cursor = await asyncio.get_event_loop().run_in_executor(
+                None,
+                lambda: conn.execute(
+                    "UPDATE user_storages SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+                    (status.value, storage_id)
+                )
+            )
+            await asyncio.get_event_loop().run_in_executor(None, conn.commit)
+            return cursor.rowcount > 0
+    
+    async def update_storage_metadata(self, storage_id: str, size_bytes: int, object_count: int) -> bool:
+        """Update storage size and object count"""
+        async with self.get_connection() as conn:
+            cursor = await asyncio.get_event_loop().run_in_executor(
+                None,
+                lambda: conn.execute(
+                    """
+                    UPDATE user_storages 
+                    SET size_bytes = ?, object_count = ?, last_accessed = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
+                    WHERE id = ?
+                    """,
+                    (size_bytes, object_count, storage_id)
+                )
+            )
+            await asyncio.get_event_loop().run_in_executor(None, conn.commit)
+            return cursor.rowcount > 0
+    
+    async def delete_storage(self, storage_id: str) -> bool:
+        """Delete storage record"""
+        async with self.get_connection() as conn:
+            # First delete environment-storage links
+            await asyncio.get_event_loop().run_in_executor(
+                None,
+                lambda: conn.execute(
+                    "DELETE FROM environment_storages WHERE storage_id = ?",
+                    (storage_id,)
+                )
+            )
+            
+            # Then delete the storage record
+            cursor = await asyncio.get_event_loop().run_in_executor(
+                None,
+                lambda: conn.execute(
+                    "DELETE FROM user_storages WHERE id = ?",
+                    (storage_id,)
+                )
+            )
+            await asyncio.get_event_loop().run_in_executor(None, conn.commit)
+            return cursor.rowcount > 0
+    
+    async def link_environment_storage(self, environment_id: str, storage_id: str, mount_path: str = "/workspace") -> None:
+        """Link an environment to a storage bucket"""
+        link_id = f"{environment_id}-{storage_id}"
+        async with self.get_connection() as conn:
+            await asyncio.get_event_loop().run_in_executor(
+                None,
+                lambda: conn.execute(
+                    """
+                    INSERT OR REPLACE INTO environment_storages 
+                    (id, environment_id, storage_id, mount_path)
+                    VALUES (?, ?, ?, ?)
+                    """,
+                    (link_id, environment_id, storage_id, mount_path)
+                )
+            )
+            await asyncio.get_event_loop().run_in_executor(None, conn.commit)
+    
+    async def get_environment_storage(self, environment_id: str) -> Optional[str]:
+        """Get storage ID linked to an environment"""
+        async with self.get_connection() as conn:
+            row = await asyncio.get_event_loop().run_in_executor(
+                None,
+                lambda: conn.execute(
+                    "SELECT storage_id FROM environment_storages WHERE environment_id = ?",
+                    (environment_id,)
+                ).fetchone()
+            )
+            return row['storage_id'] if row else None
 
 # Global database instance
 db_manager: Optional[DatabaseManager] = None

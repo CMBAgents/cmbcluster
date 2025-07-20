@@ -62,11 +62,38 @@ class CMBClusterAPIClient:
     def create_environment(self, config: Optional[Dict] = None) -> Dict[str, Any]:
         """Create a new user environment"""
         url = f"{self.base_url}/environments"
-        data = config or {
+        
+        # Default config
+        data = {
             "cpu_limit": 1.0,
             "memory_limit": "2Gi",
-            "storage_size": "10Gi"
+            "storage_size": "10Gi"  # Kept for backward compatibility
         }
+        
+        if config:
+            data.update(config)
+            
+            # Handle storage selection conversion
+            if 'storage' in config:
+                storage_info = config['storage']
+                
+                if storage_info.get('selection_type') == 'existing':
+                    # Use existing storage
+                    data['storage_id'] = storage_info.get('storage_id')
+                    data['create_new_storage'] = False
+                elif storage_info.get('selection_type') == 'create_new':
+                    # Create new storage
+                    data['storage_id'] = None
+                    data['create_new_storage'] = True
+                    if 'storage_class' in storage_info:
+                        data['storage_class'] = storage_info['storage_class']
+                else:
+                    # Default behavior - let backend handle it
+                    data['storage_id'] = None
+                    data['create_new_storage'] = False
+                
+                # Remove the frontend 'storage' key
+                del data['storage']
         
         response = self.session.post(url, json=data, headers=self._get_headers(), timeout=30)
         return self._handle_response(response)
@@ -154,6 +181,63 @@ class CMBClusterAPIClient:
                 
         except Exception as e:
             return {"status": "error", "message": f"Error restarting environment: {str(e)}"}
+    
+    # Storage Management Methods
+    def list_user_storages(self) -> Dict[str, Any]:
+        """List all storage buckets for the current user"""
+        try:
+            response = self.session.get(
+                f"{self.base_url}/storage/list",
+                headers=self._get_headers(),
+                verify=False
+            )
+            return self._handle_response(response)
+        except Exception as e:
+            return {"status": "error", "message": f"Error listing storages: {str(e)}"}
+    
+    def get_storage_details(self, storage_id: str) -> Dict[str, Any]:
+        """Get detailed information about a specific storage bucket"""
+        try:
+            response = self.session.get(
+                f"{self.base_url}/storage/{storage_id}",
+                headers=self._get_headers(),
+                verify=False
+            )
+            return self._handle_response(response)
+        except Exception as e:
+            return {"status": "error", "message": f"Error getting storage details: {str(e)}"}
+    
+    def create_storage(self, storage_class: str = "STANDARD", custom_name: str = None) -> Dict[str, Any]:
+        """Create a new storage bucket"""
+        try:
+            data = {"storage_class": storage_class}
+            if custom_name:
+                data["custom_name"] = custom_name
+            
+            response = self.session.post(
+                f"{self.base_url}/storage/create",
+                json=data,
+                headers=self._get_headers(),
+                verify=False
+            )
+            return self._handle_response(response)
+        except Exception as e:
+            return {"status": "error", "message": f"Error creating storage: {str(e)}"}
+    
+    def delete_storage(self, storage_id: str, force: bool = False) -> Dict[str, Any]:
+        """Delete a storage bucket"""
+        try:
+            body = {"operation": "delete", "force": force}
+            response = self.session.request(
+                method="DELETE",
+                url=f"{self.base_url}/storage/{storage_id}",
+                json=body,
+                headers=self._get_headers(),
+                verify=False
+            )
+            return self._handle_response(response)
+        except Exception as e:
+            return {"status": "error", "message": f"Error deleting storage: {str(e)}"}
 
 # Global API client instance
 api_client = CMBClusterAPIClient()

@@ -10,6 +10,8 @@ from kubernetes.client.rest import ApiException
 
 from config import settings
 from models import Environment, EnvironmentRequest, PodStatus
+from storage_models import StorageType, StorageStatus, UserStorage
+from storage_manager import StorageManager
 from database import get_database
 
 logger = structlog.get_logger()
@@ -29,6 +31,7 @@ class PodManager:
     
     def __init__(self):
         self.db = get_database()
+        self.storage_manager = StorageManager()
         self._setup_kubernetes()
     
     def _setup_kubernetes(self):
@@ -92,7 +95,7 @@ class PodManager:
         user_email: str, 
         config: EnvironmentRequest
     ) -> Environment:
-        """Create a new user environment pod (multi-env per user)"""
+        """Create a new user environment pod with cloud storage"""
         safe_user_id = _sanitize_for_dns(user_email)
         env_id = str(uuid.uuid4())[:8]  # Short unique ID for this environment
         pod_name = self._generate_pod_name(safe_user_id, env_id)
@@ -106,11 +109,13 @@ class PodManager:
                     pod_name=pod_name)
         
         try:
-            # Create PVC for user workspace
-            await self._create_user_pvc(safe_user_id, env_id)
+            # Handle storage selection/creation
+            storage = await self._handle_storage_selection(user_id, config)
             
-            # Create pod
-            pod_spec = self._build_pod_spec(user_id, safe_user_id, env_id, user_email, pod_name, config)
+            # Create pod with cloud storage
+            pod_spec = self._build_pod_spec_with_storage(
+                user_id, safe_user_id, env_id, user_email, pod_name, config, storage
+            )
             self.k8s_client.create_namespaced_pod(
                 namespace=namespace, 
                 body=pod_spec
@@ -136,12 +141,17 @@ class PodManager:
                 resource_config={
                     "cpu_limit": config.cpu_limit,
                     "memory_limit": config.memory_limit,
-                    "storage_size": config.storage_size
+                    "storage_id": storage.id,
+                    "storage_bucket": storage.bucket_name,
+                    "storage_type": storage.storage_type.value
                 }
             )
             
             # Store environment in database
             await self.db.create_environment(environment)
+            
+            # Link environment to storage
+            await self.db.link_environment_storage(environment.id, storage.id)
             
             logger.info("User environment created successfully", 
                         user_id=user_id, 
@@ -149,7 +159,8 @@ class PodManager:
                         safe_user_id=safe_user_id,
                         env_id=env_id,
                         url=environment.url,
-                        pod_name=pod_name)
+                        pod_name=pod_name,
+                        storage_bucket=storage.bucket_name)
             
             return environment
             
@@ -179,22 +190,214 @@ class PodManager:
             
             raise
     
+    async def _handle_storage_selection(self, user_id: str, config: EnvironmentRequest) -> UserStorage:
+        """Handle storage selection or creation for environment"""
+        
+        # If storage_id is provided, use existing storage
+        if config.storage_id:
+            storage = await self.db.get_storage_by_id(config.storage_id)
+            if not storage or storage.user_id != user_id:
+                raise ValueError(f"Storage {config.storage_id} not found or not accessible")
+            
+            # Ensure storage is active
+            if storage.status != StorageStatus.ACTIVE:
+                raise ValueError(f"Storage {config.storage_id} is not active")
+            
+            # Update last accessed time
+            await self.db.update_storage_metadata(storage.id, storage.size_bytes, storage.object_count)
+            logger.info("Using existing storage", storage_id=storage.id, bucket_name=storage.bucket_name)
+            return storage
+        
+        # If create_new_storage is True, create new storage
+        if config.create_new_storage:
+            import uuid
+            storage_id = str(uuid.uuid4())
+            
+            logger.info("Creating new storage bucket", user_id=user_id, storage_id=storage_id)
+            
+            # Create bucket
+            bucket_metadata = await self.storage_manager.create_user_bucket(
+                user_id=user_id,
+                storage_class=config.storage_class or "STANDARD"
+            )
+            
+            # Generate display name
+            display_name = self.storage_manager.get_friendly_display_name(bucket_metadata['bucket_name'])
+            
+            # Create storage record
+            storage = UserStorage(
+                id=storage_id,
+                user_id=user_id,
+                bucket_name=bucket_metadata['bucket_name'],
+                display_name=display_name,
+                storage_type=StorageType.CLOUD_STORAGE,
+                status=StorageStatus.ACTIVE,
+                created_at=bucket_metadata['created_at'],
+                size_bytes=0,
+                object_count=0,
+                location=bucket_metadata['location'],
+                storage_class=bucket_metadata['storage_class'],
+                versioning_enabled=bucket_metadata['versioning_enabled']
+            )
+            
+            await self.db.create_storage(storage)
+            
+            # Configure permissions for user environment service account
+            user_sa_email = f"{settings.cluster_name}-workload-sa@{settings.project_id}.iam.gserviceaccount.com"
+            await self.storage_manager.ensure_bucket_permissions(storage.bucket_name, user_sa_email)
+            
+            logger.info("Created new storage successfully", 
+                       storage_id=storage.id, 
+                       bucket_name=storage.bucket_name,
+                       display_name=display_name)
+            return storage
+        
+        # Default: Check for existing storage or create first one
+        # This should only happen if neither storage_id nor create_new_storage is specified
+        user_storages = await self.db.get_user_storages(user_id)
+        
+        if user_storages:
+            # Use most recent active storage
+            for storage in user_storages:
+                if storage.status == StorageStatus.ACTIVE:
+                    await self.db.update_storage_metadata(storage.id, storage.size_bytes, storage.object_count)
+                    logger.info("Using default existing storage", 
+                               storage_id=storage.id, 
+                               bucket_name=storage.bucket_name)
+                    return storage
+        
+        # No existing storage, create first one automatically
+        import uuid
+        storage_id = str(uuid.uuid4())
+        
+        logger.info("No existing storage found, creating first storage automatically", user_id=user_id)
+        
+        bucket_metadata = await self.storage_manager.create_user_bucket(
+            user_id=user_id,
+            storage_class="STANDARD"
+        )
+        
+        display_name = self.storage_manager.get_friendly_display_name(bucket_metadata['bucket_name'])
+        
+        storage = UserStorage(
+            id=storage_id,
+            user_id=user_id,
+            bucket_name=bucket_metadata['bucket_name'],
+            display_name=display_name,
+            storage_type=StorageType.CLOUD_STORAGE,
+            status=StorageStatus.ACTIVE,
+            created_at=bucket_metadata['created_at'],
+            size_bytes=0,
+            object_count=0,
+            location=bucket_metadata['location'],
+            storage_class=bucket_metadata['storage_class'],
+            versioning_enabled=bucket_metadata['versioning_enabled']
+        )
+        
+        await self.db.create_storage(storage)
+        
+        # Configure permissions
+        sa_email = f"{settings.cluster_name}-workload-sa@{settings.project_id}.iam.gserviceaccount.com"
+        await self.storage_manager.ensure_bucket_permissions(storage.bucket_name, sa_email)
+        
+        logger.info("Created first storage successfully", 
+                   storage_id=storage.id, 
+                   bucket_name=storage.bucket_name)
+        return storage
+    
+    async def delete_user_storage(self, user_id: str, storage_id: str) -> bool:
+        """Delete user storage and associated bucket"""
+        try:
+            # Get storage record
+            storage = await self.db.get_storage_by_id(storage_id)
+            if not storage or storage.user_id != user_id:
+                raise ValueError(f"Storage {storage_id} not found or not accessible")
+            
+            logger.info("Deleting user storage", 
+                       user_id=user_id, 
+                       storage_id=storage_id,
+                       bucket_name=storage.bucket_name)
+            
+            # Check if storage is being used by any active environments
+            user_envs = await self.db.get_user_environments(user_id)
+            active_envs_using_storage = []
+            
+            for env in user_envs:
+                if (env.resource_config.get('storage_id') == storage_id and 
+                    env.status in [PodStatus.PENDING, PodStatus.RUNNING]):
+                    active_envs_using_storage.append(env.env_id)
+            
+            if active_envs_using_storage:
+                raise ValueError(f"Cannot delete storage: in use by active environments {active_envs_using_storage}")
+            
+            # Delete the bucket from GCS
+            await self.storage_manager.delete_user_bucket(storage.bucket_name)
+            
+            # Mark storage as deleted in database
+            await self.db.delete_storage(storage_id)
+            
+            logger.info("Storage deleted successfully", 
+                       user_id=user_id, 
+                       storage_id=storage_id,
+                       bucket_name=storage.bucket_name)
+            
+            return True
+            
+        except Exception as e:
+            logger.error("Failed to delete storage", 
+                        user_id=user_id, 
+                        storage_id=storage_id,
+                        error=str(e))
+            raise
+    
+    async def get_user_storages(self, user_id: str) -> List[UserStorage]:
+        """Get all storage for a user with current status"""
+        try:
+            storages = await self.db.get_user_storages(user_id)
+            
+            # Update storage metadata from GCS
+            for storage in storages:
+                if storage.status == StorageStatus.ACTIVE:
+                    try:
+                        # Get current bucket info
+                        bucket_info = await self.storage_manager.get_bucket_info(storage.bucket_name)
+                        if bucket_info:
+                            await self.db.update_storage_metadata(
+                                storage.id, 
+                                bucket_info.get('size_bytes', 0),
+                                bucket_info.get('object_count', 0)
+                            )
+                            storage.size_bytes = bucket_info.get('size_bytes', 0)
+                            storage.object_count = bucket_info.get('object_count', 0)
+                    except Exception as e:
+                        logger.warning("Failed to update storage metadata", 
+                                     storage_id=storage.id,
+                                     bucket_name=storage.bucket_name,
+                                     error=str(e))
+            
+            return storages
+            
+        except Exception as e:
+            logger.error("Failed to get user storages", user_id=user_id, error=str(e))
+            raise
+    
     def _generate_pod_name(self, safe_user_id: str, env_id: str) -> str:
         """Generate unique pod name for user"""
         timestamp = int(time.time())
         # Kubernetes names must be lowercase and contain only letters, numbers, and hyphens
         return f"user-{safe_user_id[:20]}-{env_id}-{timestamp}"
     
-    def _build_pod_spec(
+    def _build_pod_spec_with_storage(
         self, 
         user_id: str, 
         safe_user_id: str,
         env_id: str,
         user_email: str, 
         pod_name: str, 
-        config: EnvironmentRequest
+        config: EnvironmentRequest,
+        storage: UserStorage
     ) -> Dict:
-        """Build Kubernetes pod specification"""
+        """Build Kubernetes pod specification with cloud storage - simplified like PVC approach"""
         image = config.image or f"{settings.registry_url}/cmbagent:latest"
         
         return {
@@ -212,8 +415,11 @@ class PodManager:
                 "annotations": {
                     "user.email": user_email,
                     "env.id": env_id,
+                    "storage.id": storage.id,
+                    "storage.bucket": storage.bucket_name,
                     "created.at": datetime.utcnow().isoformat(),
-                    "managed.by": "cmbcluster"
+                    "managed.by": "cmbcluster",
+                    "gke-gcsfuse/volumes": "true"  # Enable GCS FUSE
                 }
             },
             "spec": {
@@ -226,7 +432,9 @@ class PodManager:
                         {"name": "USER_EMAIL", "value": user_email},
                         {"name": "ENV_ID", "value": env_id},
                         {"name": "HUB_URL", "value": settings.api_url},
-                        {"name": "WORKSPACE_DIR", "value": "/workspace"}
+                        {"name": "WORKSPACE_DIR", "value": "/workspace"},
+                        {"name": "STORAGE_BUCKET", "value": storage.bucket_name},
+                        {"name": "STORAGE_TYPE", "value": storage.storage_type.value}
                     ],
                     "resources": {
                         "requests": {
@@ -261,8 +469,12 @@ class PodManager:
                 }],
                 "volumes": [{
                     "name": "user-workspace",
-                    "persistentVolumeClaim": {
-                        "claimName": f"workspace-{safe_user_id}-{env_id}"
+                    "csi": {
+                        "driver": "gcsfuse.csi.storage.gke.io",
+                        "volumeAttributes": {
+                            "bucketName": storage.bucket_name,
+                            "mountOptions": "implicit-dirs"
+                        }
                     }
                 }],
                 "restartPolicy": "Never",
@@ -271,42 +483,13 @@ class PodManager:
         }
     
     async def _create_user_pvc(self, safe_user_id: str, env_id: str):
-        """Create persistent volume claim for user"""
-        pvc_name = f"workspace-{safe_user_id}-{env_id}"
-        namespace = settings.namespace
-        
-        pvc_spec = {
-            "apiVersion": "v1",
-            "kind": "PersistentVolumeClaim",
-            "metadata": {
-                "name": pvc_name,
-                "namespace": namespace,
-                "labels": {
-                    "app": "cmbagent",
-                    "user-id": safe_user_id,
-                    "env-id": env_id
-                }
-            },
-            "spec": {
-                "accessModes": ["ReadWriteOnce"],
-                "resources": {
-                    "requests": {"storage": "10Gi"}
-                },
-                "storageClassName": "standard-rwo"
-            }
-        }
-        
-        try:
-            self.k8s_client.create_namespaced_persistent_volume_claim(
-                namespace=namespace, 
-                body=pvc_spec
-            )
-            logger.info("Created PVC for user", user_id=safe_user_id, env_id=env_id, pvc_name=pvc_name)
-        except ApiException as e:
-            if e.status == 409:  # Already exists
-                logger.info("PVC already exists", user_id=safe_user_id, env_id=env_id, pvc_name=pvc_name)
-            else:
-                raise
+        """Legacy PVC creation method - now deprecated in favor of cloud storage"""
+        # This method is kept for backward compatibility but not used
+        # in new cloud storage implementation
+        logger.warning("PVC creation called but deprecated", 
+                      safe_user_id=safe_user_id, 
+                      env_id=env_id)
+        pass
     
     async def _create_user_service(self, safe_user_id: str, env_id: str):
         """Create Kubernetes service for user pod"""

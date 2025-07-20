@@ -14,6 +14,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from components.auth import check_authentication, show_login_screen, require_auth, show_user_info
 from components.api_client import api_client
+from components.storage_selector import show_storage_selector
 from config import settings
 import ssl
 import requests
@@ -137,15 +138,18 @@ def main():
     st.title("Manage your research computing environments")
     
     # Tabs for different views
-    tab1, tab2, tab3 = st.tabs(["🖥️ Environments", "📊 Monitoring", "⚙️ Settings"])
+    tab1, tab2, tab3, tab4 = st.tabs(["🖥️ Environments", "💾 Storage", "📊 Monitoring", "⚙️ Settings"])
     
     with tab1:
         show_environment_management()
     
     with tab2:
-        show_environment_monitoring()
+        show_storage_management()
     
     with tab3:
+        show_environment_monitoring()
+    
+    with tab4:
         show_environment_settings()
 
 def show_environment_management():
@@ -234,7 +238,7 @@ def show_launch_interface():
     
     # Add helpful description
     st.markdown("""
-    💡 **Getting Started:** Choose a preset configuration based on your computational needs.
+    💡 **Getting Started:** Choose a preset configuration and select your cosmic workspace.
     Each preset includes optimized CPU, memory, and storage allocation.
     """)
     
@@ -255,13 +259,28 @@ def show_launch_interface():
     config = get_preset_config(preset_clean)
     
     # Show configuration in columns for better readability
+    st.markdown("##### ⚙️ Compute Resources")
     col1, col2, col3 = st.columns(3)
     with col1:
         st.metric("🖥️ CPU Cores", f"{config['cpu_limit']}")
     with col2:
         st.metric("💾 Memory", config['memory_limit'])
     with col3:
-        st.metric("💽 Storage", config['storage_size'])
+        st.metric("⚡ Performance", preset_clean.split()[0])
+    
+    # Storage selection section
+    st.markdown("---")
+    st.markdown("##### � Workspace Selection")
+    
+    # Show storage selector
+    selected_storage = show_storage_selector()
+    
+    # Update config with selected storage
+    if selected_storage:
+        config['storage'] = selected_storage
+        # Remove old storage_size as we now use cloud storage
+        if 'storage_size' in config:
+            del config['storage_size']
     
     # Expandable detailed configuration
     with st.expander("📋 Detailed Configuration", expanded=False):
@@ -280,18 +299,22 @@ def show_launch_interface():
             st.session_state.launch_in_progress = False
             st.rerun()
     else:
-        # Launch button with better styling
-        launch_col1, launch_col2 = st.columns([3, 1])
-        
-        with launch_col1:
-            if st.button("🚀 Launch Environment", type="primary", use_container_width=True, key="launch_env_button"):
-                st.session_state.launch_in_progress = True
-                st.rerun()
-        
-        with launch_col2:
-            if st.button("📋 Preview", use_container_width=True, key="preview_config"):
-                st.info("📊 **Configuration Preview:**")
-                st.json(config)
+        # Only show launch button if storage is selected
+        if selected_storage:
+            # Launch button with better styling
+            launch_col1, launch_col2 = st.columns([3, 1])
+            
+            with launch_col1:
+                if st.button("🚀 Launch Environment", type="primary", use_container_width=True, key="launch_env_button"):
+                    st.session_state.launch_in_progress = True
+                    st.rerun()
+            
+            with launch_col2:
+                if st.button("📋 Preview", use_container_width=True, key="preview_config"):
+                    st.info("📊 **Configuration Preview:**")
+                    st.json(config)
+        else:
+            st.warning("⚠️ Please select a workspace before launching your environment")
     
     # Execute launch if triggered
     if st.session_state.get("launch_in_progress", False):
@@ -593,6 +616,173 @@ def format_datetime(dt_str):
         return dt.strftime("%Y-%m-%d %H:%M:%S")
     except:
         return dt_str
+
+def get_storage_list():
+    """Get storage list with caching"""
+    try:
+        response = api_client.list_user_storages()
+        if response.get("status") == "success":
+            return response.get("storages", [])
+        else:
+            return []
+    except Exception as e:
+        return []
+
+def show_storage_management():
+    """Storage management interface integrated into main page"""
+    st.markdown("### 💾 Storage List")
+
+    # Refresh button
+    if st.button("🔄 Refresh", key="storage_refresh"):
+        st.rerun()
+
+    # Fetch all storages
+    try:
+        response = api_client.list_user_storages()
+        storages = response.get("storages", [])
+    except Exception as e:
+        st.error(f"Failed to load storage options: {str(e)}")
+        storages = []
+
+    if not storages:
+        st.info("No storages found.")
+        return
+
+    for storage in storages:
+        storage_id = storage.get("id")
+        display_name = storage.get("display_name", "Unknown Workspace")
+        st.write(f"**{display_name}**  (Bucket: `{storage.get('bucket_name', 'unknown')}`)")
+        if st.button("🗑️ Delete", key=f"delete_btn_{storage_id}"):
+            delete_storage_bucket(storage_id)
+        st.markdown("---")
+def format_storage_size(size_bytes: int) -> str:
+    """Format storage size in human-readable format"""
+    if size_bytes == 0:
+        return "Empty"
+    for unit in ['B', 'KB', 'MB', 'GB', 'TB']:
+        if size_bytes < 1024.0:
+            return f"{size_bytes:.1f} {unit}"
+        size_bytes /= 1024.0
+    return f"{size_bytes:.1f} PB"
+
+def show_storage_card(storage: dict):
+    """Display storage card with management options"""
+    storage_id = storage.get("id")
+    display_name = storage.get("display_name", "Unknown Workspace")
+    bucket_name = storage.get("bucket_name", "unknown")
+    
+    with st.container():
+        col1, col2 = st.columns([4, 1])
+        
+        with col1:
+            st.markdown(f"**🌌 {display_name}**")
+            st.caption(f"Bucket: `{bucket_name}`")
+        
+        with col2:
+            if st.button("🗑️ Delete", key=f"delete_btn_{storage_id}", type="secondary"):
+                st.session_state[f"show_delete_{storage_id}"] = True
+                st.rerun()
+        
+        # Show delete confirmation if triggered
+        if st.session_state.get(f"show_delete_{storage_id}", False):
+            show_delete_confirmation_inline(storage)
+        
+        st.markdown("---")
+
+def show_delete_confirmation_inline(storage: dict):
+    """Show inline delete confirmation"""
+    storage_id = storage.get("id")
+    display_name = storage.get("display_name")
+    
+    with st.container():
+        st.warning(f"⚠️ **Delete '{display_name}'?** This action cannot be undone!")
+        
+        col1, col2, col3, col4 = st.columns(4)
+        
+        with col1:
+            confirm_delete = st.checkbox(
+                "I understand this is permanent",
+                key=f"confirm_delete_{storage_id}"
+            )
+        
+        with col2:
+            force_delete = st.checkbox(
+                "Force delete",
+                key=f"force_delete_{storage_id}",
+                help="Delete even if contains data"
+            )
+        
+        with col3:
+            if confirm_delete and st.button("🗑️ Delete", key=f"confirm_btn_{storage_id}", type="primary"):
+                delete_storage_bucket(storage_id, force_delete)
+        
+        with col4:
+            if st.button("❌ Cancel", key=f"cancel_btn_{storage_id}"):
+                st.session_state[f"show_delete_{storage_id}"] = False
+                if f"confirm_delete_{storage_id}" in st.session_state:
+                    del st.session_state[f"confirm_delete_{storage_id}"]
+                if f"force_delete_{storage_id}" in st.session_state:
+                    del st.session_state[f"force_delete_{storage_id}"]
+                st.rerun()
+
+def delete_storage_bucket(storage_id: str, force: bool = False):
+    """Delete storage bucket with proper state management"""
+    try:
+        with st.spinner("🗑️ Deleting workspace..."):
+            response = api_client.delete_storage(storage_id, force=force)
+        
+        if response.get("status") == "deleted":
+            st.success("✅ Workspace deleted successfully!")
+            
+            # Clean up session state
+            keys_to_remove = [key for key in st.session_state.keys() 
+                             if storage_id in key and any(prefix in key for prefix in 
+                             ['show_delete_', 'confirm_delete_', 'force_delete_', 'delete_btn_', 'confirm_btn_', 'cancel_btn_'])]
+            for key in keys_to_remove:
+                del st.session_state[key]
+
+            # Wait and refresh
+            time.sleep(1)
+            st.rerun()
+        else:
+            st.error(f"❌ Failed to delete workspace: {response.get('message', 'Unknown error')}")
+    
+    except Exception as e:
+        st.error(f"❌ Error deleting workspace: {str(e)}")
+
+def show_storage_creation_form():
+    """Show storage creation form"""
+    with st.expander("✨ Create New Cosmic Workspace", expanded=False):        
+        storage_class = st.selectbox(
+            "Storage Performance",
+            ["STANDARD", "NEARLINE", "COLDLINE"],
+            format_func=lambda x: {
+                "STANDARD": "🚀 Standard (Best performance)",
+                "NEARLINE": "⚡ Nearline (Good for monthly access)", 
+                "COLDLINE": "❄️ Coldline (Archive storage)"
+            }[x],
+            index=0,
+            help="Choose storage class based on how frequently you'll access your data"
+        )
+        
+        if st.button("🌌 Create Cosmic Workspace", type="primary", key="create_storage_btn"):
+            create_new_storage(storage_class)
+
+def create_new_storage(storage_class: str):
+    """Create new storage bucket"""
+    try:
+        with st.spinner("🌌 Creating your cosmic workspace..."):
+            response = api_client.create_storage(storage_class=storage_class)
+        
+        if response.get("status") == "created":
+            st.success("✅ Cosmic workspace created successfully!")
+            time.sleep(1)
+            st.rerun()
+        else:
+            st.error(f"❌ Failed to create workspace: {response.get('message', 'Unknown error')}")
+    
+    except Exception as e:
+        st.error(f"❌ Error creating workspace: {str(e)}")
 
 if __name__ == "__main__":
     if not check_authentication():

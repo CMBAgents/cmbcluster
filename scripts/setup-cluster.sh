@@ -342,6 +342,17 @@ gcloud projects add-iam-policy-binding $PROJECT_ID \
 echo "Granting bucket-specific permissions for $BUCKET_NAME..."
 gsutil iam ch serviceAccount:$WORKLOAD_SA_EMAIL:objectAdmin gs://$BUCKET_NAME
 
+# Grant broader GCS permissions for user bucket management
+echo "🗂️ Configuring service account permissions for user bucket management..."
+gcloud projects add-iam-policy-binding $PROJECT_ID \
+    --member="serviceAccount:$WORKLOAD_SA_EMAIL" \
+    --role="roles/storage.admin" \
+    --quiet || echo "ℹ️ Storage admin role already assigned"
+
+# Set up bucket naming prefix for user buckets
+USER_BUCKET_PREFIX="${PROJECT_ID}-${CLUSTER_NAME}-user"
+echo "ℹ️ User buckets will use prefix: ${USER_BUCKET_PREFIX}-*"
+
 # Note: The Kubernetes Service Account (KSA) and the IAM policy binding between KSA and GSA
 # will be handled during deployment (e.g., in Helm chart or deploy.sh).
 

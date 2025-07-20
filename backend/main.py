@@ -18,8 +18,10 @@ from models import (
     Environment, EnvironmentRequest, ActivityLog, 
     HealthCheck, User, PodStatus
 )
+from storage_models import EnvironmentRequestWithStorage
 from pod_manager import PodManager
 from database import DatabaseManager
+import storage_api
 
 # Configure structured logging
 structlog.configure(
@@ -104,6 +106,9 @@ security = HTTPBearer()
 
 # Include auth router
 app.include_router(oauth_router, prefix="/auth", tags=["authentication"])
+
+# Include storage router
+app.include_router(storage_api.router)
 
 @app.middleware("http")
 async def log_requests(request: Request, call_next):
