@@ -9,6 +9,7 @@ import structlog
 from fastapi import FastAPI, Depends, HTTPException, Request, BackgroundTasks, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from fastapi import Body, Path
 from fastapi.security import HTTPBearer
 
 from auth import get_current_user, oauth_router, get_user_info
@@ -236,10 +237,10 @@ async def delete_environment(
     user_id = current_user["sub"]
     user_email = current_user["email"]
     pod_manager = app_state["pod_manager"]
-    
+
     # Debug logging
     logger.info("Delete environment request", user_id=user_id, env_id=env_id, user_email=user_email)
-    
+
     try:
         if env_id:
             logger.info("Deleting specific environment", env_id=env_id)
@@ -248,7 +249,7 @@ async def delete_environment(
             logger.info("Deleting latest environment")
             await pod_manager.delete_user_environment(user_id, user_email)
         await log_activity(user_id, "environment_deleted", f"Environment deleted (env_id={env_id})")
-        
+
         logger.info("Environment deletion successful", user_id=user_id, env_id=env_id)
         return {
             "status": "deleted",
@@ -269,6 +270,24 @@ async def delete_environment(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to delete environment: {str(e)}"
         )
+
+@app.post("/environments", tags=["environments"])
+async def create_environment(
+    request: EnvironmentRequest,
+    background_tasks: BackgroundTasks,
+    current_user: Dict = Depends(get_current_user)
+):
+    """Create a new user environment"""
+    user_id = current_user["sub"]
+    user_email = current_user["email"]
+    pod_manager: PodManager = app_state["pod_manager"]
+    # Pass env_vars through to pod_manager
+    environment = await pod_manager.create_user_environment(
+        user_id=user_id,
+        user_email=user_email,
+        config=request
+    )
+    return environment
 
 @app.post("/environments/heartbeat", tags=["environments"])
 async def environment_heartbeat(current_user: Dict = Depends(get_current_user)):
@@ -339,6 +358,56 @@ async def list_user_environments(current_user: Dict = Depends(get_current_user))
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to list environments: {str(e)}"
         )
+
+# --- User Environment Variables API ---
+@app.get("/user-env-vars", tags=["user-env-vars"])
+async def get_user_env_vars(current_user: Dict = Depends(get_current_user)):
+    """Get all environment variables for the current user"""
+    db_manager = app_state.get("db_manager")
+    user_id = current_user["sub"]
+    if not db_manager:
+        raise HTTPException(status_code=500, detail="Database unavailable")
+    try:
+        env_vars = await db_manager.get_user_env_vars(user_id)
+        return {"env_vars": env_vars}
+    except Exception as e:
+        logger.error("Failed to get user env vars", user_id=user_id, error=str(e))
+        raise HTTPException(status_code=500, detail="Failed to get environment variables")
+
+@app.post("/user-env-vars", tags=["user-env-vars"])
+async def set_user_env_var(
+    key: str = Body(..., embed=True),
+    value: str = Body(..., embed=True),
+    current_user: Dict = Depends(get_current_user)
+):
+    """Add or update an environment variable for the current user"""
+    db_manager = app_state.get("db_manager")
+    user_id = current_user["sub"]
+    if not db_manager:
+        raise HTTPException(status_code=500, detail="Database unavailable")
+    try:
+        await db_manager.set_user_env_var(user_id, key, value)
+        return {"status": "success", "key": key, "value": value}
+    except Exception as e:
+        logger.error("Failed to set user env var", user_id=user_id, key=key, error=str(e))
+        raise HTTPException(status_code=500, detail="Failed to set environment variable")
+
+@app.delete("/user-env-vars/{key}", tags=["user-env-vars"])
+async def delete_user_env_var(
+    key: str = Path(...),
+    current_user: Dict = Depends(get_current_user)
+):
+    """Delete an environment variable for the current user"""
+    db_manager = app_state.get("db_manager")
+    user_id = current_user["sub"]
+    if not db_manager:
+        raise HTTPException(status_code=500, detail="Database unavailable")
+    try:
+        await db_manager.delete_user_env_var(user_id, key)
+        return {"status": "success", "key": key}
+    except Exception as e:
+        logger.error("Failed to delete user env var", user_id=user_id, key=key, error=str(e))
+        raise HTTPException(status_code=500, detail="Failed to delete environment variable")
 
 # Background tasks
 async def monitor_environment(user_id: str):

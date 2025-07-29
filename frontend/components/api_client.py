@@ -238,6 +238,26 @@ class CMBClusterAPIClient:
             return self._handle_response(response)
         except Exception as e:
             return {"status": "error", "message": f"Error deleting storage: {str(e)}"}
+    
+    # --- User Environment Variables ---
+    def get_user_env_vars(self) -> Dict[str, Any]:
+        """Fetch all user environment variables for the current user"""
+        url = f"{self.base_url}/user-env-vars"
+        response = self.session.get(url, headers=self._get_headers(), timeout=10)
+        return self._handle_response(response)
+
+    def set_user_env_var(self, key: str, value: str) -> Dict[str, Any]:
+        """Add or update a user environment variable"""
+        url = f"{self.base_url}/user-env-vars"
+        data = {"key": key, "value": value}
+        response = self.session.post(url, json=data, headers=self._get_headers(), timeout=10)
+        return self._handle_response(response)
+
+    def delete_user_env_var(self, key: str) -> Dict[str, Any]:
+        """Delete a user environment variable by key"""
+        url = f"{self.base_url}/user-env-vars/{key}"
+        response = self.session.delete(url, headers=self._get_headers(), timeout=10)
+        return self._handle_response(response)
 
 # Global API client instance
 api_client = CMBClusterAPIClient()

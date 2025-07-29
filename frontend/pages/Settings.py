@@ -111,14 +111,84 @@ def main():
     
     st.divider()
     
+    st.divider()
+    st.markdown("## 🌱 Environment Variables")
+    show_env_vars_section()
+    st.divider()
     st.markdown("## 🔐 Security")
     show_security_settings()
-    
     st.divider()
-    
     st.markdown("## ℹ️ System Information")
     show_system_info()
 
+def show_env_vars_section():
+    """User environment variables management UI"""
+    st.markdown("Manage environment variables that will be injected into your research environment.")
+    api = api_client
+    if 'env_vars' not in st.session_state:
+        # Fetch from backend
+        result = api.get_user_env_vars()
+        st.session_state.env_vars = result.get('env_vars', {}) if isinstance(result, dict) else {}
+
+    env_vars = st.session_state.env_vars.copy()
+    keys = list(env_vars.keys())
+
+    # Inline editing table
+    st.write("**Current Environment Variables:**")
+    if not keys:
+        st.info("No environment variables set.")
+    else:
+        for k in keys:
+            cols = st.columns([4, 4, 1])
+            new_key = cols[0].text_input(f"Key_{k}", value=k, key=f"env_key_{k}")
+            new_val = cols[1].text_input(f"Value_{k}", value=env_vars[k], key=f"env_val_{k}")
+            if cols[2].button("🗑️", key=f"del_{k}"):
+                resp = api.delete_user_env_var(new_key)
+                if resp.get("status") == "success":
+                    st.session_state.env_vars.pop(k, None)
+                    st.rerun()
+                else:
+                    st.error(f"Failed to delete variable: {resp.get('message', 'Unknown error')}")
+            elif new_key != k or new_val != env_vars[k]:
+                # Update if changed
+                resp = api.set_user_env_var(new_key, new_val)
+                if resp.get("status") == "success":
+                    st.session_state.env_vars.pop(k, None)
+                    st.session_state.env_vars[new_key] = new_val
+                    st.rerun()
+                else:
+                    st.error(f"Failed to update variable: {resp.get('message', 'Unknown error')}")
+
+    st.markdown("---")
+    st.write("**Add New Variable:**")
+    import re
+    with st.form("add_env_var_form"):
+        new_key = st.text_input("Key", key="add_env_key")
+        new_val = st.text_input("Value", key="add_env_val")
+        submitted = st.form_submit_button("Add")
+        key_exists = new_key in env_vars
+        # Key validation: not empty, not whitespace, valid chars (alphanum, _, -)
+        key_valid = bool(new_key and new_key.strip() and re.match(r'^[A-Za-z_][A-Za-z0-9_\-]*$', new_key.strip()))
+        if submitted:
+            if not key_valid:
+                st.error("Key must start with a letter or underscore and contain only letters, numbers, underscores, or dashes.")
+            elif key_exists:
+                if st.confirm(f"Key '{new_key}' already exists. Overwrite?"):
+                    resp = api.set_user_env_var(new_key, new_val)
+                    if resp.get("status") == "success":
+                        st.session_state.env_vars[new_key] = new_val
+                        st.success(f"Overwritten {new_key}")
+                        st.rerun()
+                    else:
+                        st.error(f"Failed to overwrite variable: {resp.get('message', 'Unknown error')}")
+            else:
+                resp = api.set_user_env_var(new_key, new_val)
+                if resp.get("status") == "success":
+                    st.session_state.env_vars[new_key] = new_val
+                    st.success(f"Added {new_key}")
+                    st.rerun()
+                else:
+                    st.error(f"Failed to add variable: {resp.get('message', 'Unknown error')}")
 def show_profile_settings(user_info):
     """User profile settings"""
     

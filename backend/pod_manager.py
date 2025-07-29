@@ -27,6 +27,42 @@ def _sanitize_for_dns(name: str) -> str:
 
 
 class PodManager:
+    async def _create_env_secret(self, safe_user_id: str, env_id: str, env_vars: dict):
+        """Create a Kubernetes Secret for user environment variables"""
+        from kubernetes.client import V1Secret
+        namespace = settings.namespace
+        secret_name = f"user-env-{safe_user_id}-{env_id}"
+        # Kubernetes Secret data must be string:string (not None)
+        secret_data = {k: str(v) for k, v in env_vars.items() if v is not None}
+        secret = V1Secret(
+            metadata={"name": secret_name, "namespace": namespace},
+            string_data=secret_data,
+            type="Opaque"
+        )
+        try:
+            self.k8s_client.create_namespaced_secret(namespace=namespace, body=secret)
+            logger.info("Created env secret for pod", secret_name=secret_name)
+        except ApiException as e:
+            if e.status == 409:
+                logger.info("Env secret already exists", secret_name=secret_name)
+            else:
+                logger.error("Failed to create env secret", secret_name=secret_name, error=str(e))
+                raise
+        return secret_name
+
+    async def _delete_env_secret(self, safe_user_id: str, env_id: str):
+        """Delete the Kubernetes Secret for user environment variables"""
+        namespace = settings.namespace
+        secret_name = f"user-env-{safe_user_id}-{env_id}"
+        try:
+            self.k8s_client.delete_namespaced_secret(name=secret_name, namespace=namespace)
+            logger.info("Deleted env secret for pod", secret_name=secret_name)
+        except ApiException as e:
+            if e.status == 404:
+                logger.info("Env secret already deleted", secret_name=secret_name)
+            else:
+                logger.error("Failed to delete env secret", secret_name=secret_name, error=str(e))
+                raise
     """Manages Kubernetes pods for user environments"""
     
     def __init__(self):
@@ -109,24 +145,38 @@ class PodManager:
                     pod_name=pod_name)
         
         try:
+            # Ensure default OPENAI_API_KEY env var exists for user
+            user_env_vars = await self.db.get_user_env_vars(user_id)
+            if "OPENAI_API_KEY" not in user_env_vars:
+                await self.db.set_user_env_var(user_id, "OPENAI_API_KEY", "")
+                user_env_vars["OPENAI_API_KEY"] = ""
+
+            # Merge env_vars from config (request) with DB (DB values overwritten by request)
+            merged_env_vars = dict(user_env_vars)
+            if getattr(config, "env_vars", None):
+                merged_env_vars.update(config.env_vars)
+
             # Handle storage selection/creation
             storage = await self._handle_storage_selection(user_id, config)
-            
-            # Create pod with cloud storage
+
+            # Create secret for env vars
+            secret_name = await self._create_env_secret(safe_user_id, env_id, merged_env_vars)
+
+            # Create pod with cloud storage, referencing secret
             pod_spec = self._build_pod_spec_with_storage(
-                user_id, safe_user_id, env_id, user_email, pod_name, config, storage
+                user_id, safe_user_id, env_id, user_email, pod_name, config, storage, secret_name
             )
             self.k8s_client.create_namespaced_pod(
                 namespace=namespace, 
                 body=pod_spec
             )
-            
+
             # Create service
             await self._create_user_service(safe_user_id, env_id)
-            
+
             # Create ingress
             await self._create_user_ingress(safe_user_id, env_id)
-            
+
             # Create environment record
             environment = Environment(
                 id=f"{user_id}-{env_id}",
@@ -146,13 +196,13 @@ class PodManager:
                     "storage_type": storage.storage_type.value
                 }
             )
-            
+
             # Store environment in database
             await self.db.create_environment(environment)
-            
+
             # Link environment to storage
             await self.db.link_environment_storage(environment.id, storage.id)
-            
+
             logger.info("User environment created successfully", 
                         user_id=user_id, 
                         user_email=user_email,
@@ -161,9 +211,9 @@ class PodManager:
                         url=environment.url,
                         pod_name=pod_name,
                         storage_bucket=storage.bucket_name)
-            
+
             return environment
-            
+
         except Exception as e:
             logger.error("Failed to create user environment", 
                         user_id=user_id, 
@@ -395,11 +445,27 @@ class PodManager:
         user_email: str, 
         pod_name: str, 
         config: EnvironmentRequest,
-        storage: UserStorage
+        storage: UserStorage,
+        secret_name: str = None
     ) -> Dict:
-        """Build Kubernetes pod specification with cloud storage - simplified like PVC approach"""
+        """Build Kubernetes pod specification with cloud storage and env secret"""
         image = config.image or f"{settings.registry_url}/cmbagent:latest"
-        
+
+        # Default env vars (non-sensitive, always injected)
+        env_list = [
+            {"name": "USER_ID", "value": user_id},
+            {"name": "USER_EMAIL", "value": user_email},
+            {"name": "ENV_ID", "value": env_id},
+            {"name": "HUB_URL", "value": settings.api_url},
+            {"name": "WORKSPACE_DIR", "value": "/workspace"},
+            {"name": "STORAGE_BUCKET", "value": storage.bucket_name},
+            {"name": "STORAGE_TYPE", "value": storage.storage_type.value}
+        ]
+
+        env_from = []
+        if secret_name:
+            env_from.append({"secretRef": {"name": secret_name}})
+
         return {
             "apiVersion": "v1",
             "kind": "Pod",
@@ -427,15 +493,8 @@ class PodManager:
                     "name": "cmbagent",
                     "image": image,
                     "ports": [{"containerPort": 8501, "name": "streamlit"}],
-                    "env": [
-                        {"name": "USER_ID", "value": user_id},
-                        {"name": "USER_EMAIL", "value": user_email},
-                        {"name": "ENV_ID", "value": env_id},
-                        {"name": "HUB_URL", "value": settings.api_url},
-                        {"name": "WORKSPACE_DIR", "value": "/workspace"},
-                        {"name": "STORAGE_BUCKET", "value": storage.bucket_name},
-                        {"name": "STORAGE_TYPE", "value": storage.storage_type.value}
-                    ],
+                    "env": env_list,
+                    "envFrom": env_from,
                     "resources": {
                         "requests": {
                             "cpu": str(config.cpu_limit / 2),
@@ -732,6 +791,19 @@ class PodManager:
         logger.info("Deleting user environment", user_id=user_id, env_id=env_id, pod_name=environment.pod_name)
         
         try:
+            # Delete the env secret
+            await self._delete_env_secret(safe_user_id, env_id)
+
+            # Delete TLS secret for this environment
+            tls_secret_name = f"tls-{safe_user_id}-{env_id}"
+            try:
+                self.k8s_client.delete_namespaced_secret(name=tls_secret_name, namespace=namespace)
+                logger.info("TLS secret deleted successfully", secret_name=tls_secret_name)
+            except ApiException as e:
+                if e.status != 404:
+                    raise
+                logger.info("TLS secret not found (already deleted)", secret_name=tls_secret_name)
+
             # Delete pod
             try:
                 self.k8s_client.delete_namespaced_pod(
@@ -743,7 +815,7 @@ class PodManager:
                 if e.status != 404:
                     raise
                 logger.info("Pod not found (already deleted)", pod_name=environment.pod_name)
-            
+
             # Delete service
             try:
                 service_name = f"service-{safe_user_id}-{env_id}"
@@ -756,7 +828,7 @@ class PodManager:
                 if e.status != 404:
                     raise
                 logger.info("Service not found (already deleted)", service_name=service_name)
-            
+
             # Delete ingress
             try:
                 ingress_name = f"ingress-{safe_user_id}-{env_id}"
@@ -769,18 +841,18 @@ class PodManager:
                 if e.status != 404:
                     raise
                 logger.info("Ingress not found (already deleted)", ingress_name=ingress_name)
-            
+
             # Note: Keep PVC for data persistence
-            
+
             # Remove from database
             deleted = await self.db.delete_environment(user_id, env_id)
             if deleted:
                 logger.info("Environment removed from database", user_id=user_id, env_id=env_id)
             else:
                 logger.warning("Environment not found in database", user_id=user_id, env_id=env_id)
-                
+
             logger.info("User environment deleted successfully", user_id=user_id, env_id=env_id)
-            
+
         except Exception as e:
             logger.error("Failed to delete user environment", user_id=user_id, env_id=env_id, error=str(e))
             raise
@@ -838,6 +910,15 @@ class PodManager:
                    safe_user_id=safe_user_id, 
                    env_id=env_id)
         
+        # Try to delete TLS secret
+        tls_secret_name = f"tls-{safe_user_id}-{env_id}"
+        try:
+            self.k8s_client.delete_namespaced_secret(name=tls_secret_name, namespace=namespace)
+            logger.info("TLS secret deleted successfully", secret_name=tls_secret_name)
+        except ApiException as e:
+            if e.status != 404:  # Ignore if not found
+                logger.warning("Failed to cleanup TLS secret", error=str(e))
+
         # Try to delete pod
         try:
             pod_name = self._generate_pod_name(safe_user_id, env_id)
@@ -848,7 +929,7 @@ class PodManager:
         except ApiException as e:
             if e.status != 404:  # Ignore if not found
                 logger.warning("Failed to cleanup pod", error=str(e))
-        
+
         # Try to delete service
         try:
             service_name = f"service-{safe_user_id}-{env_id}"
@@ -859,7 +940,7 @@ class PodManager:
         except ApiException as e:
             if e.status != 404:  # Ignore if not found
                 logger.warning("Failed to cleanup service", error=str(e))
-        
+
         # Try to delete ingress
         try:
             ingress_name = f"ingress-{safe_user_id}-{env_id}"
@@ -870,5 +951,5 @@ class PodManager:
         except ApiException as e:
             if e.status != 404:  # Ignore if not found
                 logger.warning("Failed to cleanup ingress", error=str(e))
-        
+
         # Note: Keep PVC for potential retry/data recovery

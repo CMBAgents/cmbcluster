@@ -41,11 +41,14 @@ class EnvironmentRequest(BaseModel):
     memory_limit: Optional[str] = "2Gi"
     storage_size: Optional[str] = "10Gi"  # Kept for backward compatibility
     image: Optional[str] = None
-    
+
     # Storage selection (new)
     storage_id: Optional[str] = None  # Existing storage to attach
     create_new_storage: bool = False  # Create new storage
     storage_class: Optional[str] = "STANDARD"  # For new storage
+
+    # User-supplied environment variables
+    env_vars: Optional[Dict[str, str]] = None
 
 class ActivityLog(BaseModel):
     id: str

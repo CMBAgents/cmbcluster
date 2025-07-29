@@ -173,12 +173,12 @@ class StorageManager:
                 "bucket_name": bucket_name,
                 "location": bucket.location,
                 "storage_class": bucket.storage_class,
-                "created_at": bucket.time_created,
-                "updated_at": bucket.updated,
+                "created_at": getattr(bucket, 'time_created', None),
+                "updated_at": getattr(bucket, 'updated', None),
                 "size_bytes": total_size,
                 "object_count": blob_count,
-                "versioning_enabled": bucket.versioning_enabled,
-                "lifecycle_rules": len(bucket.lifecycle_rules)
+                "versioning_enabled": getattr(bucket, 'versioning_enabled', False),
+                "lifecycle_rules": len(list(bucket.lifecycle_rules)) if hasattr(bucket, 'lifecycle_rules') else 0
             }
             
         except gcp_exceptions.NotFound:

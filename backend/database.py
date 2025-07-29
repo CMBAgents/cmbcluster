@@ -15,6 +15,58 @@ from config import settings
 logger = structlog.get_logger()
 
 class DatabaseManager:
+    # User environment variable management
+    async def get_user_env_vars(self, user_id: str) -> Dict[str, str]:
+        """Get all environment variables for a user as a dict"""
+        async with self.get_connection() as conn:
+            rows = await asyncio.get_event_loop().run_in_executor(
+                None,
+                lambda: conn.execute(
+                    "SELECT key, value FROM user_env_vars WHERE user_id = ?",
+                    (user_id,)
+                ).fetchall()
+            )
+            return {row['key']: row['value'] for row in rows}
+
+    async def set_user_env_var(self, user_id: str, key: str, value: str) -> None:
+        """Insert or update a user environment variable"""
+        async with self.get_connection() as conn:
+            await asyncio.get_event_loop().run_in_executor(
+                None,
+                lambda: conn.execute(
+                    """
+                    INSERT INTO user_env_vars (user_id, key, value, created_at, updated_at)
+                    VALUES (?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+                    ON CONFLICT(user_id, key) DO UPDATE SET value=excluded.value, updated_at=CURRENT_TIMESTAMP
+                    """,
+                    (user_id, key, value)
+                )
+            )
+            await asyncio.get_event_loop().run_in_executor(None, conn.commit)
+
+    async def delete_user_env_var(self, user_id: str, key: str) -> None:
+        """Delete a user environment variable by key"""
+        async with self.get_connection() as conn:
+            await asyncio.get_event_loop().run_in_executor(
+                None,
+                lambda: conn.execute(
+                    "DELETE FROM user_env_vars WHERE user_id = ? AND key = ?",
+                    (user_id, key)
+                )
+            )
+            await asyncio.get_event_loop().run_in_executor(None, conn.commit)
+
+    async def clear_user_env_vars(self, user_id: str) -> None:
+        """Delete all environment variables for a user"""
+        async with self.get_connection() as conn:
+            await asyncio.get_event_loop().run_in_executor(
+                None,
+                lambda: conn.execute(
+                    "DELETE FROM user_env_vars WHERE user_id = ?",
+                    (user_id,)
+                )
+            )
+            await asyncio.get_event_loop().run_in_executor(None, conn.commit)
     """SQLite database manager for CMBCluster with thread-safe operations"""
     
     def __init__(self, db_path: str = None):
@@ -119,6 +171,20 @@ class DatabaseManager:
                         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                         FOREIGN KEY (environment_id) REFERENCES environments (id),
                         FOREIGN KEY (storage_id) REFERENCES user_storages (id)
+                    )
+                """)
+
+                # Create user_env_vars table for per-user environment variables
+                conn.execute("""
+                    CREATE TABLE IF NOT EXISTS user_env_vars (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        user_id TEXT NOT NULL,
+                        key TEXT NOT NULL,
+                        value TEXT NOT NULL,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        UNIQUE(user_id, key),
+                        FOREIGN KEY (user_id) REFERENCES users (id)
                     )
                 """)
                 
