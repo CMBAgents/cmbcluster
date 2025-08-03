@@ -1,0 +1,24 @@
+[theme]
+# Primary theme colors
+primaryColor = "#4A9EFF"
+backgroundColor = "#0E1117"
+secondaryBackgroundColor = "#262730"
+textColor = "#FAFAFA"
+
+# Set dark mode as default
+base = "dark"
+
+[server]
+# Server settings
+headless = true
+enableCORS = false
+enableXsrfProtection = false
+
+[browser]
+# Browser settings
+gatherUsageStats = false
+
+[ui]
+# UI settings
+hideTopBar = false
+hideSidebarNav = false

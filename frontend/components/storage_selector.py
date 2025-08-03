@@ -19,19 +19,19 @@ def show_storage_selector(user_storages: List[Dict] = None) -> Dict:
             st.error(f"Failed to load storage options: {str(e)}")
             user_storages = []
     
-    st.markdown("### 💾 Workspace Storage Selection")
+    st.markdown("### Workspace Storage Selection")
     
     # Check if user has existing storage
     active_storages = [s for s in user_storages if s.get("status") == "active"]
     
     if not active_storages:
         # First time user - auto-create storage
-        st.info("🌟 **Welcome!** We'll create your first cosmic workspace automatically.")
+        st.info("Welcome! We'll create your first workspace automatically.")
         st.markdown("""
-        Your workspace will be given a unique **cosmology-themed name** like:
-        - *Andromeda Nebula* 🌌
-        - *Orion Quasar* ⭐
-        - *Vega Pulsar* 💫
+        Your workspace will be given a unique research-themed name like:
+        - Research Alpha
+        - Research Beta  
+        - Research Gamma
         """)
         
         return {
@@ -48,18 +48,19 @@ def show_storage_selector(user_storages: List[Dict] = None) -> Dict:
         "Storage Options",
         ["continue_existing", "create_new"],
         format_func=lambda x: {
-            "continue_existing": "🔄 Continue with existing workspace",
-            "create_new": "✨ Start fresh with new workspace"
+            "continue_existing": "Continue with existing workspace",
+            "create_new": "Start fresh with new workspace"
         }[x],
         index=0,
-        key="storage_selection_radio"
+        key="storage_selection_radio",
+        help="Choose whether to use an existing workspace or create a new one"
     )
     
     selected_storage = None
     
     if storage_option == "continue_existing":
         # Show existing storage options
-        st.markdown("#### 📂 Your Existing Workspaces")
+        st.markdown("#### Your Existing Workspaces")
         
         # Create a more detailed storage display
         for i, storage in enumerate(active_storages):
@@ -75,22 +76,22 @@ def show_storage_selector(user_storages: List[Dict] = None) -> Dict:
                 if created_date:
                     try:
                         dt = datetime.fromisoformat(created_date.replace('Z', '+00:00'))
-                        st.write(f"📅 {dt.strftime('%Y-%m-%d')}")
+                        st.write(f"Created: {dt.strftime('%Y-%m-%d')}")
                     except:
-                        st.write("📅 Unknown")
+                        st.write("Created: Unknown")
                 else:
-                    st.write("📅 Unknown")
+                    st.write("Created: Unknown")
             
             with col3:
                 size_bytes = storage.get("size_bytes", 0)
                 if size_bytes > 0:
                     size_str = format_storage_size(size_bytes)
-                    st.write(f"📊 {size_str}")
+                    st.write(f"Size: {size_str}")
                 else:
-                    st.write("📊 Empty")
+                    st.write("Size: Empty")
             
             with col4:
-                if st.button("Select", key=f"select_storage_{i}", type="primary"):
+                if st.button("Select", key=f"select_storage_{i}", type="primary", icon=":material/check_circle:"):
                     selected_storage = storage
                     st.session_state.selected_storage_id = storage["id"]
                     st.success(f"Selected: {display_name}")
@@ -103,15 +104,15 @@ def show_storage_selector(user_storages: List[Dict] = None) -> Dict:
         if selected_storage:
             # Show selected storage details
             st.markdown("---")
-            st.markdown("#### ✅ Selected Workspace")
+            st.markdown("#### Selected Workspace")
             
             col1, col2 = st.columns(2)
             with col1:
-                st.metric("📛 Name", selected_storage.get("display_name", "Unknown"))
-                st.metric("💽 Size", format_storage_size(selected_storage.get("size_bytes", 0)))
+                st.metric("Name", selected_storage.get("display_name", "Unknown"))
+                st.metric("Size", format_storage_size(selected_storage.get("size_bytes", 0)))
             with col2:
-                st.metric("📁 Objects", selected_storage.get("object_count", 0))
-                st.metric("🏷️ Class", selected_storage.get("storage_class", "Unknown"))
+                st.metric("Objects", selected_storage.get("object_count", 0))
+                st.metric("Class", selected_storage.get("storage_class", "Unknown"))
             
             return {
                 "selection_type": "existing",
@@ -121,31 +122,31 @@ def show_storage_selector(user_storages: List[Dict] = None) -> Dict:
             }
         else:
             # No storage selected yet
-            st.info("👆 Please select a workspace from above to continue.")
+            st.info("Please select a workspace from above to continue.")
             return {"selection_type": "pending"}
     
     else:  # create_new
-        st.markdown("#### ✨ Create New Workspace")
-        st.info("🎲 A new cosmology-themed workspace will be created automatically!")
+        st.markdown("#### Create New Workspace")
+        st.info("A new research workspace will be created automatically!")
         
         # Storage class selection
         storage_class = st.selectbox(
             "Storage Performance",
             ["STANDARD", "NEARLINE", "COLDLINE"],
             format_func=lambda x: {
-                "STANDARD": "🚀 Standard (Best performance)",
-                "NEARLINE": "⚡ Nearline (Good for monthly access)", 
-                "COLDLINE": "❄️ Coldline (Archive storage)"
+                "STANDARD": "Standard (Best performance)",
+                "NEARLINE": "Nearline (Good for monthly access)", 
+                "COLDLINE": "Coldline (Archive storage)"
             }[x],
             index=0,
             help="Choose storage class based on how frequently you'll access your data"
         )
         
         st.markdown("**New workspace features:**")
-        st.markdown("- 🌌 Unique cosmic name (e.g., 'Sirius Galaxy')")
-        st.markdown("- 🔒 Private and secure")
-        st.markdown("- 📈 Automatic versioning enabled")
-        st.markdown("- ♻️ Lifecycle management")
+        st.markdown("- Unique research workspace name")
+        st.markdown("- Private and secure storage")
+        st.markdown("- Automatic versioning enabled")
+        st.markdown("- Lifecycle management included")
         
         return {
             "selection_type": "create_new",
@@ -168,10 +169,10 @@ def format_storage_size(size_bytes: int) -> str:
 def show_storage_creation_status(storage_info: Dict):
     """Show storage creation progress and status"""
     if storage_info.get("selection_type") == "create_new":
-        with st.spinner("🌌 Creating your cosmic workspace..."):
-            st.info("✨ Generating unique cosmology-themed name...")
-            st.info("🏗️ Setting up secure cloud storage...")
-            st.info("🔐 Configuring permissions...")
+        with st.spinner(":material/workspace_premium: Creating your research workspace..."):
+            st.info(":material/auto_awesome: Generating unique workspace name...")
+            st.info(":material/cloud_upload: Setting up secure cloud storage...")
+            st.info("Configuring permissions...")
 
 def clear_storage_selection():
     """Clear storage selection from session state"""

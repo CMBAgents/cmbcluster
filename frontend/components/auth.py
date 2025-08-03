@@ -133,41 +133,75 @@ def require_auth(func):
 
 def show_login_screen():
     """Display login interface"""
-    st.markdown(f"""
-    <div style="text-align: center; padding: 2rem;">
-        <h1>{settings.app_title}</h1>
-        <h3>{settings.app_tagline}</h3>
-        <p>Coming soon</p>
-    </div>
-    """, unsafe_allow_html=True)
+    # Completely clear the page and replace with login screen
     
-    col1, col2, col3 = st.columns([1, 2, 1])
+    # Create a clean container that replaces all content
+    container = st.container()
     
-    with col2:
-        if st.button("🔐 Login with Google", type="primary", use_container_width=True):
-            login_url = settings.auth_login_url
-            st.markdown(f'<meta http-equiv="refresh" content="0;URL={login_url}">', 
-                       unsafe_allow_html=True)
+    with container:
+        # Add CSS to ensure clean display and logo styling
+        st.markdown("""
+        <style>
+        .main .block-container {
+            padding: 2rem 1rem;
+        }
+        /* Make Cambridge logo text white by targeting the custom container */
+        .cambridge-logo-container img {
+            filter: invert(1) brightness(2.5) contrast(2) saturate(0) hue-rotate(180deg) !important;
+            -webkit-filter: invert(1) brightness(2.5) contrast(2) saturate(0) hue-rotate(180deg) !important;
+        }
+        </style>
+        """, unsafe_allow_html=True)
         
-        # Development mode token input
-        if settings.dev_mode:
-            st.markdown("---")
-            st.markdown("**Development Mode**")
-            with st.expander("Manual Token Input"):
-                dev_token = st.text_input("Access Token", type="password")
-                if st.button("Authenticate") and dev_token:
-                    if validate_and_store_token(dev_token):
-                        st.success("Authentication successful!")
-                        st.rerun()
-                    else:
-                        st.error("Invalid token")
+        # Logo section with better alignment (same as other pages)
+        col1, col2, col3, col4, col5 = st.columns([1, 1, 1, 1, 1])
+        
+        with col1:
+            # Add a custom class to identify Cambridge logo
+            st.markdown('<div class="cambridge-logo-container">', unsafe_allow_html=True)
+            st.image("./media/cambridge-logo.png", width=120)
+            st.markdown('</div>', unsafe_allow_html=True)
+
+        with col5:
+            st.image("./media/infosys-logo.png", width=120)
+        
+        # Main login content
+        st.markdown(f"""
+        <div style="text-align: center; padding: 3rem 0;">
+            <h1 style="color: #FFFFFF; margin-bottom: 1rem;">{settings.app_title}</h1>
+            <h3 style="color: #B8B8B8; margin-bottom: 2rem;">{settings.app_tagline}</h3>
+            <p style="color: #B8B8B8;">Coming soon</p>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        # Login button
+        col1, col2, col3 = st.columns([1, 2, 1])
+        
+        with col2:
+            if st.button("Login with Google", type="primary", use_container_width=True, icon=":material/login:"):
+                login_url = settings.auth_login_url
+                st.markdown(f'<meta http-equiv="refresh" content="0;URL={login_url}">', 
+                           unsafe_allow_html=True)
+            
+            # Development mode token input
+            if settings.dev_mode:
+                st.markdown("---")
+                st.markdown("**Development Mode**", help="For testing purposes only")
+                with st.expander("Manual Token Input", icon=":material/code:"):
+                    dev_token = st.text_input("Access Token", type="password")
+                    if st.button("Authenticate", icon=":material/verified_user:") and dev_token:
+                        if validate_and_store_token(dev_token):
+                            st.success("Authentication successful!")
+                            st.rerun()
+                        else:
+                            st.error("Invalid token")
 
 def show_user_info():
     """Display user information in sidebar with session info"""
     user_info = st.session_state.get("user_info", {})
     
     with st.sidebar:
-        st.markdown("### 👤 User Profile")
+        st.markdown("### User Profile")
         st.write(f"**Name:** {user_info.get('name', 'Unknown')}")
         st.write(f"**Email:** {user_info.get('email', 'Unknown')}")
         
@@ -180,15 +214,15 @@ def show_user_info():
                 minutes_left = int((time_left.total_seconds() % 3600) // 60)
                 
             else:
-                st.caption("⚠️ Session expired")
+                st.caption("Session expired")
         
         # Extend session button if close to expiry
         if token_expiry and (token_expiry - datetime.now()).total_seconds() < 1800:  # 30 minutes
-            if st.button("🔄 Extend Session", use_container_width=True):
+            if st.button("Extend Session", use_container_width=True, icon=":material/restart_alt:"):
                 refresh_token()
                 st.success("Session extended!")
                 st.rerun()
         
-        if st.button("🚪 Logout", use_container_width=True):
+        if st.button("Logout", use_container_width=True, icon=":material/logout:"):
             logout()
             st.rerun()

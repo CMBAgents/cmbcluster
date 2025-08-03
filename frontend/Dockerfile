@@ -25,4 +25,20 @@ HEALTHCHECK --interval=30s --timeout=30s --start-period=5s --retries=3 \
 
 EXPOSE 8501
 
-CMD ["streamlit", "run", "Main.py", "--server.port=8501", "--server.address=0.0.0.0", "--server.headless=true"]
+# Set environment variables for dark theme
+ENV STREAMLIT_THEME_BASE=dark
+ENV STREAMLIT_THEME_PRIMARY_COLOR=#4A9EFF
+ENV STREAMLIT_THEME_BACKGROUND_COLOR=#0E1117
+ENV STREAMLIT_THEME_SECONDARY_BACKGROUND_COLOR=#262730
+ENV STREAMLIT_THEME_TEXT_COLOR=#FAFAFA
+
+CMD ["streamlit", "run", "Main.py", \
+     "--server.port=8501", \
+     "--server.address=0.0.0.0", \
+     "--server.headless=true", \
+     "--theme.base=dark", \
+     "--theme.primaryColor=#4A9EFF", \
+     "--theme.backgroundColor=#0E1117", \
+     "--theme.secondaryBackgroundColor=#262730", \
+     "--theme.textColor=#FAFAFA", \
+     "--browser.gatherUsageStats=false"]

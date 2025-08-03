@@ -1,8 +1,8 @@
 # CMBCluster
 
-Multi-tenant Streamlit Platform for Cosmology Research
+Multi-tenant Streamlit Platform for Research
 
-CMBCluster is a multi-tenant Streamlit platform designed specifically for cosmology research teams. Built on the proven JupyterHub architecture pattern, it provides isolated, persistent research environments for each user while maintaining enterprise-grade security and scalability.
+CMBCluster is a multi-tenant Streamlit platform designed specifically for research teams. Built on the proven JupyterHub architecture pattern, it provides isolated, persistent research environments for each user while maintaining enterprise-grade security and scalability.
 
 ### Architecture
 
@@ -53,7 +53,7 @@ graph TB
 - **High Availability**: Multi-replica deployments with health checks
 
 ### 🔬 Research-Focused
-- **Scientific Computing**: Pre-installed cosmology libraries (CAMB, healpy, astropy)
+- **Scientific Computing**: Pre-installed research libraries (pandas, numpy, scipy, matplotlib)
 - **Interactive Analysis**: Streamlit-based data exploration interface
 - **Persistent Workspaces**: User data persists across sessions
 - **Collaborative Tools**: Shared data access and project management
@@ -286,9 +286,9 @@ kubectl get ingress -n cmbcluster
 
 1. **Access Platform**: Navigate to `https://yourdomain.com`
 2. **Login**: Click "🔐 Login with Google" and authenticate
-3. **Launch Environment**: Click "🚀 Launch Environment" to create your research pod
+3. **Launch Environment**: Click ":material/rocket_launch: Launch Environment" to create your research pod
 4. **Start Research**: Access your isolated Streamlit environment with:
-   - Pre-installed cosmology libraries (CAMB, healpy, astropy)
+   - Pre-installed research libraries (pandas, numpy, scipy, matplotlib)
    - Persistent workspace storage (`/workspace`)
    - Scientific computing tools (NumPy, SciPy, Matplotlib)
    - Data visualization capabilities (Plotly, Seaborn)
@@ -663,11 +663,11 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 ## Acknowledgments
 
 - Built on the [JupyterHub](https://jupyter.org/hub) architecture pattern
-- Inspired by the cosmology research community needs
+- Inspired by the research community needs
 - Special thanks to early adopters and contributors
 - Container orchestration powered by [Kubernetes](https://kubernetes.io/)
 
-**CMBCluster** - Empowering cosmology research through scalable, secure, and collaborative computing environments.
+**CMBCluster** - Empowering research through scalable, secure, and collaborative computing environments.
 
 For more information, visit our [GitHub repository](https://github.com/archetana/cmbcluster) or contact us at [support@cmbcluster.io](mailto:support@cmbcluster.io).
 
