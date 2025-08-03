@@ -59,6 +59,47 @@ class CMBClusterAPIClient:
         except requests.exceptions.RequestException as e:
             return {"status": "error", "message": f"Network error: {str(e)}"}
     
+    # Generic HTTP methods for direct API access
+    def get(self, endpoint: str, params: Dict = None, **kwargs):
+        """Make a GET request to the API"""
+        url = f"{self.base_url}{endpoint}"
+        if not params:
+            params = {}
+        response = self.session.get(url, params=params, headers=self._get_headers(), verify=False, **kwargs)
+        return response
+    
+    def post(self, endpoint: str, json: Dict = None, files: Dict = None, params: Dict = None, **kwargs):
+        """Make a POST request to the API"""
+        url = f"{self.base_url}{endpoint}"
+        headers = self._get_headers()
+        
+        # If files are being uploaded, don't set content-type header
+        if files:
+            headers = {k: v for k, v in headers.items() if k.lower() != 'content-type'}
+        
+        response = self.session.post(
+            url, 
+            json=json, 
+            files=files, 
+            params=params, 
+            headers=headers, 
+            verify=False,
+            **kwargs
+        )
+        return response
+    
+    def put(self, endpoint: str, json: Dict = None, **kwargs):
+        """Make a PUT request to the API"""
+        url = f"{self.base_url}{endpoint}"
+        response = self.session.put(url, json=json, headers=self._get_headers(), verify=False, **kwargs)
+        return response
+    
+    def delete(self, endpoint: str, json: Dict = None, **kwargs):
+        """Make a DELETE request to the API"""
+        url = f"{self.base_url}{endpoint}"
+        response = self.session.delete(url, json=json, headers=self._get_headers(), verify=False, **kwargs)
+        return response
+    
     def create_environment(self, config: Optional[Dict] = None) -> Dict[str, Any]:
         """Create a new user environment"""
         url = f"{self.base_url}/environments"

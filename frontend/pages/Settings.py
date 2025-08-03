@@ -11,6 +11,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from components.auth import check_authentication, show_login_screen, require_auth, logout, show_user_info
 from components.api_client import api_client
 from components.dark_theme import DARK_THEME_CSS
+from components.storage_file_manager import StorageFileManager
 from config import settings
 import ssl
 import requests
@@ -48,6 +49,9 @@ st.set_page_config(
 if not check_authentication():
     show_login_screen()
     st.stop()
+
+# Initialize storage file manager
+storage_file_manager = StorageFileManager(api_client)
 
 # Apply dark theme CSS
 st.markdown(DARK_THEME_CSS, unsafe_allow_html=True)
@@ -807,30 +811,42 @@ def show_enhanced_storage_card(storage: dict):
         # Show details if requested
         if st.session_state.get(f"show_details_{storage_id}", False):
             with st.expander("Workspace Details", expanded=True):
-                col1, col2 = st.columns(2)
+                # Create tabs for details and file management
+                details_tab, files_tab = st.tabs(["📋 Details", "📁 Files"])
                 
-                with col1:
-                    st.markdown("**Basic Information:**")
-                    details = {
-                        "Storage ID": storage_id,
-                        "Display Name": display_name,
-                        "Bucket Name": bucket_name,
-                        "Storage Class": storage_class.title(),
-                        "Status": status.title()
-                    }
-                    for key, value in details.items():
-                        st.write(f"**{key}:** {value}")
+                with details_tab:
+                    col1, col2 = st.columns(2)
+                    
+                    with col1:
+                        st.markdown("**Basic Information:**")
+                        details = {
+                            "Storage ID": storage_id,
+                            "Display Name": display_name,
+                            "Bucket Name": bucket_name,
+                            "Storage Class": storage_class.title(),
+                            "Status": status.title()
+                        }
+                        for key, value in details.items():
+                            st.write(f"**{key}:** {value}")
+                    
+                    with col2:
+                        st.markdown("**Storage Details:**")
+                        storage_details = {
+                            "Size": format_storage_size(size_bytes),
+                            "Created": format_datetime(created_at),
+                            "Region": storage.get("region", "Unknown"),
+                            "Last Modified": format_datetime(storage.get("updated_at", created_at))
+                        }
+                        for key, value in storage_details.items():
+                            st.write(f"**{key}:** {value}")
                 
-                with col2:
-                    st.markdown("**Storage Details:**")
-                    storage_details = {
-                        "Size": format_storage_size(size_bytes),
-                        "Created": format_datetime(created_at),
-                        "Region": storage.get("region", "Unknown"),
-                        "Last Modified": format_datetime(storage.get("updated_at", created_at))
-                    }
-                    for key, value in storage_details.items():
-                        st.write(f"**{key}:** {value}")
+                with files_tab:
+                    # File management interface
+                    st.markdown("**File Management**")
+                    if status == 'active':
+                        storage_file_manager.show_file_browser(storage_id, display_name)
+                    else:
+                        st.warning("File management is only available for active workspaces.")
         
         # Show delete confirmation if triggered
         if st.session_state.get(f"show_delete_{storage_id}", False):

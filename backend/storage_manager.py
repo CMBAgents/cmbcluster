@@ -304,3 +304,180 @@ class StorageManager:
         """Generate a user-friendly display name from bucket name"""
         constellation, cosmic_term = self.extract_cosmic_name_components(bucket_name)
         return f"{constellation} {cosmic_term}"
+
+    async def upload_object(self, bucket_name: str, object_name: str, file_content: bytes, content_type: str = None) -> bool:
+        """Upload an object to the storage bucket"""
+        try:
+            bucket = self.client.bucket(bucket_name)
+            blob = bucket.blob(object_name)
+            
+            # Set content type if provided, with fallback
+            if content_type and content_type != 'application/octet-stream':
+                blob.content_type = content_type
+            else:
+                # Try to guess content type from filename
+                import mimetypes
+                guessed_type, _ = mimetypes.guess_type(object_name)
+                if guessed_type:
+                    blob.content_type = guessed_type
+                else:
+                    blob.content_type = 'application/octet-stream'
+            
+            logger.info("About to upload object", 
+                       bucket_name=bucket_name,
+                       object_name=object_name,
+                       content_type=blob.content_type,
+                       size=len(file_content))
+            
+            # Upload the file content
+            blob.upload_from_string(file_content, content_type=blob.content_type)
+            
+            logger.info("Uploaded object to bucket", 
+                       bucket_name=bucket_name,
+                       object_name=object_name,
+                       size=len(file_content),
+                       content_type=blob.content_type)
+            
+            return True
+            
+        except Exception as e:
+            logger.error("Failed to upload object", 
+                        bucket_name=bucket_name,
+                        object_name=object_name,
+                        error=str(e))
+            return False
+
+    async def download_object(self, bucket_name: str, object_name: str) -> Optional[bytes]:
+        """Download an object from the storage bucket"""
+        try:
+            bucket = self.client.bucket(bucket_name)
+            blob = bucket.blob(object_name)
+            
+            # Check if object exists
+            if not blob.exists():
+                logger.warning("Object not found for download", 
+                              bucket_name=bucket_name,
+                              object_name=object_name)
+                return None
+            
+            # Download the object
+            file_content = blob.download_as_bytes()
+            
+            logger.info("Downloaded object from bucket", 
+                       bucket_name=bucket_name,
+                       object_name=object_name,
+                       size=len(file_content))
+            
+            return file_content
+            
+        except gcp_exceptions.NotFound:
+            logger.warning("Object not found for download", 
+                          bucket_name=bucket_name,
+                          object_name=object_name)
+            return None
+        except Exception as e:
+            logger.error("Failed to download object", 
+                        bucket_name=bucket_name,
+                        object_name=object_name,
+                        error=str(e))
+            return None
+
+    async def list_objects(self, bucket_name: str, prefix: str = "") -> List[Dict]:
+        """List objects in the storage bucket"""
+        try:
+            bucket = self.client.bucket(bucket_name)
+            blobs = bucket.list_blobs(prefix=prefix)
+            
+            objects = []
+            for blob in blobs:
+                objects.append({
+                    "name": blob.name,
+                    "size": blob.size,
+                    "content_type": blob.content_type,
+                    "created": blob.time_created.isoformat() if blob.time_created else None,
+                    "updated": blob.updated.isoformat() if blob.updated else None,
+                    "etag": blob.etag,
+                    "md5_hash": blob.md5_hash,
+                    "generation": blob.generation,
+                    "url": f"gs://{bucket_name}/{blob.name}"
+                })
+            
+            logger.info("Listed objects in bucket", 
+                       bucket_name=bucket_name,
+                       prefix=prefix,
+                       object_count=len(objects))
+            
+            return objects
+            
+        except Exception as e:
+            logger.error("Failed to list objects", 
+                        bucket_name=bucket_name,
+                        prefix=prefix,
+                        error=str(e))
+            return []
+
+    async def delete_object(self, bucket_name: str, object_name: str) -> bool:
+        """Delete an object from the storage bucket"""
+        try:
+            bucket = self.client.bucket(bucket_name)
+            blob = bucket.blob(object_name)
+            
+            # Check if object exists
+            if not blob.exists():
+                logger.warning("Object not found for deletion", 
+                              bucket_name=bucket_name,
+                              object_name=object_name)
+                return False
+            
+            # Delete the object
+            blob.delete()
+            
+            logger.info("Deleted object from bucket", 
+                       bucket_name=bucket_name,
+                       object_name=object_name)
+            
+            return True
+            
+        except gcp_exceptions.NotFound:
+            logger.warning("Object not found for deletion", 
+                          bucket_name=bucket_name,
+                          object_name=object_name)
+            return False
+        except Exception as e:
+            logger.error("Failed to delete object", 
+                        bucket_name=bucket_name,
+                        object_name=object_name,
+                        error=str(e))
+            return False
+
+    async def get_object_info(self, bucket_name: str, object_name: str) -> Optional[Dict]:
+        """Get information about a specific object"""
+        try:
+            bucket = self.client.bucket(bucket_name)
+            blob = bucket.blob(object_name)
+            
+            if not blob.exists():
+                return None
+            
+            # Reload to get fresh metadata
+            blob.reload()
+            
+            return {
+                "name": blob.name,
+                "size": blob.size,
+                "content_type": blob.content_type,
+                "created": blob.time_created.isoformat() if blob.time_created else None,
+                "updated": blob.updated.isoformat() if blob.updated else None,
+                "etag": blob.etag,
+                "md5_hash": blob.md5_hash,
+                "generation": blob.generation,
+                "url": f"gs://{bucket_name}/{blob.name}",
+                "metadata": blob.metadata or {}
+            }
+            
+        except Exception as e:
+            logger.error("Failed to get object info", 
+                        bucket_name=bucket_name,
+                        object_name=object_name,
+                        error=str(e))
+            return None

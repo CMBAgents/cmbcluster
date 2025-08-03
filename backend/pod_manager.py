@@ -457,9 +457,14 @@ class PodManager:
             {"name": "USER_EMAIL", "value": user_email},
             {"name": "ENV_ID", "value": env_id},
             {"name": "HUB_URL", "value": settings.api_url},
-            {"name": "WORKSPACE_DIR", "value": "/workspace"},
+            {"name": "WORKSPACE_DIR", "value": "/cmbagent"},
             {"name": "STORAGE_BUCKET", "value": storage.bucket_name},
-            {"name": "STORAGE_TYPE", "value": storage.storage_type.value}
+            {"name": "STORAGE_TYPE", "value": storage.storage_type.value},
+            # CMBAgent specific environment variables
+            {"name": "HOME", "value": "/cmbagent"},
+            {"name": "CMBAGENT_ROOT", "value": "/cmbagent"},
+            {"name": "CMBAGENT_OUTPUT_DIR", "value": "/cmbagent/cmbagent_output"},
+            {"name": "MPLCONFIGDIR", "value": "/cmbagent/.matplotlib"}
         ]
 
         env_from = []
@@ -485,7 +490,8 @@ class PodManager:
                     "storage.bucket": storage.bucket_name,
                     "created.at": datetime.utcnow().isoformat(),
                     "managed.by": "cmbcluster",
-                    "gke-gcsfuse/volumes": "true"  # Enable GCS FUSE
+                    "gke-gcsfuse/volumes": "true",  # Enable GCS FUSE
+                    "iam.gke.io/gcp-service-account": f"{settings.cluster_name}-workload-sa@{settings.project_id}.iam.gserviceaccount.com"
                 }
             },
             "spec": {
@@ -507,8 +513,23 @@ class PodManager:
                     },
                     "volumeMounts": [{
                         "name": "user-workspace",
-                        "mountPath": "/workspace"
+                        "mountPath": "/cmbagent"
                     }],
+                    "lifecycle": {
+                        "postStart": {
+                            "exec": {
+                                "command": [
+                                    "/bin/sh", "-c",
+                                    "sleep 10 && mkdir -p /cmbagent/cmbagent_output /cmbagent/.matplotlib && chmod 755 /cmbagent/cmbagent_output /cmbagent/.matplotlib && touch /cmbagent/mount_test.txt && echo 'Mount and directories initialized' || echo 'Mount initialization failed'"
+                                ]
+                            }
+                        }
+                    },
+                    "securityContext": {
+                        "runAsUser": 1000,
+                        "runAsGroup": 1000,
+                        "allowPrivilegeEscalation": False
+                    },
                     "livenessProbe": {
                         "httpGet": {
                             "path": "/_stcore/health",
@@ -532,12 +553,15 @@ class PodManager:
                         "driver": "gcsfuse.csi.storage.gke.io",
                         "volumeAttributes": {
                             "bucketName": storage.bucket_name,
-                            "mountOptions": "implicit-dirs"
+                            "mountOptions": "implicit-dirs,uid=1000,gid=1000,file-mode=644,dir-mode=755"
                         }
                     }
                 }],
                 "restartPolicy": "Never",
-                "serviceAccountName": settings.user_pod_sa_name
+                "serviceAccountName": settings.user_pod_sa_name,
+                "securityContext": {
+                    "fsGroup": 1000
+                }
             }
         }
     

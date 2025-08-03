@@ -1,8 +1,11 @@
-from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks
+from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks, UploadFile, File
+from fastapi.responses import StreamingResponse
 from typing import Dict, List, Optional
 import structlog
 from datetime import datetime
 import uuid
+import io
+import os
 
 from auth import get_current_user
 from storage_manager import StorageManager
@@ -254,6 +257,251 @@ async def delete_storage(
             detail=f"Failed to delete storage: {str(e)}"
         )
 
+@router.post("/{storage_id}/upload")
+async def upload_file_to_storage(
+    storage_id: str,
+    file: UploadFile = File(...),
+    path: str = "",
+    current_user: Dict = Depends(get_current_user)
+):
+    """Upload a file to storage bucket"""
+    user_id = current_user["sub"]
+    
+    try:
+        db = get_database()
+        storage = await db.get_storage_by_id(storage_id)
+        
+        if not storage or storage.user_id != user_id:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Storage not found"
+            )
+        
+        # Read file content
+        file_content = await file.read()
+        
+        # Log file details for debugging
+        logger.info("Uploading file", 
+                   filename=file.filename,
+                   content_type=file.content_type,
+                   size=len(file_content))
+        
+        # Construct object path
+        object_path = f"{path.strip('/')}/{file.filename}" if path else file.filename
+        object_path = object_path.lstrip('/')
+        
+        # Use a fallback content type if none provided
+        content_type = file.content_type or 'application/octet-stream'
+        
+        # Upload to bucket
+        success = await storage_manager.upload_object(
+            bucket_name=storage.bucket_name,
+            object_name=object_path,
+            file_content=file_content,
+            content_type=content_type
+        )
+        
+        if success:
+            logger.info("File uploaded successfully", 
+                       user_id=user_id,
+                       storage_id=storage_id,
+                       filename=file.filename,
+                       object_path=object_path,
+                       size=len(file_content))
+            
+            return {
+                "status": "success",
+                "message": "File uploaded successfully",
+                "object_path": object_path,
+                "size": len(file_content),
+                "content_type": file.content_type
+            }
+        else:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Failed to upload file"
+            )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("Failed to upload file", 
+                    storage_id=storage_id,
+                    filename=file.filename if file else "unknown",
+                    user_id=user_id, 
+                    error=str(e))
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to upload file: {str(e)}"
+        )
+
+@router.get("/{storage_id}/download/{object_path:path}")
+async def download_file_from_storage(
+    storage_id: str,
+    object_path: str,
+    current_user: Dict = Depends(get_current_user)
+):
+    """Download a file from storage bucket"""
+    user_id = current_user["sub"]
+    
+    try:
+        db = get_database()
+        storage = await db.get_storage_by_id(storage_id)
+        
+        if not storage or storage.user_id != user_id:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Storage not found"
+            )
+        
+        # Download from bucket
+        file_data = await storage_manager.download_object(
+            bucket_name=storage.bucket_name,
+            object_name=object_path
+        )
+        
+        if file_data is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="File not found"
+            )
+        
+        # Get filename from path
+        filename = os.path.basename(object_path)
+        
+        logger.info("File downloaded successfully", 
+                   user_id=user_id,
+                   storage_id=storage_id,
+                   object_path=object_path,
+                   size=len(file_data))
+        
+        # Return file as streaming response
+        return StreamingResponse(
+            io.BytesIO(file_data),
+            media_type="application/octet-stream",
+            headers={"Content-Disposition": f"attachment; filename={filename}"}
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("Failed to download file", 
+                    storage_id=storage_id,
+                    object_path=object_path,
+                    user_id=user_id, 
+                    error=str(e))
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to download file: {str(e)}"
+        )
+
+@router.get("/{storage_id}/list")
+async def list_storage_objects(
+    storage_id: str,
+    prefix: str = "",
+    current_user: Dict = Depends(get_current_user)
+):
+    """List objects in storage bucket"""
+    user_id = current_user["sub"]
+    
+    try:
+        db = get_database()
+        storage = await db.get_storage_by_id(storage_id)
+        
+        if not storage or storage.user_id != user_id:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Storage not found"
+            )
+        
+        # List objects in bucket
+        objects = await storage_manager.list_objects(
+            bucket_name=storage.bucket_name,
+            prefix=prefix
+        )
+        
+        logger.info("Listed storage objects", 
+                   user_id=user_id,
+                   storage_id=storage_id,
+                   prefix=prefix,
+                   object_count=len(objects))
+        
+        return {
+            "storage_id": storage_id,
+            "bucket_name": storage.bucket_name,
+            "prefix": prefix,
+            "objects": objects,
+            "total_count": len(objects)
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("Failed to list storage objects", 
+                    storage_id=storage_id,
+                    prefix=prefix,
+                    user_id=user_id, 
+                    error=str(e))
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to list objects: {str(e)}"
+        )
+
+@router.delete("/{storage_id}/objects/{object_path:path}")
+async def delete_storage_object(
+    storage_id: str,
+    object_path: str,
+    current_user: Dict = Depends(get_current_user)
+):
+    """Delete an object from storage bucket"""
+    user_id = current_user["sub"]
+    
+    try:
+        db = get_database()
+        storage = await db.get_storage_by_id(storage_id)
+        
+        if not storage or storage.user_id != user_id:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Storage not found"
+            )
+        
+        # Delete object from bucket
+        success = await storage_manager.delete_object(
+            bucket_name=storage.bucket_name,
+            object_name=object_path
+        )
+        
+        if success:
+            logger.info("Object deleted successfully", 
+                       user_id=user_id,
+                       storage_id=storage_id,
+                       object_path=object_path)
+            
+            return {
+                "status": "success",
+                "message": "Object deleted successfully",
+                "object_path": object_path
+            }
+        else:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Object not found"
+            )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("Failed to delete object", 
+                    storage_id=storage_id,
+                    object_path=object_path,
+                    user_id=user_id, 
+                    error=str(e))
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to delete object: {str(e)}"
+        )
+
 @router.post("/{storage_id}/operations")
 async def perform_storage_operation(
     storage_id: str,
@@ -273,11 +521,7 @@ async def perform_storage_operation(
                 detail="Storage not found"
             )
         
-        if request.operation == "download":
-            # TODO: Implement download functionality
-            return {"status": "pending", "message": "Download functionality coming soon"}
-        
-        elif request.operation == "backup":
+        if request.operation == "backup":
             # TODO: Implement backup functionality
             return {"status": "pending", "message": "Backup functionality coming soon"}
         

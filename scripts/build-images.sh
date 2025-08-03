@@ -27,9 +27,9 @@ gcloud auth configure-docker "$REGISTRY_HOSTNAME" --quiet
 
 #SERVICES=("backend" "frontend" "user-environment")
 
-# SERVICES=("backend" "frontend" )
+SERVICES=("backend" "frontend" )
 # SERVICES=("backend" )
-SERVICES=("frontend" )
+# SERVICES=("frontend" )
 for SERVICE in "${SERVICES[@]}"; do
     CONTEXT_PATH="$PROJECT_ROOT/$SERVICE"
     IMAGE_NAME="cmbcluster-$SERVICE"

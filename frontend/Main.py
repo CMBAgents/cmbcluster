@@ -228,8 +228,8 @@ def show_compact_environments_table(environments):
 def show_compact_launch_interface():
     """Compact environment launch interface"""
     
-    # Compact preset selection
-    col1, col2 = st.columns([2, 1])
+    # Compact preset selection and workspace selection
+    col1, col2 = st.columns([3, 1])
     
     with col1:
         preset_options = {
@@ -245,19 +245,25 @@ def show_compact_launch_interface():
             format_func=lambda x: f"{x} ({preset_options[x]})",
             help="Choose the environment configuration that matches your workload"
         )
+        
+        # Workspace selection (compact)
+        st.markdown("**Workspace Storage:**")
+        selected_storage = show_storage_selector()
     
     with col2:
-        # Quick launch button
-        if st.button("Quick Launch", type="primary", icon=":material/rocket_launch:", use_container_width=True):
-            quick_launch_environment(selected_preset)
+        # Add some spacing to align with the preset selection
+        st.markdown("<br>", unsafe_allow_html=True)
+        
+        # Quick launch button - only enabled if storage is selected
+        button_disabled = not selected_storage or selected_storage.get("selection_type") == "pending"
+        
+        if st.button("Quick Launch", type="primary", icon=":material/rocket_launch:", 
+                    use_container_width=True, disabled=button_disabled):
+            quick_launch_environment(selected_preset, selected_storage)
     
-    # Workspace selection (compact)
-    st.markdown("**Workspace Storage:**")
-    selected_storage = show_storage_selector()
-    
-    if not selected_storage:
+    # Show warning if storage not selected
+    if not selected_storage or selected_storage.get("selection_type") == "pending":
         st.warning("Please select a workspace before launching")
-        return
     
     # Launch status
     if st.session_state.get("launch_in_progress", False):
@@ -317,9 +323,14 @@ def show_environment_details(env):
     import time
     time.sleep(1)
 
-def quick_launch_environment(preset_name):
-    """Quick launch with preset configuration"""
+def quick_launch_environment(preset_name, selected_storage):
+    """Quick launch with preset configuration and storage selection"""
     config = get_preset_config(preset_name)
+    
+    # Add storage information to config
+    if selected_storage and selected_storage.get("selection_type") != "pending":
+        config["storage"] = selected_storage
+    
     st.session_state.launch_in_progress = True
     launch_environment_with_progress(preset_name, config)
     st.session_state.launch_in_progress = False
@@ -379,6 +390,13 @@ def launch_environment_with_progress(preset, config):
                 st.success(f"Environment already exists with {preset} configuration!")
             else:
                 st.success(f"Environment created successfully with {preset} configuration!")
+                
+                # Show storage information for new environments
+                if config.get("storage", {}).get("selection_type") == "create_new":
+                    st.info("✨ New workspace storage created successfully!")
+                elif config.get("storage", {}).get("selection_type") == "existing":
+                    storage_name = config.get("storage", {}).get("storage_name", "existing workspace")
+                    st.info(f"📁 Using {storage_name}")
             
             env_url = result.get("environment", {}).get("url")
             if env_url:
