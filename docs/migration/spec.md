@@ -4,144 +4,164 @@ This document outlines a migration plan for the existing Streamlit-based fronten
 
 ## 1. Current Application Overview
 
-The current frontend is a multi-page Streamlit application that provides a user interface for managing research computing environments.
+The current frontend consists of two separate Streamlit applications:
+1.  A primary, multi-page application in the `frontend/` directory for managing research computing environments and user settings.
+2.  A secondary, single-page application in the `user-environment/` directory that serves as an interactive scientific dashboard within a provisioned user environment.
 
 ### 1.1. Pages and Structure
 
-The application is structured into pages and reusable components:
+#### 1.1.1. Main Application (`frontend/`)
 
--   **Main Page (`Main.py`):** The main dashboard for viewing and launching computing environments.
+The main application is structured into pages and reusable components:
+
+-   **Main Page (`Main.py`):** The main dashboard for viewing, launching, and managing computing environments.
 -   **Settings Page (`pages/Settings.py`):** A page for managing user settings, preferences, and storage workspaces.
 -   **Components (`frontend/components/`):** The application is well-structured with reusable components for handling API calls (`api_client.py`), authentication (`auth.py`), file management (`storage_file_manager.py`), and UI elements.
 
+#### 1.1.2. User Environment Application (`user-environment/`)
+
+The user environment app (`app.py`) is a multi-tabbed interface designed for interactive data science and research tasks.
+
+-   **Data Analysis Tab:** Generates and visualizes sample data using `numpy`, `pandas`, `matplotlib`, and `plotly`.
+-   **Calculations Tab:** Provides a basic calculator, array operations, and a simplified cosmological distance calculator.
+-   **Cosmology Tools Tab:** Simulates and plots a CMB power spectrum and galaxy correlation functions.
+-   **Notebook Tab:** A critical feature that allows users to execute arbitrary Python code via an `st.text_area` and an `exec()` call. It also supports saving and loading scripts to the workspace.
+-   **System Tab:** Displays environment variables, resource usage, and package versions.
+
 ### 1.2. Dependencies
 
-The `frontend/requirements.txt` file lists the following key Python dependencies:
+The project has two sets of dependencies for its two applications.
+
+#### 1.2.1. Main Application (`frontend/requirements.txt`)
 
 | Library | Version | Purpose |
 | :--- | :--- | :--- |
 | `streamlit` | `>=1.46.0` | Core web framework. |
 | `requests` | `==2.31.0` | HTTP client for backend API communication. |
-| `pandas` | `==2.1.3` | Data manipulation and analysis. |
+| `pandas` | `==2.1.3` | Data manipulation and display. |
 | `numpy` | `>=1.26.0` | Numerical computing. |
 | `plotly` | `==5.17.0` | Interactive charting. |
 | `PyJWT` | `==2.8.0` | JWT token decoding for authentication. |
 | `python-dotenv`| `==1.0.0` | Environment variable management. |
 | `PyYAML` | `==6.0.1` | YAML parsing. |
-| `structlog` | | Structured logging. |
+
+#### 1.2.2. User Environment (`user-environment/requirements.txt`)
+
+| Library | Version | Purpose |
+| :--- | :--- | :--- |
+| `streamlit` | `==1.28.1` | Core web framework. |
+| `numpy` | `>=1.26.0` | Numerical computing. |
+| `scipy` | `>=1.11.0` | Scientific and technical computing. |
+| `matplotlib`| `>=3.8.0` | Static plotting. |
+| `pandas` | `==2.1.3` | Data manipulation. |
+| `plotly` | `==5.17.0` | Interactive plotting. |
+| `seaborn` | `==0.13.0` | Statistical data visualization. |
+| `jupyter` | `==1.0.0` | Core Jupyter infrastructure (for notebook-like functionality). |
+| `requests` | `==2.31.0` | HTTP client for sending heartbeats. |
+| `sympy` | `==1.12` | Symbolic mathematics. |
 
 ## 2. Streamlit Usage Analysis
 
-The application makes extensive use of the Streamlit library for UI, state management, and control flow.
-
 ### 2.1. Widgets and Display Elements
 
-A wide range of Streamlit widgets are used, including:
-`st.button`, `st.selectbox`, `st.slider`, `st.text_input`, `st.number_input`, `st.file_uploader`, `st.radio`, `st.checkbox`, `st.form`, `st.form_submit_button`, `st.markdown`, `st.image`, `st.metric`, `st.code`, `st.json`, `st.success`, `st.error`, `st.warning`, `st.info`, `st.progress`, `st.spinner`, `st.download_button`.
+A wide range of Streamlit widgets are used across both applications, including:
+`st.button`, `st.selectbox`, `st.slider`, `st.text_input`, `st.number_input`, `st.file_uploader`, `st.radio`, `st.checkbox`, `st.form`, `st.form_submit_button`, `st.markdown`, `st.image`, `st.metric`, `st.code`, `st.json`, `st.success`, `st.error`, `st.warning`, `st.info`, `st.progress`, `st.spinner`, `st.download_button`, `st.pyplot`, `st.plotly_chart`, `st.text_area`.
 
 ### 2.2. Layout and Pages
 
-Layout is handled using `st.columns`, `st.container`, `st.expander`, `st.tabs`, and `st.sidebar`. The application is a multi-page app, with pages defined in the `pages/` directory.
+Layout is handled using `st.columns`, `st.container`, `st.expander`, `st.tabs`, and `st.sidebar`. The main application is a multi-page app, while the user environment uses tabs to create a single-page, multi-section interface.
 
 ### 2.3. State Management
 
-`st.session_state` is used extensively to manage application state, including:
--   User authentication status and token.
--   UI state (e.g., visibility of components).
--   Data fetched from the backend.
+`st.session_state` is used extensively in both applications to manage:
+-   User authentication status and tokens.
+-   UI state (e.g., visibility of components, selected tabs).
+-   Data fetched from the backend or generated by the user.
 -   User selections and form inputs.
+-   The content of the code notebook.
 
-## 3. External Integrations
-
-The frontend integrates with several external systems.
+## 3. External Integrations & Blocking Functions
 
 ### 3.1. Backend API
 
-The primary integration is with the FastAPI backend, facilitated by the `CMBClusterAPIClient` class in `api_client.py`. This client handles all CRUD operations for environments, storage, and user settings.
+The primary integration is with the FastAPI backend.
+-   The main app's `CMBClusterAPIClient` handles all CRUD operations for environments, storage, and user settings.
+-   The `user-environment` app sends a periodic heartbeat to a `/environments/heartbeat` endpoint to keep its session alive.
 
 ### 3.2. Authentication
 
-Authentication is handled via an OAuth 2.0 flow. The user is redirected to an external provider for login and returns to the application with a JWT token.
+Authentication is handled via an OAuth 2.0 flow with a JWT token.
 
 ### 3.3. File I/O
 
-The `StorageFileManager` component manages file uploads and downloads. Files are read into memory in the Streamlit application before being sent to the backend API. This is a potential performance bottleneck for large files.
+-   **Main App:** The `StorageFileManager` manages file uploads and downloads, reading files into memory before sending them to the backend API.
+-   **User Environment App:** Performs direct file I/O on the local container filesystem (`WORKSPACE_DIR`) to save and load scripts for the notebook feature.
+
+### 3.4. LLM Calls
+
+A scan of the repository confirms there are **no integrations** with Large Language Model (LLM) APIs like OpenAI, Anthropic, or services like LangChain.
+
+### 3.5. Blocking / CPU-Heavy Functions
+
+Several functions are computationally intensive and can block the single-threaded Streamlit application server.
+
+-   `api_client.py`: `restart_environment` includes a `time.sleep(3)`, which blocks the UI.
+-   `user-environment/app.py`:
+    -   **Data Generation:** Functions generating sample data with `numpy` can be slow for a large number of points.
+    -   **Scientific Calculations:** Cosmology simulations (`show_cosmology_tools`) involve mathematical operations that can be CPU-intensive.
+    -   **Code Execution:** The `exec(code)` call in the notebook feature is the most significant concern. It can execute arbitrary, long-running, and resource-heavy code, completely blocking the user interface and posing a security risk.
 
 ## 4. Proposed Migration to Next.js
 
-The proposed migration involves rebuilding the frontend using Next.js and the React ecosystem.
-
 ### 4.1. Component Mapping
 
-The following table maps the currently used Streamlit components to their proposed Next.js/React equivalents. We recommend using a component library like **Shadcn/ui** which is built on top of Radix UI for accessibility and Tailwind CSS for styling.
+The following table maps Streamlit components to their proposed Next.js/React equivalents. A component library like **Shadcn/ui** is recommended for its accessibility and customizability.
 
 | Streamlit Component | Next.js/React Equivalent | Library/Component | Notes |
 | :--- | :--- | :--- | :--- |
 | `st.set_page_config` | Page metadata | `next/head` or Metadata API | For setting page title, favicon, etc. |
 | `st.session_state` | State management | React Context, Zustand, Redux | Zustand is a lightweight and popular choice. |
-| `st.button` | Button component | `<button>` element, Shadcn/ui `Button` | Shadcn/ui provides accessible and customizable components. |
+| `st.button` | Button component | Shadcn/ui `Button` | |
 | `st.selectbox` | Select/Dropdown | Shadcn/ui `Select` | |
 | `st.slider` | Slider component | Shadcn/ui `Slider` | |
-| `st.text_input` | Input field | Shadcn/ui `Input` | |
-| `st.number_input` | Number input | `<input type="number">`, Shadcn/ui `Input` | |
-| `st.file_uploader` | File upload component | `react-dropzone` | A popular library for handling file uploads. |
-| `st.radio` | Radio group | Shadcn/ui `RadioGroup` | |
-| `st.checkbox` | Checkbox component | Shadcn/ui `Checkbox` | |
+| `st.text_input`, `st.text_area` | Input field | Shadcn/ui `Input`, `Textarea` | |
+| `st.file_uploader` | File upload component | `react-dropzone` | For robust file handling. |
 | `st.form`, `st.form_submit_button` | Form handling | `react-hook-form` | For managing form state and validation. |
-| `st.markdown`, `st.write` | Text/Markdown rendering | `react-markdown` | For rendering markdown content safely. |
+| `st.markdown`, `st.write` | Text/Markdown rendering | `react-markdown` | |
 | `st.image` | Image component | `next/image` | For optimized image loading. |
-| `st.metric` | Metric display | Custom component | A simple component to display a value and a label. |
-| `st.code`, `st.json` | Code/JSON display | `react-syntax-highlighter` | For syntax-highlighted code blocks. |
-| `st.success`, `st.error`, `st.warning`, `st.info` | Toast/Alert notifications | `sonner`, `react-hot-toast` | For displaying non-blocking notifications. |
-| `st.progress` | Progress bar | Shadcn/ui `Progress` | |
-| `st.spinner` | Loading spinner | `lucide-react` (e.g., `Loader` icon) | Or any other SVG icon library. |
-| `st.balloons` | Fun animation | `canvas-confetti` | For celebratory animations. |
-| `st.columns`, `st.container` | Layout | CSS Flexbox/Grid, Tailwind CSS | Modern CSS is sufficient for creating complex layouts. |
+| `st.metric` | Metric display | Custom component | |
+| `st.code`, `st.json` | Code/JSON display | `react-syntax-highlighter` | |
+| `st.success`, `st.error`, `st.info` | Toast/Alert notifications | `sonner`, `react-hot-toast` | For non-blocking notifications. |
+| `st.progress`, `st.spinner` | Progress/Loading indicators | Shadcn/ui `Progress`, `lucide-react` icons | |
+| `st.columns`, `st.container` | Layout | CSS Flexbox/Grid, Tailwind CSS | |
 | `st.expander` | Accordion/Collapsible | Shadcn/ui `Accordion` | |
 | `st.tabs` | Tabs component | Shadcn/ui `Tabs` | |
-| `st.sidebar` | Sidebar layout | Custom component with CSS | A common layout pattern, easy to implement with CSS. |
-| `st.rerun()`, `st.stop()` | Control flow | State updates, conditional rendering | React's declarative nature handles this differently. |
-| `st.download_button` | Download link | `<a>` tag with `download` attribute | File content can be fetched and provided as a data URL. |
-| `st.empty()` | Dynamic content | Conditional rendering | Render different components based on state. |
-| `st.query_params` | URL query parameters | `next/navigation` (`useSearchParams`) | For reading and manipulating URL query parameters. |
-| `plotly` charts | Interactive charts | `plotly.js` or `react-plotly.js` | The JavaScript version of the same library. |
+| `st.sidebar` | Sidebar layout | Custom component with CSS | |
+| `st.rerun()`, `st.stop()` | Control flow | Not applicable | Handled by React's state updates and conditional rendering. |
+| `st.pyplot`, `st.plotly_chart` | Interactive charts | `plotly.js` or `react-plotly.js` | |
 
-### 4.2. State Management
+### 4.2. Styling and State Management
 
-For global state management (e.g., user authentication, session info), a lightweight library like **Zustand** is recommended. For local component state, React's built-in `useState` and `useReducer` hooks will suffice.
+-   **Styling:** **Tailwind CSS** is recommended for its utility-first approach that integrates seamlessly with Next.js.
+-   **State Management:** **Zustand** is recommended for global state (e.g., authentication), while local state can be managed with React's `useState` and `useReducer` hooks.
 
-### 4.3. Styling
+## 5. Backend (FastAPI) Considerations & Recommendations
 
-**Tailwind CSS** is recommended for styling, as it integrates well with Next.js and allows for rapid development of modern user interfaces.
+The existing FastAPI backend is a good starting point, but several improvements are necessary to support a robust Next.js frontend, especially given the features in the `user-environment` app.
 
-## 5. Backend (FastAPI) Considerations
+### 5.1. Functions to Remain in Python (as FastAPI Endpoints)
 
-The existing FastAPI backend provides a solid foundation. The Next.js frontend will interact with this backend.
+All business logic and data processing should be handled by the backend. This includes:
+-   Authentication and user management.
+-   CRUD operations for environments and storage.
+-   All file I/O operations (uploads, downloads, listing).
+-   User preference and settings management.
+-   **All scientific calculations and data generation** currently in `user-environment/app.py`. The frontend should request data from an endpoint (e.g., `/api/data/generate/cmb_map`) and receive a JSON response to plot.
 
-### 5.1. Required Endpoints
+### 5.2. Critical Improvements and New Endpoints
 
-The frontend will require a comprehensive set of RESTful endpoints to manage resources. The existing endpoints called by `api_client.py` are a good starting point, but they should be reviewed and formalized. Key functionalities to be covered include:
-
--   **Authentication:** `/login`, `/token`, `/user/me`, `/logout`.
--   **Environment Management:** CRUD operations for environments.
--   **Storage Management:** CRUD operations for storage buckets and files within them.
--   **User Settings:** Endpoints for managing user preferences and environment variables.
--   **Monitoring:** Endpoints for activity logs and system status.
-
-### 5.2. Identified Gaps and Improvements
-
--   **Asynchronous Operations:** Long-running operations like `restart_environment` (which currently includes a `time.sleep(3)`) should be made asynchronous. The API should immediately return a task ID, and the frontend should poll a status endpoint to get updates.
--   **Streaming File I/O:** For better performance and memory efficiency, the backend should support streaming file uploads and downloads.
--   **Security:** The practice of skipping JWT signature verification in `auth.py` must be addressed in a production environment. The backend should be responsible for validating all tokens.
-
-## 6. Migration Strategy & Next Steps
-
-1.  **Setup Next.js Project:** Initialize a new Next.js project with TypeScript, ESLint, Prettier, and Tailwind CSS.
-2.  **Implement Authentication:** Build the login page and authentication flow, connecting to the existing backend auth endpoints.
-3.  **Develop Core Layout:** Create the main application layout, including the sidebar and navigation.
-4.  **Migrate Pages Incrementally:**
-    -   Start with the `Settings` page, as it has a variety of forms and data display elements.
-    -   Then, migrate the main `Environments` dashboard.
-5.  **Develop Reusable Components:** Build a library of reusable React components based on the mapping in section 4.1.
-6.  **Refactor Backend (as needed):** Address the gaps identified in section 5.2, particularly the asynchronous operations.
-7.  **Testing:** Thoroughly test the new frontend to ensure feature parity and a smooth user experience.
+-   **Asynchronous Operations:** Long-running operations (`restart_environment`, `create_workspace`) must be made asynchronous. The API should immediately return a task ID, and the frontend should poll a status endpoint (`/api/tasks/{task_id}`) for updates. This prevents UI blocking.
+-   **Streaming File I/O:** Implement streaming for file uploads and downloads to handle large files efficiently without high memory consumption on the server.
+-   **Secure Code Execution Service:** **This is the most critical recommendation.** The `exec()` function in `user-environment/app.py` is a major security vulnerability and performance bottleneck. It must be replaced with a dedicated, sandboxed backend service.
+    -   **Proposal:** Create a new API endpoint (e.g., `/api/notebook/execute`). When called, this endpoint should delegate the code execution to a secure, isolated environment (e.g., a short-lived Docker container, or a managed service like Jupyter Kernel Gateway). The service would execute the code, capture stdout/stderr and any plot artifacts, and return them in a structured JSON response. This isolates user code from the main application infrastructure.
+-   **Formalize Endpoints:** All existing API interactions should be reviewed, documented, and formalized into a consistent RESTful or GraphQL API.
