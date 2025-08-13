@@ -10,9 +10,9 @@ from authlib.integrations.starlette_client import OAuth
 from starlette.responses import RedirectResponse
 import structlog
 
-from config import settings
-from models import User, UserRole
-from database import get_database
+from .config import settings
+from .models import User, UserRole
+from .database import get_database
 
 logger = structlog.get_logger()
 security = HTTPBearer()

@@ -12,18 +12,18 @@ from fastapi.responses import JSONResponse
 from fastapi import Body, Path
 from fastapi.security import HTTPBearer
 
-from auth import get_current_user, oauth_router, get_user_info
+from .auth import get_current_user, oauth_router, get_user_info
 from starlette.middleware.sessions import SessionMiddleware
-from config import settings
-from models import (
+from .config import settings
+from .models import (
     Environment, EnvironmentRequest, ActivityLog, 
     HealthCheck, User, PodStatus
 )
-from storage_models import EnvironmentRequestWithStorage
-from pod_manager import PodManager
-from database import DatabaseManager
-from storage_manager import StorageManager
-import storage_api
+from .storage_models import EnvironmentRequestWithStorage
+from .pod_manager import PodManager
+from .database import DatabaseManager
+from .storage_manager import StorageManager
+from . import storage_api
 
 # Configure structured logging
 structlog.configure(
@@ -56,7 +56,7 @@ async def lifespan(app: FastAPI):
     app_state["start_time"] = time.time()
     
     # Initialize database
-    from database import get_database
+    from .database import get_database
     app_state["db_manager"] = get_database()
     logger.info("Database initialized", db_path=settings.database_path)
     
@@ -117,7 +117,7 @@ app.include_router(oauth_router, prefix="/auth", tags=["authentication"])
 app.include_router(storage_api.router)
 
 # Include python_service router
-from backend.python_service.main import router as science_router
+from .python_service.main import router as science_router
 app.include_router(science_router)
 
 @app.middleware("http")
@@ -280,23 +280,6 @@ async def delete_environment(
             detail=f"Failed to delete environment: {str(e)}"
         )
 
-@app.post("/environments", tags=["environments"])
-async def create_environment(
-    request: EnvironmentRequest,
-    background_tasks: BackgroundTasks,
-    current_user: Dict = Depends(get_current_user)
-):
-    """Create a new user environment"""
-    user_id = current_user["sub"]
-    user_email = current_user["email"]
-    pod_manager: PodManager = app_state["pod_manager"]
-    # Pass env_vars through to pod_manager
-    environment = await pod_manager.create_user_environment(
-        user_id=user_id,
-        user_email=user_email,
-        config=request
-    )
-    return environment
 
 @app.post("/environments/heartbeat", tags=["environments"])
 async def environment_heartbeat(current_user: Dict = Depends(get_current_user)):
