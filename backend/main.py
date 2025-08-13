@@ -22,6 +22,7 @@ from models import (
 from storage_models import EnvironmentRequestWithStorage
 from pod_manager import PodManager
 from database import DatabaseManager
+from storage_manager import StorageManager
 import storage_api
 
 # Configure structured logging
@@ -62,6 +63,10 @@ async def lifespan(app: FastAPI):
     # Initialize pod manager (it will use the global database instance)
     app_state["pod_manager"] = PodManager()
     
+    # Initialize storage manager
+    app.state.storage_manager = StorageManager()
+    logger.info("Storage manager initialized")
+
     # Background tasks
     cleanup_task = asyncio.create_task(periodic_cleanup())
     
@@ -110,6 +115,10 @@ app.include_router(oauth_router, prefix="/auth", tags=["authentication"])
 
 # Include storage router
 app.include_router(storage_api.router)
+
+# Include python_service router
+from backend.python_service.main import router as science_router
+app.include_router(science_router)
 
 @app.middleware("http")
 async def log_requests(request: Request, call_next):

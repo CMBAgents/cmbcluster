@@ -1,10 +1,6 @@
 import pytest
-import sys
-import os
 from fastapi.testclient import TestClient
-
-# Add the backend directory to the Python path
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+import os
 
 # Mock kubernetes before importing main
 with pytest.MonkeyPatch().context() as m:
