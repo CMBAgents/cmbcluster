@@ -8,7 +8,7 @@ import structlog
 from google.cloud import storage
 from google.api_core import exceptions as gcp_exceptions
 
-from config import settings
+from .config import settings
 
 logger = structlog.get_logger()
 

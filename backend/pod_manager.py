@@ -8,11 +8,11 @@ import structlog
 from kubernetes import client, config
 from kubernetes.client.rest import ApiException
 
-from config import settings
-from models import Environment, EnvironmentRequest, PodStatus
-from storage_models import StorageType, StorageStatus, UserStorage
-from storage_manager import StorageManager
-from database import get_database
+from .config import settings
+from .models import Environment, EnvironmentRequest, PodStatus
+from .storage_models import StorageType, StorageStatus, UserStorage
+from .storage_manager import StorageManager
+from .database import get_database
 
 logger = structlog.get_logger()
 

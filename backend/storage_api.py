@@ -7,15 +7,15 @@ import uuid
 import io
 import os
 
-from auth import get_current_user
-from storage_manager import StorageManager
-from storage_models import (
+from .auth import get_current_user
+from .storage_manager import StorageManager
+from .storage_models import (
     UserStorage, StorageRequest, StorageSelectionRequest,
     StorageListResponse, StorageCreationResponse, StorageUsageStats,
     BucketOperationRequest, StorageMetadata, StorageStatus, StorageType
 )
-from database import get_database
-from config import settings
+from .database import get_database
+from .config import settings
 
 logger = structlog.get_logger()
 

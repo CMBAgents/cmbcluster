@@ -1,0 +1,1993 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "CMBCluster API",
+    "description": "Multi-tenant Streamlit Platform for Cosmology Research",
+    "version": "1.0.0"
+  },
+  "paths": {
+    "/auth/login": {
+      "get": {
+        "tags": [
+          "authentication"
+        ],
+        "summary": "Oauth Login",
+        "description": "Initiate Google OAuth login",
+        "operationId": "oauth_login_auth_login_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/auth/callback": {
+      "get": {
+        "tags": [
+          "authentication"
+        ],
+        "summary": "Oauth Callback",
+        "description": "Handle OAuth callback from Google",
+        "operationId": "oauth_callback_auth_callback_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/storage/list": {
+      "get": {
+        "tags": [
+          "storage"
+        ],
+        "summary": "List User Storages",
+        "description": "List all storage buckets for the current user",
+        "operationId": "list_user_storages_storage_list_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StorageListResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/storage/create": {
+      "post": {
+        "tags": [
+          "storage"
+        ],
+        "summary": "Create Storage",
+        "description": "Create a new storage bucket for the user",
+        "operationId": "create_storage_storage_create_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StorageRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StorageCreationResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/storage/{storage_id}": {
+      "get": {
+        "tags": [
+          "storage"
+        ],
+        "summary": "Get Storage Details",
+        "description": "Get detailed information about a specific storage bucket",
+        "operationId": "get_storage_details_storage__storage_id__get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "storage_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Storage Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StorageMetadata"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "storage"
+        ],
+        "summary": "Delete Storage",
+        "description": "Delete a storage bucket",
+        "operationId": "delete_storage_storage__storage_id__delete",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "storage_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Storage Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BucketOperationRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/storage/{storage_id}/upload": {
+      "post": {
+        "tags": [
+          "storage"
+        ],
+        "summary": "Upload File To Storage",
+        "description": "Upload a file to storage bucket",
+        "operationId": "upload_file_to_storage_storage__storage_id__upload_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "storage_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Storage Id"
+            }
+          },
+          {
+            "name": "path",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "",
+              "title": "Path"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_upload_file_to_storage_storage__storage_id__upload_post"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/storage/{storage_id}/download/{object_path}": {
+      "get": {
+        "tags": [
+          "storage"
+        ],
+        "summary": "Download File From Storage",
+        "description": "Download a file from storage bucket",
+        "operationId": "download_file_from_storage_storage__storage_id__download__object_path__get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "storage_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Storage Id"
+            }
+          },
+          {
+            "name": "object_path",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Object Path"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/storage/{storage_id}/list": {
+      "get": {
+        "tags": [
+          "storage"
+        ],
+        "summary": "List Storage Objects",
+        "description": "List objects in storage bucket",
+        "operationId": "list_storage_objects_storage__storage_id__list_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "storage_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Storage Id"
+            }
+          },
+          {
+            "name": "prefix",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "",
+              "title": "Prefix"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/storage/{storage_id}/objects/{object_path}": {
+      "delete": {
+        "tags": [
+          "storage"
+        ],
+        "summary": "Delete Storage Object",
+        "description": "Delete an object from storage bucket",
+        "operationId": "delete_storage_object_storage__storage_id__objects__object_path__delete",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "storage_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Storage Id"
+            }
+          },
+          {
+            "name": "object_path",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Object Path"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/science/health": {
+      "get": {
+        "tags": [
+          "Scientific Computing"
+        ],
+        "summary": "Health Check",
+        "description": "Health check for the scientific computing service.",
+        "operationId": "health_check_science_health_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HealthResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/science/analysis/generate": {
+      "post": {
+        "tags": [
+          "Scientific Computing"
+        ],
+        "summary": "Generate Data",
+        "description": "Generate various types of scientific data.",
+        "operationId": "generate_data_science_analysis_generate_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DataGenerationRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DataGenerationResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/science/calculator/basic": {
+      "post": {
+        "tags": [
+          "Scientific Computing"
+        ],
+        "summary": "Basic Math",
+        "description": "Perform basic mathematical operations.",
+        "operationId": "basic_math_science_calculator_basic_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BasicMathRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CalculationResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/science/calculator/array": {
+      "post": {
+        "tags": [
+          "Scientific Computing"
+        ],
+        "summary": "Array Operations",
+        "description": "Generate a random array and return its statistics.",
+        "operationId": "array_operations_science_calculator_array_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ArrayCalculationRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ArrayCalculationResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/science/cosmology/power-spectrum": {
+      "get": {
+        "tags": [
+          "Scientific Computing"
+        ],
+        "summary": "Get Power Spectrum",
+        "description": "Get data for a simulated CMB power spectrum plot.",
+        "operationId": "get_power_spectrum_science_cosmology_power_spectrum_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CosmologyPlotResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/science/cosmology/correlation-function": {
+      "get": {
+        "tags": [
+          "Scientific Computing"
+        ],
+        "summary": "Get Correlation Function",
+        "description": "Get data for a simulated galaxy correlation function plot.",
+        "operationId": "get_correlation_function_science_cosmology_correlation_function_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CosmologyPlotResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/science/notebook/execute": {
+      "post": {
+        "tags": [
+          "Scientific Computing"
+        ],
+        "summary": "Execute Notebook Code",
+        "description": "Placeholder for a secure code execution endpoint.\nWARNING: This endpoint is a placeholder and does not execute code for security reasons.\nA secure, sandboxed environment is required for this functionality.",
+        "operationId": "execute_notebook_code_science_notebook_execute_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NotebookExecutionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotebookExecutionResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/": {
+      "get": {
+        "tags": [
+          "root"
+        ],
+        "summary": "Root",
+        "description": "Root endpoint",
+        "operationId": "root__get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/health": {
+      "get": {
+        "tags": [
+          "health"
+        ],
+        "summary": "Health Check",
+        "description": "Health check endpoint",
+        "operationId": "health_check_health_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HealthCheck"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/environments": {
+      "post": {
+        "tags": [
+          "environments"
+        ],
+        "summary": "Create Environment",
+        "description": "Create a new user environment",
+        "operationId": "create_environment_environments_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EnvironmentRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "environments"
+        ],
+        "summary": "Get Environment Status",
+        "description": "Get current user's environment status",
+        "operationId": "get_environment_status_environments_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "environments"
+        ],
+        "summary": "Delete Environment",
+        "description": "Delete user's environment (optionally by env_id)",
+        "operationId": "delete_environment_environments_delete",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "env_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "description": "Environment ID to delete (optional, deletes latest if not provided)",
+              "title": "Env Id"
+            },
+            "description": "Environment ID to delete (optional, deletes latest if not provided)"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/environments/heartbeat": {
+      "post": {
+        "tags": [
+          "environments"
+        ],
+        "summary": "Environment Heartbeat",
+        "description": "Update environment activity timestamp",
+        "operationId": "environment_heartbeat_environments_heartbeat_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/activity": {
+      "get": {
+        "tags": [
+          "activity"
+        ],
+        "summary": "Get User Activity",
+        "description": "Get user activity log",
+        "operationId": "get_user_activity_activity_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "default": 50,
+              "title": "Limit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/users/me": {
+      "get": {
+        "tags": [
+          "users"
+        ],
+        "summary": "Get Current User Info",
+        "description": "Get current user information",
+        "operationId": "get_current_user_info_users_me_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/User"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/environments/list": {
+      "get": {
+        "tags": [
+          "environments"
+        ],
+        "summary": "List User Environments",
+        "description": "List all environments for the current user (multi-environment support)",
+        "operationId": "list_user_environments_environments_list_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/user-env-vars": {
+      "get": {
+        "tags": [
+          "user-env-vars"
+        ],
+        "summary": "Get User Env Vars",
+        "description": "Get all environment variables for the current user",
+        "operationId": "get_user_env_vars_user_env_vars_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "user-env-vars"
+        ],
+        "summary": "Set User Env Var",
+        "description": "Add or update an environment variable for the current user",
+        "operationId": "set_user_env_var_user_env_vars_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_set_user_env_var_user_env_vars_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/user-env-vars/{key}": {
+      "delete": {
+        "tags": [
+          "user-env-vars"
+        ],
+        "summary": "Delete User Env Var",
+        "description": "Delete an environment variable for the current user",
+        "operationId": "delete_user_env_var_user_env_vars__key__delete",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "key",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "ArrayCalculationRequest": {
+        "properties": {
+          "size": {
+            "type": "integer",
+            "maximum": 5000.0,
+            "exclusiveMinimum": 0.0,
+            "title": "Size",
+            "default": 100
+          }
+        },
+        "type": "object",
+        "title": "ArrayCalculationRequest",
+        "description": "Request model for array operations."
+      },
+      "ArrayCalculationResponse": {
+        "properties": {
+          "statistics": {
+            "$ref": "#/components/schemas/ArrayStatistics"
+          },
+          "values_preview": {
+            "items": {
+              "type": "number"
+            },
+            "type": "array",
+            "title": "Values Preview"
+          }
+        },
+        "type": "object",
+        "required": [
+          "statistics",
+          "values_preview"
+        ],
+        "title": "ArrayCalculationResponse",
+        "description": "Response model for array operations."
+      },
+      "ArrayStatistics": {
+        "properties": {
+          "mean": {
+            "type": "number",
+            "title": "Mean"
+          },
+          "std_dev": {
+            "type": "number",
+            "title": "Std Dev"
+          },
+          "min": {
+            "type": "number",
+            "title": "Min"
+          },
+          "max": {
+            "type": "number",
+            "title": "Max"
+          }
+        },
+        "type": "object",
+        "required": [
+          "mean",
+          "std_dev",
+          "min",
+          "max"
+        ],
+        "title": "ArrayStatistics",
+        "description": "Statistics of a numerical array."
+      },
+      "BasicMathRequest": {
+        "properties": {
+          "num1": {
+            "type": "number",
+            "title": "Num1"
+          },
+          "operation": {
+            "type": "string",
+            "title": "Operation",
+            "examples": [
+              "+",
+              "-",
+              "*",
+              "/",
+              "**",
+              "log",
+              "exp"
+            ]
+          },
+          "num2": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Num2"
+          }
+        },
+        "type": "object",
+        "required": [
+          "num1",
+          "operation"
+        ],
+        "title": "BasicMathRequest",
+        "description": "Request model for basic calculator operations."
+      },
+      "Body_set_user_env_var_user_env_vars_post": {
+        "properties": {
+          "key": {
+            "type": "string",
+            "title": "Key"
+          },
+          "value": {
+            "type": "string",
+            "title": "Value"
+          }
+        },
+        "type": "object",
+        "required": [
+          "key",
+          "value"
+        ],
+        "title": "Body_set_user_env_var_user_env_vars_post"
+      },
+      "Body_upload_file_to_storage_storage__storage_id__upload_post": {
+        "properties": {
+          "file": {
+            "type": "string",
+            "format": "binary",
+            "title": "File"
+          }
+        },
+        "type": "object",
+        "required": [
+          "file"
+        ],
+        "title": "Body_upload_file_to_storage_storage__storage_id__upload_post"
+      },
+      "BucketOperationRequest": {
+        "properties": {
+          "operation": {
+            "type": "string",
+            "title": "Operation"
+          },
+          "force": {
+            "type": "boolean",
+            "title": "Force",
+            "default": false
+          },
+          "backup_location": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Backup Location"
+          }
+        },
+        "type": "object",
+        "required": [
+          "operation"
+        ],
+        "title": "BucketOperationRequest",
+        "description": "Request model for bucket operations"
+      },
+      "CalculationResponse": {
+        "properties": {
+          "result": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "string"
+              }
+            ],
+            "title": "Result"
+          }
+        },
+        "type": "object",
+        "required": [
+          "result"
+        ],
+        "title": "CalculationResponse",
+        "description": "Response model for a calculation."
+      },
+      "CosmologyPlotResponse": {
+        "properties": {
+          "plot_type": {
+            "type": "string",
+            "title": "Plot Type"
+          },
+          "x_values": {
+            "items": {
+              "type": "number"
+            },
+            "type": "array",
+            "title": "X Values"
+          },
+          "y_values": {
+            "items": {
+              "type": "number"
+            },
+            "type": "array",
+            "title": "Y Values"
+          },
+          "x_label": {
+            "type": "string",
+            "title": "X Label"
+          },
+          "y_label": {
+            "type": "string",
+            "title": "Y Label"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          }
+        },
+        "type": "object",
+        "required": [
+          "plot_type",
+          "x_values",
+          "y_values",
+          "x_label",
+          "y_label",
+          "title"
+        ],
+        "title": "CosmologyPlotResponse",
+        "description": "Response model for cosmology plot data."
+      },
+      "DataGenerationRequest": {
+        "properties": {
+          "data_type": {
+            "type": "string",
+            "title": "Data Type",
+            "description": "Type of data to generate.",
+            "examples": [
+              "Random Normal",
+              "CMB Temperature Map",
+              "Galaxy Survey",
+              "Time Series"
+            ]
+          },
+          "n_points": {
+            "type": "integer",
+            "maximum": 10000.0,
+            "exclusiveMinimum": 0.0,
+            "title": "N Points",
+            "description": "Number of data points to generate.",
+            "default": 1000
+          }
+        },
+        "type": "object",
+        "required": [
+          "data_type"
+        ],
+        "title": "DataGenerationRequest",
+        "description": "Request model for generating sample data."
+      },
+      "DataGenerationResponse": {
+        "properties": {
+          "data_type": {
+            "type": "string",
+            "title": "Data Type"
+          },
+          "data": {
+            "title": "Data"
+          },
+          "statistics": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "type": "number"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Statistics"
+          },
+          "message": {
+            "type": "string",
+            "title": "Message"
+          }
+        },
+        "type": "object",
+        "required": [
+          "data_type",
+          "data",
+          "message"
+        ],
+        "title": "DataGenerationResponse",
+        "description": "Response model for generated data."
+      },
+      "EnvironmentRequest": {
+        "properties": {
+          "cpu_limit": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cpu Limit",
+            "default": 1.0
+          },
+          "memory_limit": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Memory Limit",
+            "default": "2Gi"
+          },
+          "storage_size": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Storage Size",
+            "default": "10Gi"
+          },
+          "image": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Image"
+          },
+          "storage_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Storage Id"
+          },
+          "create_new_storage": {
+            "type": "boolean",
+            "title": "Create New Storage",
+            "default": false
+          },
+          "storage_class": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Storage Class",
+            "default": "STANDARD"
+          },
+          "env_vars": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "type": "string"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Env Vars"
+          }
+        },
+        "type": "object",
+        "title": "EnvironmentRequest"
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "type": "array",
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "title": "HTTPValidationError"
+      },
+      "HealthCheck": {
+        "properties": {
+          "status": {
+            "type": "string",
+            "title": "Status",
+            "default": "healthy"
+          },
+          "timestamp": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Timestamp"
+          },
+          "version": {
+            "type": "string",
+            "title": "Version",
+            "default": "1.0.0"
+          },
+          "uptime": {
+            "type": "number",
+            "title": "Uptime"
+          }
+        },
+        "type": "object",
+        "required": [
+          "timestamp",
+          "uptime"
+        ],
+        "title": "HealthCheck"
+      },
+      "HealthResponse": {
+        "properties": {
+          "status": {
+            "type": "string",
+            "title": "Status",
+            "default": "healthy"
+          }
+        },
+        "type": "object",
+        "title": "HealthResponse",
+        "description": "Health check response model."
+      },
+      "NotebookExecutionRequest": {
+        "properties": {
+          "code": {
+            "type": "string",
+            "title": "Code"
+          }
+        },
+        "type": "object",
+        "required": [
+          "code"
+        ],
+        "title": "NotebookExecutionRequest",
+        "description": "Request model for executing code in the notebook."
+      },
+      "NotebookExecutionResponse": {
+        "properties": {
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "stdout": {
+            "type": "string",
+            "title": "Stdout"
+          },
+          "stderr": {
+            "type": "string",
+            "title": "Stderr"
+          },
+          "plots": {
+            "items": {},
+            "type": "array",
+            "title": "Plots",
+            "default": []
+          },
+          "message": {
+            "type": "string",
+            "title": "Message",
+            "default": "This endpoint is a placeholder and does not execute code."
+          }
+        },
+        "type": "object",
+        "required": [
+          "status",
+          "stdout",
+          "stderr"
+        ],
+        "title": "NotebookExecutionResponse",
+        "description": "Response model for notebook code execution."
+      },
+      "StorageCreationResponse": {
+        "properties": {
+          "storage": {
+            "$ref": "#/components/schemas/UserStorage"
+          },
+          "bucket_metadata": {
+            "type": "object",
+            "title": "Bucket Metadata"
+          },
+          "permissions_configured": {
+            "type": "boolean",
+            "title": "Permissions Configured"
+          }
+        },
+        "type": "object",
+        "required": [
+          "storage",
+          "bucket_metadata",
+          "permissions_configured"
+        ],
+        "title": "StorageCreationResponse",
+        "description": "Response model for storage creation"
+      },
+      "StorageListResponse": {
+        "properties": {
+          "storages": {
+            "items": {
+              "$ref": "#/components/schemas/UserStorage"
+            },
+            "type": "array",
+            "title": "Storages"
+          },
+          "total_count": {
+            "type": "integer",
+            "title": "Total Count"
+          },
+          "usage_stats": {
+            "$ref": "#/components/schemas/StorageUsageStats"
+          }
+        },
+        "type": "object",
+        "required": [
+          "storages",
+          "total_count",
+          "usage_stats"
+        ],
+        "title": "StorageListResponse",
+        "description": "Response model for storage listing"
+      },
+      "StorageMetadata": {
+        "properties": {
+          "storage": {
+            "$ref": "#/components/schemas/UserStorage"
+          },
+          "bucket_metadata": {
+            "anyOf": [
+              {
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bucket Metadata"
+          },
+          "recent_activity": {
+            "items": {
+              "type": "object"
+            },
+            "type": "array",
+            "title": "Recent Activity"
+          },
+          "permissions_valid": {
+            "type": "boolean",
+            "title": "Permissions Valid",
+            "default": true
+          }
+        },
+        "type": "object",
+        "required": [
+          "storage"
+        ],
+        "title": "StorageMetadata",
+        "description": "Detailed storage metadata for management"
+      },
+      "StorageRequest": {
+        "properties": {
+          "storage_type": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/StorageType"
+              }
+            ],
+            "default": "cloud_storage"
+          },
+          "storage_class": {
+            "type": "string",
+            "title": "Storage Class",
+            "default": "STANDARD"
+          },
+          "custom_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Custom Name"
+          },
+          "location": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Location"
+          }
+        },
+        "type": "object",
+        "title": "StorageRequest",
+        "description": "Request model for creating storage"
+      },
+      "StorageStatus": {
+        "type": "string",
+        "enum": [
+          "creating",
+          "active",
+          "deleting",
+          "failed",
+          "unknown"
+        ],
+        "title": "StorageStatus",
+        "description": "Storage status states"
+      },
+      "StorageType": {
+        "type": "string",
+        "enum": [
+          "pvc",
+          "cloud_storage",
+          "fuse"
+        ],
+        "title": "StorageType",
+        "description": "Storage backend types"
+      },
+      "StorageUsageStats": {
+        "properties": {
+          "total_buckets": {
+            "type": "integer",
+            "title": "Total Buckets"
+          },
+          "total_size_bytes": {
+            "type": "integer",
+            "title": "Total Size Bytes"
+          },
+          "active_buckets": {
+            "type": "integer",
+            "title": "Active Buckets"
+          },
+          "last_updated": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Last Updated"
+          }
+        },
+        "type": "object",
+        "required": [
+          "total_buckets",
+          "total_size_bytes",
+          "active_buckets",
+          "last_updated"
+        ],
+        "title": "StorageUsageStats",
+        "description": "Storage usage statistics"
+      },
+      "User": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "email": {
+            "type": "string",
+            "title": "Email"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "role": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/UserRole"
+              }
+            ],
+            "default": "user"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "last_login": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Login"
+          },
+          "is_active": {
+            "type": "boolean",
+            "title": "Is Active",
+            "default": true
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "email",
+          "name",
+          "created_at"
+        ],
+        "title": "User"
+      },
+      "UserRole": {
+        "type": "string",
+        "enum": [
+          "user",
+          "admin",
+          "researcher"
+        ],
+        "title": "UserRole"
+      },
+      "UserStorage": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "user_id": {
+            "type": "string",
+            "title": "User Id"
+          },
+          "bucket_name": {
+            "type": "string",
+            "title": "Bucket Name"
+          },
+          "display_name": {
+            "type": "string",
+            "title": "Display Name"
+          },
+          "storage_type": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/StorageType"
+              }
+            ],
+            "default": "cloud_storage"
+          },
+          "status": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/StorageStatus"
+              }
+            ],
+            "default": "creating"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "last_accessed": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Accessed"
+          },
+          "size_bytes": {
+            "type": "integer",
+            "title": "Size Bytes",
+            "default": 0
+          },
+          "object_count": {
+            "type": "integer",
+            "title": "Object Count",
+            "default": 0
+          },
+          "location": {
+            "type": "string",
+            "title": "Location"
+          },
+          "storage_class": {
+            "type": "string",
+            "title": "Storage Class",
+            "default": "STANDARD"
+          },
+          "versioning_enabled": {
+            "type": "boolean",
+            "title": "Versioning Enabled",
+            "default": true
+          },
+          "metadata": {
+            "type": "object",
+            "title": "Metadata"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "user_id",
+          "bucket_name",
+          "display_name",
+          "created_at",
+          "location"
+        ],
+        "title": "UserStorage",
+        "description": "User storage bucket metadata"
+      },
+      "ValidationError": {
+        "properties": {
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Location"
+          },
+          "msg": {
+            "type": "string",
+            "title": "Message"
+          },
+          "type": {
+            "type": "string",
+            "title": "Error Type"
+          }
+        },
+        "type": "object",
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError"
+      }
+    },
+    "securitySchemes": {
+      "HTTPBearer": {
+        "type": "http",
+        "scheme": "bearer"
+      }
+    }
+  }
+}
