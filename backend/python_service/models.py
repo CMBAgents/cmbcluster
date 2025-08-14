@@ -21,6 +21,19 @@ class DataGenerationResponse(BaseModel):
     statistics: Optional[Dict[str, float]] = None
     message: str
 
+
+class Galaxy(BaseModel):
+    """Represents a single galaxy in the survey data."""
+    ra: float = Field(..., description="Right Ascension")
+    dec: float = Field(..., description="Declination")
+    redshift: float = Field(..., description="Redshift value")
+
+
+class GalaxyDataResponse(BaseModel):
+    """Response model for the galaxy survey data endpoint."""
+    data: List[Galaxy]
+
+
 # --- Calculator Models ---
 
 class BasicMathRequest(BaseModel):
