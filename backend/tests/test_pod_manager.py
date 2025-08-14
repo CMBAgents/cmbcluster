@@ -1,12 +1,12 @@
 import pytest
 from unittest.mock import Mock, patch, AsyncMock
-from pod_manager import PodManager
+from backend.pod_manager import PodManager
 
 @pytest.fixture
 def mock_pod_manager():
     """Create a mock pod manager for testing"""
-    with patch('pod_manager.config'), \
-         patch('pod_manager.client'):
+    with patch('backend.pod_manager.config'), \
+         patch('backend.pod_manager.client'):
         pm = PodManager()
         pm.k8s_client = Mock()
         pm.apps_client = Mock()

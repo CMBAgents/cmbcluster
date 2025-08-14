@@ -63,7 +63,7 @@ add-ip: ## Add your current IP to the GKE master authorized networks list
 
 test: ## Run tests
 	@echo "Running tests..."
-	cd backend && python -m pytest
+	@PYTHONPATH=. python -m pytest backend
 
 logs-gke: ## View backend logs from the GKE cluster
 	@echo "📜 Tailing backend logs from namespace '$(NAMESPACE)'..."
