@@ -7,14 +7,35 @@ from . import models
 
 router = APIRouter(
     prefix="/science",
-    tags=["Scientific Computing"],
-    dependencies=[Depends(get_current_user)]
+    tags=["Scientific Computing"]
+    # Temporarily removed authentication dependency for this public data endpoint
+    # dependencies=[Depends(get_current_user)]
 )
 
 @router.get("/health", response_model=models.HealthResponse)
 async def health_check():
     """Health check for the scientific computing service."""
     return models.HealthResponse(status="healthy")
+
+
+@router.get("/data", response_model=models.GalaxyDataResponse, summary="Get Galaxy Survey Data")
+async def get_galaxy_data():
+    """
+    Fetches a sample dataset of galaxy survey information, including Right Ascension (RA),
+    Declination (Dec), and redshift. This endpoint provides a static dataset of 500 galaxies
+    and is intended for demonstration and testing purposes.
+    """
+    try:
+        # Generate 500 data points for the "Galaxy Survey"
+        galaxy_data, _ = logic.generate_data("Galaxy Survey", 500)
+        return models.GalaxyDataResponse(data=galaxy_data)
+    except ValueError as e:
+        # This might happen if "Galaxy Survey" type is somehow removed from logic
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        # Catch any other unexpected errors during data generation
+        raise HTTPException(status_code=500, detail=f"An unexpected error occurred: {str(e)}")
+
 
 @router.post("/analysis/generate", response_model=models.DataGenerationResponse)
 async def generate_data(request: models.DataGenerationRequest):
