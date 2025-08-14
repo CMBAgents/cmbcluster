@@ -29,6 +29,12 @@ export default function RoutesLayout({
               >
                 Storage
               </Link>
+              <Link
+                href="/streaming"
+                className="text-foreground/60 transition-colors hover:text-foreground/80"
+              >
+                Streaming
+              </Link>
             </nav>
           </div>
         </div>

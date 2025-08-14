@@ -1,7 +1,7 @@
 import pytest
 from unittest.mock import Mock, patch
-from auth import create_access_token, verify_token
-from config import settings
+from backend.auth import create_access_token, verify_token
+from backend.config import settings
 
 def test_create_access_token():
     """Test JWT token creation"""
@@ -27,7 +27,7 @@ def test_verify_token_invalid():
     with pytest.raises(Exception):  # Should raise HTTPException
         verify_token("invalid-token")
 
-@patch('auth.settings')
+@patch('backend.auth.settings')
 def test_dev_mode_bypass(mock_settings):
     """Test development mode authentication bypass"""
     mock_settings.dev_mode = True

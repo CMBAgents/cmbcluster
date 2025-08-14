@@ -482,6 +482,25 @@ async def get_user_activity_log(user_id: str, limit: int = 50) -> List[Dict]:
         logger.error("Failed to get activity log", user_id=user_id, error=str(e))
         return []
 
+
+from fastapi.responses import StreamingResponse
+
+async def fake_llm_streamer():
+    """A fake LLM streamer that yields text chunks."""
+    text = "This is a simulated stream of tokens from a large language model. " \
+           "Each word is sent as a separate chunk to demonstrate live updates " \
+           "on the client-side."
+    words = text.split(" ")
+    for word in words:
+        yield f"data: {word} \n\n"
+        await asyncio.sleep(0.1)
+
+@app.get("/stream", tags=["streaming"])
+async def stream(current_user: Dict = Depends(get_current_user)):
+    """A streaming endpoint to simulate LLM token generation."""
+    return StreamingResponse(fake_llm_streamer(), media_type="text/event-stream")
+
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(
