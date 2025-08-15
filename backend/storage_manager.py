@@ -305,43 +305,41 @@ class StorageManager:
         constellation, cosmic_term = self.extract_cosmic_name_components(bucket_name)
         return f"{constellation} {cosmic_term}"
 
-    async def upload_object(self, bucket_name: str, object_name: str, file_content: bytes, content_type: str = None) -> bool:
-        """Upload an object to the storage bucket"""
+    def upload_object(self, bucket_name: str, object_name: str, file_obj, file_size: int, content_type: str = None) -> bool:
+        """Upload an object to the storage bucket using a file-like object for streaming."""
         try:
             bucket = self.client.bucket(bucket_name)
             blob = bucket.blob(object_name)
-            
-            # Set content type if provided, with fallback
-            if content_type and content_type != 'application/octet-stream':
-                blob.content_type = content_type
-            else:
-                # Try to guess content type from filename
+
+            # Determine content type
+            final_content_type = content_type
+            if not final_content_type or final_content_type == 'application/octet-stream':
                 import mimetypes
                 guessed_type, _ = mimetypes.guess_type(object_name)
                 if guessed_type:
-                    blob.content_type = guessed_type
+                    final_content_type = guessed_type
                 else:
-                    blob.content_type = 'application/octet-stream'
+                    final_content_type = 'application/octet-stream'
             
-            logger.info("About to upload object", 
-                       bucket_name=bucket_name,
-                       object_name=object_name,
-                       content_type=blob.content_type,
-                       size=len(file_content))
-            
-            # Upload the file content
-            blob.upload_from_string(file_content, content_type=blob.content_type)
-            
-            logger.info("Uploaded object to bucket", 
-                       bucket_name=bucket_name,
-                       object_name=object_name,
-                       size=len(file_content),
-                       content_type=blob.content_type)
+            logger.info("Starting file upload",
+                        bucket_name=bucket_name,
+                        object_name=object_name,
+                        content_type=final_content_type,
+                        size=file_size)
+
+            # Stream upload from file-like object
+            blob.upload_from_file(file_obj, size=file_size, content_type=final_content_type)
+
+            logger.info("Completed file upload",
+                        bucket_name=bucket_name,
+                        object_name=object_name,
+                        size=file_size,
+                        content_type=final_content_type)
             
             return True
-            
+
         except Exception as e:
-            logger.error("Failed to upload object", 
+            logger.error("Failed to upload object via stream",
                         bucket_name=bucket_name,
                         object_name=object_name,
                         error=str(e))

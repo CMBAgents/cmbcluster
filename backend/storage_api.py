@@ -174,6 +174,8 @@ async def delete_storage(
         await db.update_storage_status(storage_id, StorageStatus.FAILED)
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to delete storage bucket")
 
+import asyncio
+
 @router.post("/{storage_id}/upload")
 async def upload_file_to_storage(
     storage_id: str,
@@ -182,7 +184,7 @@ async def upload_file_to_storage(
     current_user: Dict = Depends(get_current_user),
     storage_manager: StorageManager = Depends(get_storage_manager)
 ):
-    """Upload a file to storage bucket"""
+    """Upload a file to a storage bucket using streaming."""
     user_id = current_user["sub"]
     db = get_database()
     storage = await db.get_storage_by_id(storage_id)
@@ -190,23 +192,36 @@ async def upload_file_to_storage(
     if not storage or storage.user_id != user_id:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Storage not found")
 
-    file_content = await file.read()
+    if not file.filename:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="No file name provided.")
+
+    # Sanitize and create the object path
     object_path = f"{path.strip('/')}/{file.filename}" if path else file.filename
     object_path = object_path.lstrip('/')
+
     content_type = file.content_type or 'application/octet-stream'
+    file_size = file.size
 
-    success = await storage_manager.upload_object(
-        bucket_name=storage.bucket_name,
-        object_name=object_path,
-        file_content=file_content,
-        content_type=content_type
-    )
+    try:
+        # Run the synchronous upload method in a thread to avoid blocking the event loop
+        success = await asyncio.to_thread(
+            storage_manager.upload_object,
+            bucket_name=storage.bucket_name,
+            object_name=object_path,
+            file_obj=file.file,
+            file_size=file_size,
+            content_type=content_type
+        )
 
-    if success:
-        logger.info("File uploaded successfully", user_id=user_id, size=len(file_content))
-        return {"status": "success", "message": "File uploaded successfully", "object_path": object_path, "size": len(file_content)}
-    else:
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to upload file")
+        if success:
+            logger.info("File stream uploaded successfully", user_id=user_id, storage_id=storage_id, object_path=object_path, size=file_size)
+            return {"status": "success", "message": "File uploaded successfully", "object_path": object_path, "size": file_size}
+        else:
+            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to upload file")
+
+    except Exception as e:
+        logger.error("File upload failed", user_id=user_id, storage_id=storage_id, error=str(e))
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"An error occurred during file upload: {e}")
 
 @router.get("/{storage_id}/download/{object_path:path}")
 async def download_file_from_storage(
