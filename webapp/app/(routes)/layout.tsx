@@ -37,6 +37,16 @@ export default function RoutesLayout({
               </Link>
             </nav>
           </div>
+          <div className="flex flex-1 items-center justify-end space-x-4">
+            <nav className="flex items-center space-x-6 text-sm font-medium">
+              <Link
+                href="/profile"
+                className="text-foreground/60 transition-colors hover:text-foreground/80"
+              >
+                Profile
+              </Link>
+            </nav>
+          </div>
         </div>
       </header>
       <main className="flex-1">{children}</main>
