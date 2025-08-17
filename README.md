@@ -113,12 +113,12 @@ SECRET_KEY=your-generated-secret-key
 #### Option A: Local Development
 ```bash
 # Start local environment
-make dev
+make up
 
-# Or using docker-compose directly
-docker-compose up --build
+# Or using docker compose directly
+docker compose up --build
 ```
-Access at: http://localhost:8501
+Access the frontend at http://localhost:8501.
 
 #### Option B: Production Deployment
 ```bash
@@ -133,97 +133,57 @@ make deploy
 
 ### Quick Start
 ```bash
-# Start all services
-docker-compose up --build
+# Start all services using the Makefile
+make up
 
-# Access points:
-# Frontend: http://localhost:8501
-# Backend API: http://localhost:8000
-# API Docs: http://localhost:8000/docs
-# User Environment: http://localhost:8502
+# Or start directly with Docker Compose
+docker compose up --build
 ```
+
+### Access Points
+- **Frontend**: `http://localhost:8501`
+- **Backend API**: `http://localhost:8000`
+- **API Docs**: `http://localhost:8000/docs`
+- **User Environment**: `http://localhost:8502` (Sample user environment)
 
 ### Development Commands
 ```bash
-
-# Make the script executable
-chmod +x scripts/build-images.sh
-chmod +x scripts/setup-cluster.sh
-chmod +x scripts/deploy.sh
-chmod +x scripts/cleanup.sh
-chmod +x scripts/local-dev.sh
-
-# Build images
+# Build container images
 make build
 
-# Run tests
+# Run backend tests
 make test
 
-# View logs
+# View logs from all running services
 make logs
 
-# Stop services
-docker-compose down
+# Stop and remove all local services
+make down
 
-# Clean up everything
+# Clean up everything (use with caution)
 make clean
 ```
 
 ### File Structure
 ```
 cmbcluster/
-├── README.md                # This file
-├── .env.example            # Environment template
-├── .gitignore              # Git ignore rules
-├── docker-compose.yml      # Local development setup
-├── Makefile               # Build and deployment commands
-├── backend/               # FastAPI backend service
-│   ├── Dockerfile
-│   ├── requirements.txt
-│   ├── main.py           # Application entry point
-│   ├── auth.py           # OAuth authentication
-│   ├── pod_manager.py    # Kubernetes pod management
-│   ├── config.py         # Configuration settings
-│   └── models.py         # Data models
-├── frontend/              # Streamlit frontend application
-│   ├── Dockerfile
-│   ├── requirements.txt
-│   ├── main.py           # Main UI application
-│   ├── config.py         # Frontend configuration
-│   ├── components/       # Reusable UI components
-│   │   ├── auth.py
-│   │   └── api_client.py
-│   └── pages/           # Multi-page UI
-│       ├── Dashboard.py
-│       ├── Environment.py
-│       └── Settings.py
-├── user-environment/      # User research environment container
-│   ├── Dockerfile
-│   ├── requirements.txt
-│   └── app.py           # Streamlit research application
-├── k8s/                  # Kubernetes manifests
-│   ├── namespace.yaml
-│   ├── rbac.yaml
-│   ├── backend-deployment.yaml
-│   ├── frontend-deployment.yaml
-│   └── ingress.yaml
-├── helm/                 # Helm chart templates
-│   ├── Chart.yaml
-│   ├── values.yaml
-│   └── templates/
-│       ├── backend.yaml
-│       ├── frontend.yaml
-│       └── ingress.yaml
-├── scripts/              # Deployment and utility scripts
-│   ├── setup-cluster.sh
-│   ├── build-images.sh
-│   ├── deploy.sh
-│   ├── cleanup.sh
-│   └── local-dev.sh
-└── terraform/            # Infrastructure as code (optional)
-    ├── main.tf
-    ├── variables.tf
-    └── outputs.tf
+├── README.md               # This file
+├── .env.example            # Environment configuration template
+├── compose.yml             # Local development setup using Docker Compose
+├── Makefile                # Automation scripts for build, deploy, and management
+├── backend/                # FastAPI backend (Hub) for API and user session management
+├── frontend/               # Main Streamlit frontend application
+├── webapp/                 # (WIP) Next.js-based frontend application
+├── user-environment/       # Container image for the isolated user research environment
+├── packages/               # Shared packages and libraries, like the TypeScript SDK
+│   └── sdk/
+├── k8s/                    # Raw Kubernetes manifests for deployment
+├── helm/                   # Helm chart for production deployments on Kubernetes
+├── scripts/                # Utility and deployment shell scripts
+├── terraform/              # (Optional) Infrastructure as Code for cloud resources
+├── schema/                 # OpenAPI schema definitions
+├── docs/                   # Project documentation
+└── data/                   # Local database and data files
 ```
 
 ## Production Deployment
