@@ -27,7 +27,7 @@ gcloud auth configure-docker "$REGISTRY_HOSTNAME" --quiet
 
 #SERVICES=("backend" "frontend" "user-environment")
 
-SERVICES=("backend" "frontend" )
+SERVICES=("frontend" )
 # SERVICES=("backend" )
 # SERVICES=("frontend" )
 for SERVICE in "${SERVICES[@]}"; do

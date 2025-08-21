@@ -234,15 +234,27 @@ async def delete_storage(
             logger.info("Deleted user storage", 
                        user_id=user_id, 
                        storage_id=storage_id,
-                       bucket_name=storage.bucket_name)
+                       bucket_name=storage.bucket_name,
+                       force_delete=request.force)
             
             return {"status": "deleted", "message": "Storage deleted successfully"}
         else:
             # Update status back to failed
             await db.update_storage_status(storage_id, StorageStatus.FAILED)
+            
+            error_msg = "Failed to delete storage bucket"
+            if not request.force:
+                error_msg += ". The bucket may contain data. Try using force delete if needed."
+            
+            logger.error("Storage deletion failed", 
+                        user_id=user_id,
+                        storage_id=storage_id,
+                        bucket_name=storage.bucket_name,
+                        force_delete=request.force)
+            
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="Failed to delete storage bucket"
+                detail=error_msg
             )
         
     except HTTPException:

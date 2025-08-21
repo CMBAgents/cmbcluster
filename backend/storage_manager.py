@@ -133,28 +133,131 @@ class StorageManager:
         try:
             bucket = self.client.bucket(bucket_name)
             
+            # First check if bucket exists
+            if not bucket.exists():
+                logger.warning("Bucket does not exist, considering deletion successful", 
+                             bucket_name=bucket_name)
+                return True
+            
             if force:
-                # Delete all objects first
-                blobs = list(bucket.list_blobs())
-                for blob in blobs:
-                    blob.delete()
-                    logger.debug("Deleted blob", blob_name=blob.name, bucket_name=bucket_name)
+                logger.info("Force deleting bucket contents", bucket_name=bucket_name)
+                # Delete all objects and their versions
+                self._force_delete_bucket_contents(bucket)
             
             # Delete the bucket
+            logger.info("Deleting bucket", bucket_name=bucket_name)
             bucket.delete()
             
-            logger.info("Deleted storage bucket", bucket_name=bucket_name, force=force)
+            logger.info("Successfully deleted storage bucket", bucket_name=bucket_name, force=force)
             return True
             
         except gcp_exceptions.NotFound:
             logger.warning("Bucket not found for deletion", bucket_name=bucket_name)
             return True  # Consider it successful if already deleted
             
-        except Exception as e:
-            logger.error("Failed to delete storage bucket", 
-                        bucket_name=bucket_name, 
-                        error=str(e))
+        except gcp_exceptions.Conflict as e:
+            error_msg = str(e)
+            if "not empty" in error_msg.lower():
+                if force:
+                    logger.error("Bucket still not empty after force deletion", 
+                               bucket_name=bucket_name, error=error_msg)
+                else:
+                    logger.error("Bucket not empty and force=False", 
+                               bucket_name=bucket_name, error=error_msg)
+            else:
+                logger.error("Conflict error deleting bucket", 
+                           bucket_name=bucket_name, error=error_msg)
             return False
+            
+        except gcp_exceptions.Forbidden as e:
+            logger.error("Permission denied deleting bucket", 
+                        bucket_name=bucket_name, error=str(e))
+            return False
+            
+        except Exception as e:
+            logger.error("Unexpected error deleting storage bucket", 
+                        bucket_name=bucket_name, 
+                        error=str(e),
+                        error_type=type(e).__name__)
+            return False
+    
+    def _force_delete_bucket_contents(self, bucket):
+        """Force delete all contents from a bucket including all versions"""
+        try:
+            # Delete all object versions first
+            logger.info("Starting force delete of bucket contents", bucket_name=bucket.name)
+            
+            # Get all objects including versions
+            all_blobs = list(bucket.list_blobs(versions=True))
+            logger.info("Found objects to delete", 
+                       bucket_name=bucket.name, 
+                       total_objects=len(all_blobs))
+            
+            if not all_blobs:
+                logger.info("No objects found in bucket", bucket_name=bucket.name)
+                return
+            
+            # Delete in batches to avoid timeouts
+            batch_size = 100
+            deleted_count = 0
+            
+            for i in range(0, len(all_blobs), batch_size):
+                batch = all_blobs[i:i + batch_size]
+                
+                for blob in batch:
+                    try:
+                        blob.delete()
+                        deleted_count += 1
+                        logger.debug("Deleted blob version", 
+                                   blob_name=blob.name, 
+                                   generation=blob.generation,
+                                   bucket_name=bucket.name)
+                    except gcp_exceptions.NotFound:
+                        # Object already deleted, continue
+                        deleted_count += 1
+                        logger.debug("Blob already deleted", 
+                                   blob_name=blob.name,
+                                   bucket_name=bucket.name)
+                    except Exception as blob_error:
+                        logger.warning("Failed to delete blob, continuing", 
+                                     blob_name=blob.name,
+                                     error=str(blob_error),
+                                     bucket_name=bucket.name)
+                
+                logger.info("Completed batch deletion", 
+                           batch_number=i // batch_size + 1,
+                           batch_size=len(batch),
+                           deleted_in_batch=len(batch),
+                           total_deleted=deleted_count,
+                           bucket_name=bucket.name)
+            
+            # Additional cleanup: try to delete any remaining objects
+            # Sometimes objects can be created during deletion
+            remaining_objects = list(bucket.list_blobs())
+            if remaining_objects:
+                logger.info("Cleaning up remaining objects", 
+                           bucket_name=bucket.name, 
+                           remaining_count=len(remaining_objects))
+                
+                for blob in remaining_objects:
+                    try:
+                        blob.delete()
+                        deleted_count += 1
+                    except:
+                        pass  # Best effort cleanup
+            
+            logger.info("Bucket contents force deletion completed", 
+                       bucket_name=bucket.name,
+                       total_deleted=deleted_count,
+                       original_count=len(all_blobs))
+            
+        except Exception as e:
+            logger.error("Error during force delete of bucket contents", 
+                        bucket_name=bucket.name, 
+                        error=str(e),
+                        error_type=type(e).__name__)
+            # Continue with bucket deletion attempt even if content deletion fails
+            raise
     
     async def get_bucket_metadata(self, bucket_name: str) -> Optional[Dict]:
         """Get metadata for a storage bucket"""

@@ -64,7 +64,7 @@ def show_storage_selector(user_storages: List[Dict] = None) -> Dict:
         
         # Create a more detailed storage display
         for i, storage in enumerate(active_storages):
-            col1, col2, col3, col4 = st.columns([3, 2, 2, 1])
+            col1, col2, col3, col4 = st.columns([3, 2, 1, 2])
             
             with col1:
                 display_name = storage.get("display_name", "Unknown Workspace")
@@ -122,7 +122,6 @@ def show_storage_selector(user_storages: List[Dict] = None) -> Dict:
             }
         else:
             # No storage selected yet
-            st.info("Please select a workspace from above to continue.")
             return {"selection_type": "pending"}
     
     else:  # create_new

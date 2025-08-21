@@ -34,7 +34,7 @@ class StorageFileManager:
         
         with col1:
             # Path/prefix input
-            prefix = st.text_input("📂 Folder Path", value="", placeholder="folder/subfolder/")
+            prefix = st.text_input("📂 Folder Path", value="", placeholder="folder/subfolder/", key=f"folder_path_{storage_id}")
         
         with col2:
             if st.button("🔄 Refresh", key=f"file_refresh_{storage_id}", help="Refresh file list"):
@@ -54,7 +54,7 @@ class StorageFileManager:
     
     def show_upload_interface(self, storage_id: str, prefix: str = ""):
         """Display file upload interface"""
-        with st.expander("📤 Upload Files", expanded=True):
+        with st.expander("📤 Upload Files", expanded=True, key=f"upload_expander_{storage_id}"):
             st.write("Select files to upload to your storage bucket")
             
             # File uploader
@@ -172,7 +172,18 @@ class StorageFileManager:
                 return
             
             data = response.json()
-            objects = data.get('objects', [])
+            all_objects = data.get('objects', [])
+            
+            # Filter out hidden files/folders (starting with .)
+            # Check both the full path and just the filename
+            objects = []
+            for obj in all_objects:
+                obj_name = obj.get('name', '')
+                # Skip if the filename starts with . or if any part of the path starts with .
+                path_parts = obj_name.split('/')
+                is_hidden = any(part.startswith('.') for part in path_parts if part)
+                if not is_hidden:
+                    objects.append(obj)
             
             if not objects:
                 st.info("📭 No files found in this location")
@@ -222,12 +233,62 @@ class StorageFileManager:
                         st.write("Unknown")
                 
                 with col4:
+                    # Direct download approach
+                    download_key = f"download_{storage_id}_{hash(obj['name'])}"
                     if st.button("⬇️", key=f"file_download_{storage_id}_{hash(obj['name'])}", help="Download file"):
-                        self.download_file(storage_id, obj['name'])
+                        st.session_state[download_key] = True
+                        st.rerun()
+                    
+                    # Show download button if requested
+                    if st.session_state.get(download_key, False):
+                        try:
+                            response = self.api_client.get(f"/storage/{storage_id}/download/{obj['name']}", stream=True)
+                            if response.status_code == 200:
+                                filename = os.path.basename(obj['name'])
+                                st.download_button(
+                                    label=f"💾 {filename}",
+                                    data=response.content,
+                                    file_name=filename,
+                                    mime=response.headers.get('content-type', 'application/octet-stream'),
+                                    key=f"dl_btn_{storage_id}_{hash(obj['name'])}",
+                                    on_click=lambda: st.session_state.pop(download_key, None)
+                                )
+                            else:
+                                st.error("Download failed")
+                                st.session_state.pop(download_key, None)
+                        except Exception as e:
+                            st.error(f"Error: {str(e)}")
+                            st.session_state.pop(download_key, None)
                 
                 with col5:
+                    delete_key = f"delete_{storage_id}_{hash(obj['name'])}"
                     if st.button("🗑️", key=f"file_delete_{storage_id}_{hash(obj['name'])}", help="Delete file"):
-                        self.delete_file(storage_id, obj['name'])
+                        st.session_state[delete_key] = True
+                        st.rerun()
+                    
+                    # Show delete confirmation if requested
+                    if st.session_state.get(delete_key, False):
+                        filename = os.path.basename(obj['name'])
+                        st.warning(f"Delete {filename}?")
+                        col_a, col_b = st.columns(2)
+                        with col_a:
+                            if st.button("❌", key=f"cancel_{storage_id}_{hash(obj['name'])}", help="Cancel"):
+                                st.session_state.pop(delete_key, None)
+                                st.rerun()
+                        with col_b:
+                            if st.button("✅", key=f"confirm_{storage_id}_{hash(obj['name'])}", help="Confirm delete"):
+                                try:
+                                    response = self.api_client.delete(f"/storage/{storage_id}/objects/{obj['name']}")
+                                    if response.status_code == 200:
+                                        st.success(f"Deleted {filename}")
+                                        st.session_state.pop(delete_key, None)
+                                        st.rerun()
+                                    else:
+                                        st.error("Delete failed")
+                                        st.session_state.pop(delete_key, None)
+                                except Exception as e:
+                                    st.error(f"Error: {str(e)}")
+                                    st.session_state.pop(delete_key, None)
             
         except Exception as e:
             st.error(f"Error loading files: {str(e)}")
@@ -276,16 +337,15 @@ class StorageFileManager:
                 # Get filename
                 filename = os.path.basename(object_path)
                 
-                # Offer file for download
+                # Direct download without additional button
                 st.download_button(
-                    label=f"💾 Save {filename}",
+                    label=f"💾 Download {filename}",
                     data=response.content,
                     file_name=filename,
                     mime=response.headers.get('content-type', 'application/octet-stream'),
-                    key=f"file_save_{storage_id}_{hash(object_path)}"
+                    key=f"direct_download_{storage_id}_{hash(object_path)}",
+                    use_container_width=True
                 )
-                
-                st.success(f"✅ {filename} ready for download")
                 
             else:
                 st.error("Failed to download file")
@@ -296,39 +356,3 @@ class StorageFileManager:
                         storage_id=storage_id,
                         object_path=object_path,
                         error=str(e))
-    
-    def delete_file(self, storage_id: str, object_path: str):
-        """Delete a file from storage"""
-        filename = os.path.basename(object_path)
-        
-        # Confirmation dialog
-        if st.session_state.get(f"file_confirm_delete_{storage_id}_{hash(object_path)}"):
-            try:
-                response = self.api_client.delete(f"/storage/{storage_id}/objects/{object_path}")
-                
-                if response.status_code == 200:
-                    st.success(f"✅ {filename} deleted successfully")
-                    # Reset confirmation state
-                    del st.session_state[f"file_confirm_delete_{storage_id}_{hash(object_path)}"]
-                    st.rerun()
-                else:
-                    st.error("Failed to delete file")
-                    
-            except Exception as e:
-                st.error(f"Error deleting file: {str(e)}")
-                logger.error("Error deleting file", 
-                            storage_id=storage_id,
-                            object_path=object_path,
-                            error=str(e))
-        else:
-            # Show confirmation
-            st.warning(f"⚠️ Are you sure you want to delete **{filename}**? This action cannot be undone.")
-            
-            col1, col2 = st.columns(2)
-            with col1:
-                if st.button("❌ Cancel", key=f"file_cancel_delete_{storage_id}_{hash(object_path)}"):
-                    st.rerun()
-            with col2:
-                if st.button("🗑️ Delete", key=f"file_confirm_delete_btn_{storage_id}_{hash(object_path)}", type="primary"):
-                    st.session_state[f"file_confirm_delete_{storage_id}_{hash(object_path)}"] = True
-                    st.rerun()
