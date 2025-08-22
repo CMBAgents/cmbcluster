@@ -2,6 +2,9 @@ import asyncio
 import time
 import re
 import uuid
+import tempfile
+import os
+import json
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional
 import structlog
@@ -13,6 +16,7 @@ from models import Environment, EnvironmentRequest, PodStatus
 from storage_models import StorageType, StorageStatus, UserStorage
 from storage_manager import StorageManager
 from database import get_database
+from file_encryption import get_file_encryption
 
 logger = structlog.get_logger()
 
@@ -50,6 +54,70 @@ class PodManager:
                 raise
         return secret_name
 
+    async def _create_file_secret(self, safe_user_id: str, env_id: str, user_files: dict):
+        """Create a Kubernetes Secret for user files"""
+        from kubernetes.client import V1Secret
+        
+        if not user_files:
+            return None
+        
+        namespace = settings.namespace
+        secret_name = f"user-files-{safe_user_id}-{env_id}"
+        
+        # Decrypt and prepare file data for secret
+        encryption = get_file_encryption()
+        secret_data = {}
+        
+        for file_id, user_file in user_files.items():
+            try:
+                # Decrypt file content
+                decrypted_content = encryption.decrypt_content(user_file.encrypted_content)
+                
+                # Use a filename based on the container path
+                filename = os.path.basename(user_file.container_path)
+                secret_data[filename] = decrypted_content
+                
+                logger.debug("Added file to secret", 
+                           filename=filename, 
+                           env_var=user_file.environment_variable_name,
+                           container_path=user_file.container_path)
+                
+            except Exception as e:
+                logger.error("Failed to decrypt file for secret", 
+                           file_id=file_id, 
+                           filename=user_file.file_name,
+                           error=str(e),
+                           error_type=type(e).__name__)
+                # Don't raise - continue with other files, but log the issue
+                logger.warning("Skipping file due to decryption error - may need to re-upload", 
+                             file_id=file_id,
+                             filename=user_file.file_name)
+        
+        if not secret_data:
+            return None
+        
+        secret = V1Secret(
+            metadata={"name": secret_name, "namespace": namespace},
+            string_data=secret_data,
+            type="Opaque"
+        )
+        
+        try:
+            self.k8s_client.create_namespaced_secret(namespace=namespace, body=secret)
+            logger.info("Created file secret for pod", 
+                       secret_name=secret_name, 
+                       file_count=len(secret_data))
+        except ApiException as e:
+            if e.status == 409:
+                logger.info("File secret already exists", secret_name=secret_name)
+            else:
+                logger.error("Failed to create file secret", 
+                           secret_name=secret_name, 
+                           error=str(e))
+                raise
+        
+        return secret_name
+
     async def _delete_env_secret(self, safe_user_id: str, env_id: str):
         """Delete the Kubernetes Secret for user environment variables"""
         namespace = settings.namespace
@@ -62,6 +130,20 @@ class PodManager:
                 logger.info("Env secret already deleted", secret_name=secret_name)
             else:
                 logger.error("Failed to delete env secret", secret_name=secret_name, error=str(e))
+                raise
+
+    async def _delete_file_secret(self, safe_user_id: str, env_id: str):
+        """Delete the Kubernetes Secret for user files"""
+        namespace = settings.namespace
+        secret_name = f"user-files-{safe_user_id}-{env_id}"
+        try:
+            self.k8s_client.delete_namespaced_secret(name=secret_name, namespace=namespace)
+            logger.info("Deleted file secret for pod", secret_name=secret_name)
+        except ApiException as e:
+            if e.status == 404:
+                logger.info("File secret already deleted", secret_name=secret_name)
+            else:
+                logger.error("Failed to delete file secret", secret_name=secret_name, error=str(e))
                 raise
     """Manages Kubernetes pods for user environments"""
     
@@ -151,6 +233,13 @@ class PodManager:
                 await self.db.set_user_env_var(user_id, "OPENAI_API_KEY", "")
                 user_env_vars["OPENAI_API_KEY"] = ""
 
+            # Get user files for environment variables and mounting
+            user_files = await self.db.get_user_files_for_environment(user_id)
+            
+            # Add file-based environment variables to merged env vars
+            for env_var_name, user_file in user_files.items():
+                user_env_vars[env_var_name] = user_file.container_path
+
             # Merge env_vars from config (request) with DB (DB values overwritten by request)
             merged_env_vars = dict(user_env_vars)
             if getattr(config, "env_vars", None):
@@ -161,10 +250,13 @@ class PodManager:
 
             # Create secret for env vars
             secret_name = await self._create_env_secret(safe_user_id, env_id, merged_env_vars)
+            
+            # Create secret for user files
+            file_secret_name = await self._create_file_secret(safe_user_id, env_id, user_files)
 
-            # Create pod with cloud storage, referencing secret
+            # Create pod with cloud storage, referencing secrets
             pod_spec = self._build_pod_spec_with_storage(
-                user_id, safe_user_id, env_id, user_email, pod_name, config, storage, secret_name
+                user_id, safe_user_id, env_id, user_email, pod_name, config, storage, secret_name, file_secret_name
             )
             self.k8s_client.create_namespaced_pod(
                 namespace=namespace, 
@@ -446,7 +538,8 @@ class PodManager:
         pod_name: str, 
         config: EnvironmentRequest,
         storage: UserStorage,
-        secret_name: str = None
+        secret_name: str = None,
+        file_secret_name: str = None
     ) -> Dict:
         """Build Kubernetes pod specification with cloud storage and env secret"""
         image = config.image or f"{settings.registry_url}/cmbagent:latest"
@@ -470,6 +563,42 @@ class PodManager:
         env_from = []
         if secret_name:
             env_from.append({"secretRef": {"name": secret_name}})
+
+        # Build volume mounts - start with default workspace mount
+        volume_mounts = [{
+            "name": "user-workspace",
+            "mountPath": "/cmbagent"
+        }]
+        
+        # Build volumes - start with default workspace volume
+        volumes = [{
+            "name": "user-workspace",
+            "csi": {
+                "driver": "gcsfuse.csi.storage.gke.io",
+                "volumeAttributes": {
+                    "bucketName": storage.bucket_name,
+                    "mountOptions": "implicit-dirs,uid=1000,gid=1000,file-mode=644,dir-mode=755"
+                }
+            }
+        }]
+
+        # Add file secret volume and mounts if files exist
+        if file_secret_name:
+            # Add file secret volume
+            volumes.append({
+                "name": "user-files",
+                "secret": {
+                    "secretName": file_secret_name,
+                    "defaultMode": 384  # 0600 in octal
+                }
+            })
+            
+            # Mount the entire secret to /app/secrets
+            volume_mounts.append({
+                "name": "user-files",
+                "mountPath": "/app/secrets",
+                "readOnly": True
+            })
 
         return {
             "apiVersion": "v1",
@@ -511,10 +640,7 @@ class PodManager:
                             "memory": config.memory_limit
                         }
                     },
-                    "volumeMounts": [{
-                        "name": "user-workspace",
-                        "mountPath": "/cmbagent"
-                    }],
+                    "volumeMounts": volume_mounts,
                     "lifecycle": {
                         "postStart": {
                             "exec": {
@@ -547,16 +673,7 @@ class PodManager:
                         "periodSeconds": 5
                     }
                 }],
-                "volumes": [{
-                    "name": "user-workspace",
-                    "csi": {
-                        "driver": "gcsfuse.csi.storage.gke.io",
-                        "volumeAttributes": {
-                            "bucketName": storage.bucket_name,
-                            "mountOptions": "implicit-dirs,uid=1000,gid=1000,file-mode=644,dir-mode=755"
-                        }
-                    }
-                }],
+                "volumes": volumes,
                 "restartPolicy": "Never",
                 "serviceAccountName": settings.user_pod_sa_name,
                 "securityContext": {
@@ -817,6 +934,9 @@ class PodManager:
         try:
             # Delete the env secret
             await self._delete_env_secret(safe_user_id, env_id)
+            
+            # Delete the file secret
+            await self._delete_file_secret(safe_user_id, env_id)
 
             # Delete TLS secret for this environment
             tls_secret_name = f"tls-{safe_user_id}-{env_id}"

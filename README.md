@@ -341,10 +341,14 @@ kubectl delete pods -l app=cmbcluster-user-env --field-selector status.phase=Suc
 | `GOOGLE_CLIENT_ID` | OAuth Client ID | - | ✅ |
 | `GOOGLE_CLIENT_SECRET` | OAuth Secret | - | ✅ |
 | `SECRET_KEY` | JWT signing key | - | ✅ |
-| `MAX_INACTIVE_HOURS` | Auto-cleanup time | `4` | ❌ |
-| `MAX_USER_PODS` | Pods per user | `1` | ❌ |
-| `TOKEN_EXPIRE_HOURS` | JWT expiration | `8` | ❌ |
-| `NAMESPACE` | Kubernetes namespace | `cmbcluster` | ❌ |
+| `MAX_INACTIVE_HOURS` | Auto-cleanup time | `1H` | ✅ |
+| `MAX_USER_PODS` | Pods per user | `1` | ✅ |
+| `TOKEN_EXPIRE_HOURS` | JWT expiration | `24` | ✅ |
+| `NAMESPACE` | Kubernetes namespace | `cmbcluster` | ✅ |
+| `FILE_ENCRYPTION_KEY` | Environment file encryption key | - | ⚠️ |
+
+> ⚠️ **Important**: The `FILE_ENCRYPTION_KEY` is required for production deployments to encrypt uploaded environment files. See [ENCRYPTION.md](ENCRYPTION.md) for details.
+
 
 ### Resource Limits
 

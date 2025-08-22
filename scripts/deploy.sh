@@ -98,12 +98,21 @@ kubectl create namespace $K8S_NAMESPACE --dry-run=client -o yaml | kubectl apply
 
 # Create secrets
 echo "🔐 Creating secrets..."
+
+# Generate encryption key if not provided
+if [ -z "$FILE_ENCRYPTION_KEY" ]; then
+    echo "📝 Generating encryption key for environment files..."
+    FILE_ENCRYPTION_KEY=$(python3 -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())" 2>/dev/null || openssl rand -base64 32)
+    echo "✅ Generated FILE_ENCRYPTION_KEY (store this securely for future deployments)"
+fi
+
 # Create a secret for the backend. The keys must be uppercase to be correctly
 # mapped to environment variables by the Helm chart's 'envFrom' directive.
 kubectl create secret generic cmbcluster-backend-secrets \
     --from-literal=GOOGLE_CLIENT_ID="${GOOGLE_CLIENT_ID}" \
     --from-literal=GOOGLE_CLIENT_SECRET="${GOOGLE_CLIENT_SECRET}" \
     --from-literal=SECRET_KEY="${SECRET_KEY:-$(openssl rand -hex 32)}" \
+    --from-literal=FILE_ENCRYPTION_KEY="${FILE_ENCRYPTION_KEY}" \
     --namespace=$K8S_NAMESPACE \
     --dry-run=client -o yaml | kubectl apply -f -
 

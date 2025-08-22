@@ -3,6 +3,7 @@ import asyncio
 import threading
 import structlog
 import json
+import uuid
 from datetime import datetime
 from typing import Dict, List, Optional, Any
 from contextlib import asynccontextmanager
@@ -10,6 +11,7 @@ from pathlib import Path
 
 from models import User, Environment, ActivityLog, UserRole, PodStatus
 from storage_models import UserStorage, StorageType, StorageStatus
+from file_models import UserFile, FileType
 from config import settings
 
 logger = structlog.get_logger()
@@ -67,6 +69,161 @@ class DatabaseManager:
                 )
             )
             await asyncio.get_event_loop().run_in_executor(None, conn.commit)
+
+    # ============ USER FILES MANAGEMENT ============
+    
+    async def create_user_file(self, user_file: UserFile) -> UserFile:
+        """Create a new user file record"""
+        async with self.get_connection() as conn:
+            await asyncio.get_event_loop().run_in_executor(
+                None,
+                lambda: conn.execute(
+                    """
+                    INSERT INTO user_files 
+                    (id, user_id, file_name, file_type, encrypted_content, 
+                     environment_variable_name, container_path, file_size, created_at, updated_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+                    """,
+                    (user_file.id, user_file.user_id, user_file.file_name, user_file.file_type.value,
+                     user_file.encrypted_content, user_file.environment_variable_name, 
+                     user_file.container_path, user_file.file_size, user_file.created_at.isoformat())
+                )
+            )
+            await asyncio.get_event_loop().run_in_executor(None, conn.commit)
+            logger.info("User file created", file_id=user_file.id, user_id=user_file.user_id, file_name=user_file.file_name)
+            return user_file
+
+    async def get_user_files(self, user_id: str) -> List[UserFile]:
+        """Get all files for a user"""
+        async with self.get_connection() as conn:
+            rows = await asyncio.get_event_loop().run_in_executor(
+                None,
+                lambda: conn.execute(
+                    """
+                    SELECT id, user_id, file_name, file_type, encrypted_content,
+                           environment_variable_name, container_path, file_size, 
+                           created_at, updated_at 
+                    FROM user_files 
+                    WHERE user_id = ? 
+                    ORDER BY created_at DESC
+                    """,
+                    (user_id,)
+                ).fetchall()
+            )
+            
+            files = []
+            for row in rows:
+                user_file = UserFile(
+                    id=row['id'],
+                    user_id=row['user_id'],
+                    file_name=row['file_name'],
+                    file_type=FileType(row['file_type']),
+                    encrypted_content=row['encrypted_content'],
+                    environment_variable_name=row['environment_variable_name'],
+                    container_path=row['container_path'],
+                    file_size=row['file_size'],
+                    created_at=datetime.fromisoformat(row['created_at']),
+                    updated_at=datetime.fromisoformat(row['updated_at']) if row['updated_at'] else None
+                )
+                files.append(user_file)
+            
+            return files
+
+    async def get_user_file(self, user_id: str, file_id: str) -> Optional[UserFile]:
+        """Get a specific user file by ID"""
+        async with self.get_connection() as conn:
+            row = await asyncio.get_event_loop().run_in_executor(
+                None,
+                lambda: conn.execute(
+                    """
+                    SELECT id, user_id, file_name, file_type, encrypted_content,
+                           environment_variable_name, container_path, file_size, 
+                           created_at, updated_at 
+                    FROM user_files 
+                    WHERE user_id = ? AND id = ?
+                    """,
+                    (user_id, file_id)
+                ).fetchone()
+            )
+            
+            if not row:
+                return None
+            
+            return UserFile(
+                id=row['id'],
+                user_id=row['user_id'],
+                file_name=row['file_name'],
+                file_type=FileType(row['file_type']),
+                encrypted_content=row['encrypted_content'],
+                environment_variable_name=row['environment_variable_name'],
+                container_path=row['container_path'],
+                file_size=row['file_size'],
+                created_at=datetime.fromisoformat(row['created_at']),
+                updated_at=datetime.fromisoformat(row['updated_at']) if row['updated_at'] else None
+            )
+
+    async def update_user_file(self, user_id: str, file_id: str, **updates) -> bool:
+        """Update user file metadata and/or content"""
+        if not updates:
+            return False
+        
+        # Build dynamic update query
+        set_clauses = []
+        values = []
+        
+        for field, value in updates.items():
+            if field == 'encrypted_content':
+                set_clauses.append(f"{field} = ?")
+                values.append(value)
+            elif field in ['file_name', 'environment_variable_name', 'container_path', 'file_size']:
+                set_clauses.append(f"{field} = ?")
+                values.append(value)
+        
+        if not set_clauses:
+            return False
+        
+        set_clauses.append("updated_at = CURRENT_TIMESTAMP")
+        values.extend([user_id, file_id])
+        
+        query = f"""
+            UPDATE user_files 
+            SET {', '.join(set_clauses)}
+            WHERE user_id = ? AND id = ?
+        """
+        
+        async with self.get_connection() as conn:
+            cursor = await asyncio.get_event_loop().run_in_executor(
+                None,
+                lambda: conn.execute(query, values)
+            )
+            await asyncio.get_event_loop().run_in_executor(None, conn.commit)
+            
+            updated = cursor.rowcount > 0
+            if updated:
+                logger.info("User file updated", file_id=file_id, user_id=user_id, fields=list(updates.keys()))
+            return updated
+
+    async def delete_user_file(self, user_id: str, file_id: str) -> bool:
+        """Delete a user file"""
+        async with self.get_connection() as conn:
+            cursor = await asyncio.get_event_loop().run_in_executor(
+                None,
+                lambda: conn.execute(
+                    "DELETE FROM user_files WHERE user_id = ? AND id = ?",
+                    (user_id, file_id)
+                )
+            )
+            await asyncio.get_event_loop().run_in_executor(None, conn.commit)
+            
+            deleted = cursor.rowcount > 0
+            if deleted:
+                logger.info("User file deleted", file_id=file_id, user_id=user_id)
+            return deleted
+
+    async def get_user_files_for_environment(self, user_id: str) -> Dict[str, UserFile]:
+        """Get all user files mapped by environment variable name for pod creation"""
+        files = await self.get_user_files(user_id)
+        return {file.environment_variable_name: file for file in files if file.environment_variable_name is not None}
     """SQLite database manager for CMBCluster with thread-safe operations"""
     
     def __init__(self, db_path: str = None):
@@ -187,6 +344,65 @@ class DatabaseManager:
                         FOREIGN KEY (user_id) REFERENCES users (id)
                     )
                 """)
+
+                # Create user_files table for secure file storage
+                conn.execute("""
+                    CREATE TABLE IF NOT EXISTS user_files (
+                        id TEXT PRIMARY KEY,
+                        user_id TEXT NOT NULL,
+                        file_name TEXT NOT NULL,
+                        file_type TEXT NOT NULL,
+                        encrypted_content BLOB NOT NULL,
+                        environment_variable_name TEXT,
+                        container_path TEXT NOT NULL,
+                        created_at TIMESTAMP NOT NULL,
+                        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        file_size INTEGER NOT NULL,
+                        FOREIGN KEY (user_id) REFERENCES users (id)
+                    )
+                """)
+                
+                # Migration: Update existing user_files table to allow NULL environment_variable_name
+                try:
+                    # Check if the column constraint needs to be updated
+                    cursor = conn.execute("PRAGMA table_info(user_files)")
+                    columns = cursor.fetchall()
+                    env_var_column = next((col for col in columns if col[1] == 'environment_variable_name'), None)
+                    
+                    # SQLite doesn't support ALTER COLUMN, so we need to recreate the table if it has NOT NULL constraint
+                    if env_var_column and env_var_column[3] == 1:  # notnull is 1
+                        # Create new table with correct schema
+                        conn.execute("""
+                            CREATE TABLE user_files_new (
+                                id TEXT PRIMARY KEY,
+                                user_id TEXT NOT NULL,
+                                file_name TEXT NOT NULL,
+                                file_type TEXT NOT NULL,
+                                encrypted_content BLOB NOT NULL,
+                                environment_variable_name TEXT,
+                                container_path TEXT NOT NULL,
+                                created_at TIMESTAMP NOT NULL,
+                                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                                file_size INTEGER NOT NULL,
+                                FOREIGN KEY (user_id) REFERENCES users (id)
+                            )
+                        """)
+                        
+                        # Copy data from old table
+                        conn.execute("""
+                            INSERT INTO user_files_new 
+                            SELECT id, user_id, file_name, file_type, encrypted_content, 
+                                   environment_variable_name, container_path, created_at, 
+                                   updated_at, file_size 
+                            FROM user_files
+                        """)
+                        
+                        # Drop old table and rename new one
+                        conn.execute("DROP TABLE user_files")
+                        conn.execute("ALTER TABLE user_files_new RENAME TO user_files")
+                except Exception as e:
+                    # If migration fails, continue - table might not exist yet
+                    pass
                 
                 # Create indexes for better query performance
                 conn.execute("CREATE INDEX IF NOT EXISTS idx_users_email ON users (email)")
@@ -202,6 +418,11 @@ class DatabaseManager:
                 conn.execute("CREATE INDEX IF NOT EXISTS idx_user_storages_status ON user_storages (status)")
                 conn.execute("CREATE INDEX IF NOT EXISTS idx_environment_storages_env_id ON environment_storages (environment_id)")
                 conn.execute("CREATE INDEX IF NOT EXISTS idx_environment_storages_storage_id ON environment_storages (storage_id)")
+                
+                # User files indexes
+                conn.execute("CREATE INDEX IF NOT EXISTS idx_user_files_user_id ON user_files (user_id)")
+                conn.execute("CREATE INDEX IF NOT EXISTS idx_user_files_type ON user_files (file_type)")
+                conn.execute("CREATE INDEX IF NOT EXISTS idx_user_files_env_var ON user_files (environment_variable_name)")
                 
                 conn.commit()
                 conn.close()

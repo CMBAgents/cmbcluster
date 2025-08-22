@@ -12,6 +12,7 @@ from components.auth import check_authentication, show_login_screen, require_aut
 from components.api_client import api_client
 from components.dark_theme import DARK_THEME_CSS
 from components.storage_file_manager import StorageFileManager
+from components.file_upload_manager import FileUploadManager
 from config import settings
 import ssl
 import requests
@@ -50,8 +51,12 @@ if not check_authentication():
     show_login_screen()
     st.stop()
 
-# Initialize storage file manager
+# Initialize storage file manager and file upload manager
 storage_file_manager = StorageFileManager(api_client)
+
+# Add debug mode toggle for file upload troubleshooting
+debug_mode = False
+file_upload_manager = FileUploadManager(api_client, debug_mode=debug_mode)
 
 # Apply dark theme CSS
 st.markdown(DARK_THEME_CSS, unsafe_allow_html=True)
@@ -181,10 +186,11 @@ def main():
     st.markdown("Manage your account, preferences, and workspace configurations")
     
     # Settings navigation tabs
-    tab1, tab2, tab3 = st.tabs([
+    tab1, tab2, tab3, tab4 = st.tabs([
         "Profile", 
         "Environment Preferences", 
-        "Environment Variables"
+        "Environment Variables",
+        "Environment Files"
     ])
     
     # Get user info
@@ -198,6 +204,9 @@ def main():
     
     with tab3:
         show_env_vars_section()
+    
+    with tab4:
+        file_upload_manager.show_file_upload_section()
 
 def show_env_vars_section():
     """Professional environment variables management UI"""

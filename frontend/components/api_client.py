@@ -12,9 +12,13 @@ class CMBClusterAPIClient:
         # Add timeout to prevent hanging requests
         self.session.timeout = 10
     
-    def _get_headers(self) -> Dict[str, str]:
-        """Get headers with authentication token"""
-        headers = {"Content-Type": "application/json"}
+    def _get_headers(self, exclude_content_type: bool = False) -> Dict[str, str]:
+        """Get headers for API requests"""
+        headers = {}
+        
+        if not exclude_content_type:
+            headers["Content-Type"] = "application/json"
+        
         token = st.session_state.get("access_token")
         if token:
             headers["Authorization"] = f"Bearer {token}"
@@ -299,6 +303,76 @@ class CMBClusterAPIClient:
         url = f"{self.base_url}/user-env-vars/{key}"
         response = self.session.delete(url, headers=self._get_headers(), timeout=10)
         return self._handle_response(response)
+
+    # --- User File Management ---
+    def upload_user_file(self, file_data: bytes, filename: str, file_type: str, 
+                        env_var_name: str = None, container_path: str = None) -> Dict[str, Any]:
+        """Upload a user file"""
+        try:
+            files = {"file": (filename, file_data, "application/json")}
+            data = {"file_type": file_type}
+            
+            if env_var_name:
+                data["environment_variable_name"] = env_var_name
+            if container_path:
+                data["container_path"] = container_path
+            
+            url = f"{self.base_url}/user-files/upload"
+            response = self.session.post(
+                url,
+                files=files,
+                data=data,
+                headers=self._get_headers(exclude_content_type=True),  # Let requests set multipart content-type
+                timeout=30
+            )
+            return self._handle_response(response)
+        except Exception as e:
+            return {"status": "error", "message": f"Error uploading file: {str(e)}"}
+
+    def list_user_files(self) -> Dict[str, Any]:
+        """List all user files"""
+        try:
+            url = f"{self.base_url}/user-files"
+            response = self.session.get(url, headers=self._get_headers(), timeout=10)
+            return self._handle_response(response)
+        except Exception as e:
+            return {"status": "error", "message": f"Error listing files: {str(e)}"}
+
+    def get_user_file(self, file_id: str) -> Dict[str, Any]:
+        """Get user file details"""
+        try:
+            url = f"{self.base_url}/user-files/{file_id}"
+            response = self.session.get(url, headers=self._get_headers(), timeout=10)
+            return self._handle_response(response)
+        except Exception as e:
+            return {"status": "error", "message": f"Error getting file: {str(e)}"}
+
+    def update_user_file(self, file_id: str, **updates) -> Dict[str, Any]:
+        """Update user file"""
+        try:
+            url = f"{self.base_url}/user-files/{file_id}"
+            response = self.session.put(url, json=updates, headers=self._get_headers(), timeout=10)
+            return self._handle_response(response)
+        except Exception as e:
+            return {"status": "error", "message": f"Error updating file: {str(e)}"}
+
+    def delete_user_file(self, file_id: str) -> Dict[str, Any]:
+        """Delete a user file"""
+        try:
+            url = f"{self.base_url}/user-files/{file_id}"
+            response = self.session.delete(url, headers=self._get_headers(), timeout=10)
+            return self._handle_response(response)
+        except Exception as e:
+            return {"status": "error", "message": f"Error deleting file: {str(e)}"}
+
+    def download_user_file(self, file_id: str) -> Dict[str, Any]:
+        """Download user file content"""
+        try:
+            url = f"{self.base_url}/user-files/{file_id}/download"
+            response = self.session.get(url, headers=self._get_headers(), timeout=10)
+            return self._handle_response(response)
+        except Exception as e:
+            return {"status": "error", "message": f"Error downloading file: {str(e)}"}
 
 # Global API client instance
 api_client = CMBClusterAPIClient()

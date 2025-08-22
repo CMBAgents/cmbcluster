@@ -23,6 +23,7 @@ from storage_models import EnvironmentRequestWithStorage
 from pod_manager import PodManager
 from database import DatabaseManager
 import storage_api
+import file_api
 
 # Configure structured logging
 structlog.configure(
@@ -58,6 +59,19 @@ async def lifespan(app: FastAPI):
     from database import get_database
     app_state["db_manager"] = get_database()
     logger.info("Database initialized", db_path=settings.database_path)
+    
+    # Check file encryption health
+    try:
+        from file_migration import check_file_decryption_health
+        healthy, failed_files = check_file_decryption_health()
+        if not healthy:
+            logger.warning("Some environment files cannot be decrypted with current key", 
+                         failed_count=len(failed_files))
+            logger.warning("Users may need to re-upload failed files")
+        else:
+            logger.info("All environment files can be decrypted successfully")
+    except Exception as e:
+        logger.warning("Could not check file encryption health", error=str(e))
     
     # Initialize pod manager (it will use the global database instance)
     app_state["pod_manager"] = PodManager()
@@ -105,11 +119,10 @@ app.add_middleware(
 # Security
 security = HTTPBearer()
 
-# Include auth router
-app.include_router(oauth_router, prefix="/auth", tags=["authentication"])
-
-# Include storage router
+# Include routers
+app.include_router(oauth_router, prefix="/auth")
 app.include_router(storage_api.router)
+app.include_router(file_api.router)
 
 @app.middleware("http")
 async def log_requests(request: Request, call_next):
