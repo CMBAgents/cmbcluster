@@ -26,10 +26,15 @@ class Settings(BaseSettings):
     # Application settings
     namespace: str = "cmbcluster"
     registry_url: str = "gcr.io/cmbcluster-dev"
-    max_inactive_hours: int = 4
     max_user_pods: int = 1
     storage_class_name: str = "standard-rwo"
     user_pod_sa_name: str = "cmbcluster-user-sa"
+    
+    # Auto-shutdown settings for free tier (uptime-based, not inactivity-based)
+    free_tier_max_uptime_minutes: int = 60  # 1 hour for free users
+    auto_shutdown_check_interval_minutes: int = 5  # Check every 5 minutes
+    shutdown_warning_minutes: int = 10  # Warn 10 minutes before shutdown
+    grace_period_minutes: int = 5  # Grace period after warning
     
     # Ingress and TLS settings
     ingress_class_name: str = "nginx"

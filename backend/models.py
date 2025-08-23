@@ -8,6 +8,12 @@ class UserRole(str, Enum):
     ADMIN = "admin"
     RESEARCHER = "researcher"
 
+class SubscriptionTier(str, Enum):
+    FREE = "free"
+    BASIC = "basic"
+    PREMIUM = "premium"
+    ENTERPRISE = "enterprise"
+
 class PodStatus(str, Enum):
     PENDING = "pending"
     RUNNING = "running"
@@ -23,6 +29,12 @@ class User(BaseModel):
     created_at: datetime
     last_login: Optional[datetime] = None
     is_active: bool = True
+    
+    # Subscription fields
+    subscription_tier: SubscriptionTier = SubscriptionTier.FREE
+    subscription_expires_at: Optional[datetime] = None
+    max_uptime_minutes: Optional[int] = 60  # None = unlimited, 60 = 1 hour for free
+    auto_shutdown_enabled: bool = True
 
 class Environment(BaseModel):
     id: str

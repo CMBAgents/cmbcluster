@@ -401,8 +401,19 @@ class DatabaseManager:
                         conn.execute("DROP TABLE user_files")
                         conn.execute("ALTER TABLE user_files_new RENAME TO user_files")
                 except Exception as e:
-                    # If migration fails, continue - table might not exist yet
-                    pass
+                    # Migration might have already been applied
+                    logger.debug("User files migration might already be applied", error=str(e))
+                
+                # Add subscription columns with defaults for existing users
+                try:
+                    conn.execute("ALTER TABLE users ADD COLUMN subscription_tier TEXT DEFAULT 'free'")
+                    conn.execute("ALTER TABLE users ADD COLUMN subscription_expires_at TIMESTAMP")
+                    conn.execute("ALTER TABLE users ADD COLUMN max_uptime_minutes INTEGER DEFAULT 60")
+                    conn.execute("ALTER TABLE users ADD COLUMN auto_shutdown_enabled BOOLEAN DEFAULT 1")
+                    logger.info("Added subscription columns to users table")
+                except Exception as e:
+                    # Columns might already exist
+                    logger.debug("Subscription columns might already exist", error=str(e))
                 
                 # Create indexes for better query performance
                 conn.execute("CREATE INDEX IF NOT EXISTS idx_users_email ON users (email)")
@@ -463,13 +474,18 @@ class DatabaseManager:
                 lambda: conn.execute(
                     """
                     INSERT OR REPLACE INTO users 
-                    (id, email, name, role, created_at, last_login, is_active, updated_at)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+                    (id, email, name, role, created_at, last_login, is_active, updated_at,
+                     subscription_tier, subscription_expires_at, max_uptime_minutes, auto_shutdown_enabled)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, ?, ?, ?, ?)
                     """,
                     (user.id, user.email, user.name, user.role.value, 
                      user.created_at.isoformat(), 
                      user.last_login.isoformat() if user.last_login else None,
-                     user.is_active)
+                     user.is_active,
+                     user.subscription_tier.value,
+                     user.subscription_expires_at.isoformat() if user.subscription_expires_at else None,
+                     user.max_uptime_minutes,
+                     user.auto_shutdown_enabled)
                 )
             )
             await asyncio.get_event_loop().run_in_executor(None, conn.commit)
@@ -482,11 +498,14 @@ class DatabaseManager:
             row = await asyncio.get_event_loop().run_in_executor(
                 None,
                 lambda: conn.execute(
-                    "SELECT * FROM users WHERE id = ?", (user_id,)
+                    """SELECT id, email, name, role, created_at, last_login, is_active,
+                              subscription_tier, subscription_expires_at, max_uptime_minutes, auto_shutdown_enabled 
+                       FROM users WHERE id = ?""", (user_id,)
                 ).fetchone()
             )
             
             if row:
+                from models import SubscriptionTier
                 return User(
                     id=row['id'],
                     email=row['email'],
@@ -494,7 +513,11 @@ class DatabaseManager:
                     role=UserRole(row['role']),
                     created_at=datetime.fromisoformat(row['created_at']),
                     last_login=datetime.fromisoformat(row['last_login']) if row['last_login'] else None,
-                    is_active=bool(row['is_active'])
+                    is_active=bool(row['is_active']),
+                    subscription_tier=SubscriptionTier(row['subscription_tier'] or 'free'),
+                    subscription_expires_at=datetime.fromisoformat(row['subscription_expires_at']) if row['subscription_expires_at'] else None,
+                    max_uptime_minutes=row['max_uptime_minutes'] or 60,
+                    auto_shutdown_enabled=bool(row['auto_shutdown_enabled'])
                 )
             return None
     
@@ -633,41 +656,6 @@ class DatabaseManager:
             if deleted:
                 logger.info("Environment deleted", user_id=user_id, env_id=env_id)
             return deleted
-    
-    async def get_stale_environments(self, max_inactive_hours: int) -> List[Environment]:
-        """Get environments that have been inactive for too long"""
-        async with self.get_connection() as conn:
-            cutoff_time = datetime.utcnow().timestamp() - (max_inactive_hours * 3600)
-            
-            rows = await asyncio.get_event_loop().run_in_executor(
-                None,
-                lambda: conn.execute(
-                    """
-                    SELECT * FROM environments 
-                    WHERE last_activity < ? AND status IN ('running', 'pending')
-                    """,
-                    (datetime.fromtimestamp(cutoff_time).isoformat(),)
-                ).fetchall()
-            )
-            
-            environments = []
-            for row in rows:
-                resource_config = json.loads(row['resource_config']) if row['resource_config'] else {}
-                env = Environment(
-                    id=row['id'],
-                    user_id=row['user_id'],
-                    user_email=row['user_email'],
-                    env_id=row['env_id'],
-                    pod_name=row['pod_name'],
-                    status=PodStatus(row['status']),
-                    url=row['url'],
-                    created_at=datetime.fromisoformat(row['created_at']),
-                    last_activity=datetime.fromisoformat(row['last_activity']) if row['last_activity'] else None,
-                    resource_config=resource_config
-                )
-                environments.append(env)
-            
-            return environments
     
     # Activity logging methods
     async def log_activity(self, activity: ActivityLog) -> None:
@@ -904,6 +892,37 @@ class DatabaseManager:
                 ).fetchone()
             )
             return row['storage_id'] if row else None
+    
+    async def get_all_running_environments(self) -> List[Environment]:
+        """Get all running environments across all users"""
+        async with self.get_connection() as conn:
+            rows = await asyncio.get_event_loop().run_in_executor(
+                None,
+                lambda: conn.execute(
+                    """SELECT * FROM environments 
+                       WHERE status IN ('running', 'pending') 
+                       ORDER BY created_at DESC""",
+                ).fetchall()
+            )
+            
+            environments = []
+            for row in rows:
+                resource_config = json.loads(row['resource_config']) if row['resource_config'] else {}
+                env = Environment(
+                    id=row['id'],
+                    user_id=row['user_id'],
+                    user_email=row['user_email'],
+                    env_id=row['env_id'],
+                    pod_name=row['pod_name'],
+                    status=PodStatus(row['status']),
+                    url=row['url'],
+                    created_at=datetime.fromisoformat(row['created_at']),
+                    last_activity=datetime.fromisoformat(row['last_activity']) if row['last_activity'] else None,
+                    resource_config=resource_config
+                )
+                environments.append(env)
+            
+            return environments
 
 # Global database instance
 db_manager: Optional[DatabaseManager] = None

@@ -78,12 +78,14 @@ async def lifespan(app: FastAPI):
     
     # Background tasks
     cleanup_task = asyncio.create_task(periodic_cleanup())
+    shutdown_task = asyncio.create_task(auto_shutdown_task())
     
     yield
     
     # Shutdown
     logger.info("Shutting down CMBCluster API")
     cleanup_task.cancel()
+    shutdown_task.cancel()
     if app_state.get("pod_manager"):
         await app_state["pod_manager"].cleanup_all()
 
@@ -193,8 +195,9 @@ async def create_environment(
             config=request
         )
         
-        # Start monitoring
-        background_tasks.add_task(monitor_environment, user_id)
+        # Start monitoring - only uptime-based auto-shutdown now
+        # (No longer using inactivity-based monitoring since environments are standalone)
+        # background_tasks.add_task(monitor_environment, user_id)
         
         await log_activity(user_id, "environment_created", f"Created environment {environment.pod_name}")
         
@@ -210,6 +213,76 @@ async def create_environment(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to create environment"
+        )
+
+@app.get("/environments/{env_id}/info", tags=["environments"])
+async def get_environment_info(
+    env_id: str,
+    current_user: Dict = Depends(get_current_user)
+):
+    """Get detailed environment information including uptime and shutdown warnings"""
+    user_id = current_user["sub"]
+    
+    try:
+        # Get environment
+        db_manager = app_state.get("db_manager")
+        environment = await db_manager.get_environment(user_id, env_id)
+        
+        if not environment:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Environment not found"
+            )
+        
+        # Get user data for subscription info
+        user = await db_manager.get_user(user_id)
+        
+        # Calculate uptime
+        uptime_minutes = 0
+        if environment.created_at:
+            uptime_delta = datetime.utcnow() - environment.created_at
+            uptime_minutes = int(uptime_delta.total_seconds() / 60)
+        
+        # Get auto-shutdown info
+        from auto_shutdown_manager import get_auto_shutdown_manager
+        shutdown_manager = get_auto_shutdown_manager()
+        
+        max_uptime = 60  # Default for free users
+        auto_shutdown_enabled = True
+        if user:
+            max_uptime = user.max_uptime_minutes or 60
+            auto_shutdown_enabled = user.auto_shutdown_enabled and user.subscription_tier == "free"
+        
+        # Check if warning was sent
+        warning_sent = env_id in shutdown_manager.shutdown_warnings
+        warning_time = shutdown_manager.shutdown_warnings.get(env_id)
+        
+        # Calculate time until shutdown
+        time_until_shutdown = None
+        if auto_shutdown_enabled and uptime_minutes < max_uptime:
+            time_until_shutdown = max_uptime - uptime_minutes
+        
+        return {
+            "environment": environment,
+            "uptime_minutes": uptime_minutes,
+            "max_uptime_minutes": max_uptime,
+            "auto_shutdown_enabled": auto_shutdown_enabled,
+            "time_until_shutdown_minutes": time_until_shutdown,
+            "shutdown_warning_sent": warning_sent,
+            "shutdown_warning_time": warning_time.isoformat() if warning_time else None,
+            "subscription_tier": user.subscription_tier if user else "free"
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("Failed to get environment info", 
+                    user_id=user_id, 
+                    env_id=env_id, 
+                    error=str(e))
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to get environment information"
         )
 
 @app.get("/environments", tags=["environments"])
@@ -301,25 +374,6 @@ async def create_environment(
         config=request
     )
     return environment
-
-@app.post("/environments/heartbeat", tags=["environments"])
-async def environment_heartbeat(current_user: Dict = Depends(get_current_user)):
-    """Update environment activity timestamp"""
-    user_id = current_user["sub"]
-    pod_manager = app_state["pod_manager"]
-    
-    try:
-        await pod_manager.update_user_activity(user_id)
-        return {
-            "status": "updated",
-            "timestamp": datetime.utcnow()
-        }
-    except Exception as e:
-        logger.error("Failed to update heartbeat", user_id=user_id, error=str(e))
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to update activity"
-        )
 
 @app.get("/activity", tags=["activity"])
 async def get_user_activity(
@@ -423,39 +477,49 @@ async def delete_user_env_var(
         raise HTTPException(status_code=500, detail="Failed to delete environment variable")
 
 # Background tasks
-async def monitor_environment(user_id: str):
-    """Monitor environment activity and cleanup if inactive"""
-    pod_manager = app_state["pod_manager"]
-    
-    while await pod_manager.user_has_active_pod(user_id):
-        await asyncio.sleep(300)  # Check every 5 minutes
-        
-        try:
-            environment = await pod_manager.get_user_environment(user_id)
-            if environment and environment.last_activity:
-                inactive_time = datetime.utcnow() - environment.last_activity
-                
-                if inactive_time > timedelta(hours=settings.max_inactive_hours):
-                    logger.info("Cleaning up inactive environment", user_id=user_id)
-                    await pod_manager.delete_user_environment(user_id)
-                    await log_activity(user_id, "environment_auto_cleanup", "Environment cleaned up due to inactivity")
-                    break
-        except Exception as e:
-            logger.error("Error monitoring environment", user_id=user_id, error=str(e))
-            break
+# Note: Removed monitor_environment function since standalone environments 
+# can't reliably report activity back to the main application
 
 async def periodic_cleanup():
-    """Periodic cleanup of stale resources"""
+    """Periodic cleanup of failed/stuck resources only"""
     while True:
         try:
             await asyncio.sleep(3600)  # Run every hour
-            logger.info("Running periodic cleanup")
+            logger.info("Running periodic cleanup for failed/stuck resources")
             
+            # Only clean up truly failed or stuck pods, not based on inactivity
+            # since we can't reliably detect activity in standalone environments
             pod_manager = app_state["pod_manager"]
-            await pod_manager.cleanup_stale_pods()
+            await pod_manager.cleanup_failed_pods()
             
         except Exception as e:
             logger.error("Error in periodic cleanup", error=str(e))
+
+async def auto_shutdown_task():
+    """Background task for auto-shutdown based on uptime"""
+    while True:
+        try:
+            # Wait for the configured interval (default 5 minutes)
+            await asyncio.sleep(settings.auto_shutdown_check_interval_minutes * 60)
+            
+            logger.debug("Running auto-shutdown check")
+            
+            # Import here to avoid circular imports
+            from auto_shutdown_manager import get_auto_shutdown_manager
+            
+            shutdown_manager = get_auto_shutdown_manager()
+            stats = await shutdown_manager.check_environments_for_shutdown()
+            
+            # Clean up old warning tracking data
+            shutdown_manager.cleanup_warning_tracking()
+            
+            if stats["shutdown"] > 0 or stats["warned"] > 0:
+                logger.info("Auto-shutdown task completed", stats=stats)
+            else:
+                logger.debug("Auto-shutdown task completed", stats=stats)
+                
+        except Exception as e:
+            logger.error("Error in auto-shutdown task", error=str(e))
 
 async def log_activity(user_id: str, action: str, details: str):
     """Log user activity to database"""
