@@ -147,23 +147,27 @@ def show_login_screen():
         }
         /* Make Cambridge logo text white by targeting the custom container */
         .cambridge-logo-container img {
-            filter: invert(1) brightness(2.5) contrast(2) saturate(0) hue-rotate(180deg) !important;
-            -webkit-filter: invert(1) brightness(2.5) contrast(2) saturate(0) hue-rotate(180deg) !important;
+        filter: brightness(2) invert(1) !important;
+        opacity: 1 !important;
+        max-width: none !important;
+        width: auto !important;
+        height: auto !important;
+        object-fit: contain !important;
         }
         </style>
         """, unsafe_allow_html=True)
         
         # Logo section with better alignment (same as other pages)
-        col1, col2, col3, col4, col5 = st.columns([1, 1, 1, 1, 1])
+        col1,  col3 , col4 , col5 = st.columns([4,1, 1, 2])
         
         with col1:
             # Add a custom class to identify Cambridge logo
             st.markdown('<div class="cambridge-logo-container">', unsafe_allow_html=True)
-            st.image("./media/cambridge-logo.png", width=120)
+            st.image("./media/cambridge-logo.png", width=300)
             st.markdown('</div>', unsafe_allow_html=True)
 
         with col5:
-            st.image("./media/infosys-logo.png", width=120)
+            st.image("./media/infosys-logo.png",width=175)
         
         # Main login content
         st.markdown(f"""

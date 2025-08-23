@@ -27,8 +27,8 @@ gcloud auth configure-docker "$REGISTRY_HOSTNAME" --quiet
 
 #SERVICES=("backend" "frontend" "user-environment")
 
-# SERVICES=("frontend" )
-SERVICES=("backend" )
+SERVICES=("frontend" )
+# SERVICES=("backend" )
 #  SERVICES=("frontend" "backend" )
 for SERVICE in "${SERVICES[@]}"; do
     CONTEXT_PATH="$PROJECT_ROOT/$SERVICE"

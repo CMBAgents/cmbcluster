@@ -61,28 +61,29 @@ file_upload_manager = FileUploadManager(api_client, debug_mode=debug_mode)
 # Apply dark theme CSS
 st.markdown(DARK_THEME_CSS, unsafe_allow_html=True)
 
-# Logo section with better alignment
-col1, col2, col3, col4, col5 = st.columns([1, 1, 1, 1, 1])
+  # Logo section with better alignment (same as other pages)
+col1,  col3 , col4 , col5 = st.columns([4,1, 1, 2])
 
 with col1:
     # Add a custom class to identify Cambridge logo
     st.markdown('<div class="cambridge-logo-container">', unsafe_allow_html=True)
-    st.image(CAMBRIDGE_LOGO_URL, width=120)
+    st.image("./media/cambridge-logo.png", width=300)
     st.markdown('</div>', unsafe_allow_html=True)
 
 with col5:
-    st.image(INFOSYS_LOGO_URL, width=120)
+    st.image("./media/infosys-logo.png",width=175)
 
-# Apply dark theme CSS
-st.markdown(DARK_THEME_CSS, unsafe_allow_html=True)
 
 # Custom CSS for logo styling and professional settings design
 st.markdown("""
 <style>
 /* Make Cambridge logo text white by targeting the custom container */
 .cambridge-logo-container img {
-    filter: invert(1) brightness(2.5) contrast(2) saturate(0) hue-rotate(180deg) !important;
-    -webkit-filter: invert(1) brightness(2.5) contrast(2) saturate(0) hue-rotate(180deg) !important;
+    filter: brightness(2) invert(1) !important;
+    opacity: 1 !important;
+    max-width: 100% !important;
+    height: auto !important;
+    object-fit: contain !important;
 }
 
 .settings-card {
