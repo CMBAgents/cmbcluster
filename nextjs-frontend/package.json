@@ -5,9 +5,15 @@
   "scripts": {
     "dev": "next dev -p 8501",
     "build": "next build",
+    "build:analyze": "ANALYZE=true next build",
     "start": "next start -p 8501",
+    "start:production": "NODE_ENV=production next start -p 8501",
     "lint": "next lint",
-    "type-check": "tsc --noEmit"
+    "lint:fix": "next lint --fix",
+    "type-check": "tsc --noEmit",
+    "clean": "rm -rf .next out node_modules/.cache",
+    "docker:build": "docker build -t cmbcluster-frontend .",
+    "docker:run": "docker run -p 8501:8501 cmbcluster-frontend"
   },
   "dependencies": {
     "next": "14.2.5",
@@ -34,7 +40,8 @@
     "autoprefixer": "^10.4.20",
     "postcss": "^8.4.41",
     "tailwindcss": "^3.4.10",
-    "eslint": "^9.9.1",
-    "eslint-config-next": "14.2.5"
+    "eslint": "^8.57.0",
+    "eslint-config-next": "14.2.5",
+    "webpack-bundle-analyzer": "^4.10.2"
   }
 }

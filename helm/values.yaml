@@ -65,7 +65,7 @@ frontend:
   service:
     type: ClusterIP
     port: 8501
-    targetPort: streamlit
+    targetPort: nextjs
   image:
     repository: us-central1-docker.pkg.dev/your-gcp-project-id/cmbcluster-images/cmbcluster-frontend
     tag: "latest"

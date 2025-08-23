@@ -341,3 +341,102 @@ body {
   outline: 2px solid var(--ant-primary-color, #4a9eff) !important;
   outline-offset: 2px !important;
 }
+
+/* Settings page specific styles */
+.settings-tabs .ant-tabs-tab {
+  padding: 12px 24px !important;
+  font-size: 16px !important;
+  font-weight: 500 !important;
+}
+
+.settings-tabs .ant-tabs-content-holder {
+  padding-top: 24px !important;
+}
+
+.settings-section {
+  background: rgba(26, 31, 46, 0.5);
+  border-radius: 12px;
+  padding: 24px;
+  margin: 16px 0;
+  border-left: 4px solid #4A9EFF;
+}
+
+.metric-card {
+  background: rgba(26, 31, 46, 0.8);
+  border-radius: 12px;
+  padding: 20px;
+  text-align: center;
+  border: 1px solid #2D3748;
+  transition: all 0.3s ease;
+}
+
+.metric-card:hover {
+  border-color: #4A9EFF;
+  transform: translateY(-2px);
+}
+
+.status-badge {
+  display: inline-block;
+  padding: 6px 14px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.status-active {
+  background-color: rgba(72, 187, 120, 0.1);
+  color: #48BB78;
+  border: 1px solid #48BB78;
+}
+
+.status-inactive {
+  background-color: rgba(113, 128, 150, 0.1);
+  color: #718096;
+  border: 1px solid #718096;
+}
+
+/* Dark theme for modals */
+.dark-modal .ant-modal-content {
+  background: #1A1F2E !important;
+  border: 1px solid #2D3748 !important;
+}
+
+.dark-modal .ant-modal-header {
+  background: #1A1F2E !important;
+  border-bottom: 1px solid #2D3748 !important;
+}
+
+/* Settings table styles */
+.ant-table-thead > tr > th {
+  background: var(--bg-tertiary, #252b3a) !important;
+  border-color: var(--border-primary, #2d3748) !important;
+  color: var(--text-primary, #ffffff) !important;
+}
+
+.ant-table-tbody > tr > td {
+  background: transparent !important;
+  border-color: var(--border-primary, #2d3748) !important;
+  color: var(--text-primary, #ffffff) !important;
+}
+
+.ant-table-tbody > tr:hover > td {
+  background: var(--bg-tertiary, #252b3a) !important;
+}
+
+/* Form styles */
+.ant-form-item-label > label {
+  color: var(--text-primary, #ffffff) !important;
+}
+
+.ant-form-item-explain,
+.ant-form-item-extra {
+  color: var(--text-secondary, #e2e8f0) !important;
+}
+
+/* Cambridge logo styling */
+.cambridge-logo-container img {
+  filter: invert(1) brightness(2.5) contrast(2) saturate(0) hue-rotate(180deg) !important;
+  -webkit-filter: invert(1) brightness(2.5) contrast(2) saturate(0) hue-rotate(180deg) !important;
+}

@@ -59,3 +59,29 @@ Thumbs.db
 # Logs
 *.log
 logs/
+
+# Next.js
+nextjs-frontend/.next/
+nextjs-frontend/out/
+nextjs-frontend/build/
+nextjs-frontend/dist/
+nextjs-frontend/.env
+nextjs-frontend/.env.*
+nextjs-frontend/.vercel
+
+# Node.js
+nextjs-frontend/node_modules/
+nextjs-frontend/npm-debug.log*
+nextjs-frontend/yarn-debug.log*
+nextjs-frontend/yarn-error.log*
+nextjs-frontend/pnpm-debug.log*
+nextjs-frontend/lerna-debug.log*
+
+# Next.js cache
+nextjs-frontend/.next/
+nextjs-frontend/.swc/
+nextjs-frontend/.turbo/
+
+# TypeScript
+nextjs-frontend/*.tsbuildinfo
+nextjs-frontend/next-env.d.ts

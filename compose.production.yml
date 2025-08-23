@@ -1,0 +1,73 @@
+# Production Docker Compose Configuration
+# This file integrates the Next.js frontend with existing backend services
+version: '3.8'
+
+services:
+  # Existing backend service (unchanged)
+  backend:
+    build: ./backend
+    ports:
+      - "8000:8000"
+    env_file: .env
+    environment:
+      - DEV_MODE=false
+      - DEBUG=false
+      - API_URL=https://api.cmbagent.cloud
+      - FRONTEND_URL=https://cmbagent.cloud
+    volumes:
+      - ~/.kube:/root/.kube:ro
+    restart: unless-stopped
+    networks:
+      - cmbcluster-network
+
+  # Next.js Frontend (replacing Streamlit frontend)
+  frontend:
+    build: 
+      context: ./nextjs-frontend
+      dockerfile: Dockerfile
+    ports:
+      - "8501:8501"  # Keep same port as Streamlit for seamless replacement
+    env_file: 
+      - ./nextjs-frontend/env.production
+    environment:
+      - NODE_ENV=production
+      - API_URL=http://backend:8000
+      - BASE_DOMAIN=cmbagent.cloud
+      - NEXTAUTH_URL=https://cmbagent.cloud
+      - PORT=8501
+    depends_on:
+      - backend
+    restart: unless-stopped
+    networks:
+      - cmbcluster-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8501/api/health"]
+      interval: 30s
+      timeout: 30s
+      start_period: 5s
+      retries: 3
+
+  # User environment service (unchanged)
+  user-env:
+    build: ./user-environment
+    ports:
+      - "8502:8501"
+    environment:
+      - USER_ID=dev-user
+      - USER_EMAIL=dev@cmbcluster.local
+      - HUB_URL=http://backend:8000
+    volumes:
+      - ./user-environment:/app
+    restart: unless-stopped
+    networks:
+      - cmbcluster-network
+
+networks:
+  cmbcluster-network:
+    name: cmbcluster-network
+    driver: bridge
+
+volumes:
+  # Persistent volume for logs and cache
+  nextjs-cache:
+    driver: local

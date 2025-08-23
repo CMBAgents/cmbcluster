@@ -33,6 +33,7 @@ export interface StorageItem {
   updated_at?: string;
   size_bytes: number;
   region?: string;
+  object_count?: number;
 }
 
 export interface UserFile {

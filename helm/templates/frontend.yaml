@@ -28,41 +28,45 @@ spec:
         image: "{{ .Values.frontend.image.repository }}:{{ .Values.frontend.image.tag }}"
         imagePullPolicy: {{ .Values.frontend.image.pullPolicy }}
         ports:
-        - name: streamlit
+        - name: nextjs
           containerPort: 8501
           protocol: TCP
         env:
+        - name: NODE_ENV
+          value: "production"
+        - name: PORT
+          value: "8501"
+        - name: HOSTNAME
+          value: "0.0.0.0"
         - name: API_URL
           value: "https://api.{{ .Values.ingress.baseDomain }}"
         - name: BASE_DOMAIN
           value: "{{ .Values.ingress.baseDomain }}"
+        - name: NEXTAUTH_URL
+          value: "https://{{ .Values.ingress.baseDomain }}"
+        - name: NEXT_TELEMETRY_DISABLED
+          value: "1"
         - name: DEV_MODE
           value: "false"
-        - name: XDG_CONFIG_HOME
-          value: "/tmp/.config"
-        - name: XDG_DATA_HOME
-          value: "/tmp/.local/share"
-        - name: STREAMLIT_SERVER_HEADLESS
-          value: "true"
-        - name: STREAMLIT_BROWSER_GATHER_USAGE_STATS
-          value: "false"
+        # Authentication secrets from the same secret as backend
+        envFrom:
+        - secretRef:
+            name: {{ .Values.backend.secretName }}
         volumeMounts:
         - name: tmp-volume
           mountPath: /tmp
-        - name: streamlit-config
-          mountPath: /tmp/.streamlit
         livenessProbe:
           httpGet:
-            path: /_stcore/health
-            port: streamlit
+            path: /api/health
+            port: nextjs
           initialDelaySeconds: 30
           periodSeconds: 10
           timeoutSeconds: 5
           failureThreshold: 3
         readinessProbe:
           httpGet:
-            path: /_stcore/health
-            port: streamlit
+            path: /api/health
+            port: nextjs
           initialDelaySeconds: 5
           periodSeconds: 5
           timeoutSeconds: 5
@@ -80,8 +84,6 @@ spec:
       volumes:
       - name: tmp-volume
         emptyDir: {}
-      - name: streamlit-config
-        emptyDir: {}
 ---
 apiVersion: v1
 kind: Service
@@ -95,9 +97,9 @@ spec:
   type: {{ .Values.frontend.service.type }}
   ports:
   - port: {{ .Values.frontend.service.port }}
-    targetPort: {{ .Values.frontend.service.targetPort }}
+    targetPort: nextjs
     protocol: TCP
-    name: streamlit
+    name: nextjs
   selector:
     {{- include "cmbcluster.selectorLabels" . | nindent 4 }}
     app.kubernetes.io/component: frontend

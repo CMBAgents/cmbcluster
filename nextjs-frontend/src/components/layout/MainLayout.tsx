@@ -2,7 +2,6 @@
 
 import { useState } from 'react';
 import { useSession, signOut } from 'next-auth/react';
-import { useRouter, usePathname } from 'next/navigation';
 import {
   Layout,
   Menu,
@@ -41,8 +40,18 @@ export default function MainLayout({ children }: MainLayoutProps) {
   const [collapsed, setCollapsed] = useState(false);
   const [darkMode, setDarkMode] = useState(true);
   const { data: session } = useSession();
-  const router = useRouter();
-  const pathname = usePathname();
+  const [pathname, setPathname] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return window.location.pathname;
+    }
+    return '/dashboard';
+  });
+
+  // Simple navigation handler
+  const navigateTo = (path: string) => {
+    setPathname(path);
+    window.location.href = path;
+  };
 
   // Menu items based on Main.py structure
   const menuItems: MenuProps['items'] = [
@@ -50,31 +59,31 @@ export default function MainLayout({ children }: MainLayoutProps) {
       key: '/dashboard',
       icon: <DashboardOutlined />,
       label: 'Dashboard',
-      onClick: () => router.push('/dashboard'),
+      onClick: () => navigateTo('/dashboard'),
     },
     {
-      key: '/',
+      key: '/environments',
       icon: <RocketOutlined />,
       label: 'Environments',
-      onClick: () => router.push('/'),
+      onClick: () => navigateTo('/environments'),
     },
     {
       key: '/storage',
       icon: <DatabaseOutlined />,
       label: 'Storage',
-      onClick: () => router.push('/storage'),
+      onClick: () => navigateTo('/storage'),
     },
     {
       key: '/monitoring',
       icon: <MonitorOutlined />,
       label: 'Monitoring',
-      onClick: () => router.push('/monitoring'),
+      onClick: () => navigateTo('/monitoring'),
     },
     {
       key: '/settings',
       icon: <SettingOutlined />,
       label: 'Settings',
-      onClick: () => router.push('/settings'),
+      onClick: () => navigateTo('/settings'),
     },
   ];
 
@@ -84,7 +93,7 @@ export default function MainLayout({ children }: MainLayoutProps) {
       key: 'profile',
       icon: <UserOutlined />,
       label: 'Profile',
-      onClick: () => router.push('/profile'),
+      onClick: () => navigateTo('/profile'),
     },
     {
       type: 'divider',
@@ -213,8 +222,9 @@ export default function MainLayout({ children }: MainLayoutProps) {
 
             {/* Page Title */}
             <Title level={4} className="text-text-primary mb-0">
-              {pathname === '/' ? 'Environments' :
+              {pathname === '/' ? 'Dashboard' :
                pathname === '/dashboard' ? 'Dashboard' :
+               pathname === '/environments' ? 'Environments' :
                pathname === '/storage' ? 'Storage' :
                pathname === '/monitoring' ? 'Monitoring' :
                pathname === '/settings' ? 'Settings' :
