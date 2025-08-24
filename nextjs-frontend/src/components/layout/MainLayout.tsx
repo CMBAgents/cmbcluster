@@ -49,47 +49,46 @@ export default function MainLayout({ children }: MainLayoutProps) {
     router.push(path);
   };
 
-  // Menu items based on Main.py structure
+  // Handle menu click
+  const handleMenuClick: MenuProps['onClick'] = (e) => {
+    navigateTo(e.key);
+  };
+
+  // Menu items based on Main.py structure - without onClick functions
   const menuItems: MenuProps['items'] = [
     {
       key: '/',
       icon: <DashboardOutlined />,
       label: 'Dashboard',
-      onClick: () => navigateTo('/'),
     },
     {
       key: '/environments',
       icon: <RocketOutlined />,
       label: 'Environments',
-      onClick: () => navigateTo('/environments'),
     },
     {
       key: '/storage',
       icon: <DatabaseOutlined />,
       label: 'Storage',
-      onClick: () => navigateTo('/storage'),
     },
     {
       key: '/monitoring',
       icon: <MonitorOutlined />,
       label: 'Monitoring',
-      onClick: () => navigateTo('/monitoring'),
     },
     {
       key: '/settings',
       icon: <SettingOutlined />,
       label: 'Settings',
-      onClick: () => navigateTo('/settings'),
     },
   ];
 
-  // User dropdown menu
+  // User dropdown menu - without onClick functions
   const userMenuItems: MenuProps['items'] = [
     {
       key: 'profile',
       icon: <UserOutlined />,
       label: 'Profile',
-      onClick: () => navigateTo('/profile'),
     },
     {
       type: 'divider',
@@ -99,9 +98,17 @@ export default function MainLayout({ children }: MainLayoutProps) {
       icon: <LogoutOutlined />,
       label: 'Sign Out',
       danger: true,
-      onClick: () => signOut({ callbackUrl: '/auth/signin' }),
     },
   ];
+
+  // Handle user menu click
+  const handleUserMenuClick: MenuProps['onClick'] = (e) => {
+    if (e.key === 'logout') {
+      signOut({ callbackUrl: '/auth/signin' });
+    } else if (e.key === 'profile') {
+      navigateTo('/profile');
+    }
+  };
 
   const handleThemeToggle = (checked: boolean) => {
     setDarkMode(checked);
@@ -176,6 +183,7 @@ export default function MainLayout({ children }: MainLayoutProps) {
             mode="inline"
             selectedKeys={[pathname]}
             items={menuItems}
+            onClick={handleMenuClick}
             className="bg-transparent border-r-0"
           />
 
@@ -243,7 +251,7 @@ export default function MainLayout({ children }: MainLayoutProps) {
             {/* User Dropdown */}
             {session?.user && (
               <Dropdown
-                menu={{ items: userMenuItems }}
+                menu={{ items: userMenuItems, onClick: handleUserMenuClick }}
                 placement="bottomRight"
                 arrow
                 trigger={['click']}
