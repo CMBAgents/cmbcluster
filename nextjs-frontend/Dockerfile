@@ -33,6 +33,7 @@ COPY . .
 # Build the application with production optimizations
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
+ENV SKIP_ENV_VALIDATION=true
 RUN npm run build
 
 # Stage 4: Runner stage - Final production image

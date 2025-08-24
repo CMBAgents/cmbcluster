@@ -1,7 +1,8 @@
 'use client';
 
 import { useSession } from 'next-auth/react';
-import { Card, Row, Col, Statistic, Typography, Space, Button, Alert } from 'antd';
+import { useEffect, useState } from 'react';
+import { Card, Row, Col, Statistic, Typography, Space, Button, Alert, Spin } from 'antd';
 import {
   RocketOutlined,
   DatabaseOutlined,
@@ -11,35 +12,70 @@ import {
   SettingOutlined,
 } from '@ant-design/icons';
 import MainLayout from '@/components/layout/MainLayout';
+import apiClient from '@/lib/api-client';
+import { Environment, StorageItem } from '@/types';
 
 const { Title, Text, Paragraph } = Typography;
 
 export default function DashboardPage() {
   const { data: session } = useSession();
+  const [environments, setEnvironments] = useState<Environment[]>([]);
+  const [storages, setStorages] = useState<StorageItem[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  // Placeholder statistics - these would come from your API
+  // Fetch dashboard data
+  useEffect(() => {
+    const fetchDashboardData = async () => {
+      if (!session) return;
+      
+      try {
+        setLoading(true);
+        
+        const [envResponse, storageResponse] = await Promise.all([
+          apiClient.listEnvironments(),
+          apiClient.listUserStorages()
+        ]);
+
+        if (envResponse.status === 'success' && envResponse.environments) {
+          setEnvironments(envResponse.environments);
+        }
+
+        if (storageResponse.status === 'success' && storageResponse.storages) {
+          setStorages(storageResponse.storages);
+        }
+      } catch (error) {
+        console.error('Error fetching dashboard data:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchDashboardData();
+  }, [session]);
+
+  // Calculate statistics from real data
   const stats = [
     {
-      title: 'Active Environments',
-      value: 3,
+      title: 'Total Environments',
+      value: environments.length,
       icon: <RocketOutlined className="text-primary" />,
       color: '#4A9EFF',
     },
     {
-      title: 'Storage Usage',
-      value: '2.3 GB',
-      icon: <DatabaseOutlined className="text-green-500" />,
+      title: 'Running Environments',
+      value: environments.filter(env => env.status === 'running').length,
+      icon: <PlayCircleOutlined className="text-green-500" />,
       color: '#52c41a',
     },
     {
-      title: 'CPU Usage',
-      value: '45%',
-      icon: <CloudOutlined className="text-orange-500" />,
-      color: '#fa8c16',
+      title: 'Storage Workspaces',
+      value: storages.length,
+      icon: <DatabaseOutlined className="text-blue-500" />,
+      color: '#1890ff',
     },
     {
-      title: 'Active Sessions',
-      value: 1,
+      title: 'Active User',
+      value: session?.user ? 1 : 0,
       icon: <UserOutlined className="text-purple-500" />,
       color: '#722ed1',
     },
@@ -65,6 +101,16 @@ export default function DashboardPage() {
       action: '/settings',
     },
   ];
+
+  if (loading) {
+    return (
+      <MainLayout>
+        <div className="flex items-center justify-center h-64">
+          <Spin size="large" />
+        </div>
+      </MainLayout>
+    );
+  }
 
   return (
     <MainLayout>

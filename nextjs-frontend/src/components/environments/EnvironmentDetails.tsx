@@ -115,7 +115,9 @@ export default function EnvironmentDetails({ envId }: EnvironmentDetailsProps) {
     stopped: { color: 'default', text: 'Stopped' },
   };
 
-  const status = statusConfig[environment.status as keyof typeof statusConfig] || statusConfig.stopped;
+  // Handle both direct environment object and wrapped response
+  const envData = environment && 'environment' in environment ? environment.environment : environment;
+  const status = statusConfig[envData?.status as keyof typeof statusConfig] || statusConfig.stopped;
 
   return (
     <div className="space-y-6">
@@ -130,13 +132,13 @@ export default function EnvironmentDetails({ envId }: EnvironmentDetailsProps) {
           </Button>
           <div>
             <Title level={2} className="mb-1">
-              Environment {getDisplayId(environment.id)}
+              Environment {getDisplayId(envData?.env_id || envData?.id)}
             </Title>
             <Space>
               <Badge status={status.color as any} text={status.text} />
               <Text type="secondary">•</Text>
               <Text type="secondary">
-                Created {formatDateTime(environment.created_at)}
+                Created {formatDateTime(envData?.created_at)}
               </Text>
             </Space>
           </div>
@@ -151,11 +153,11 @@ export default function EnvironmentDetails({ envId }: EnvironmentDetailsProps) {
             Refresh
           </Button>
           
-          {environment.url && (
+          {envData?.url && (
             <Button
               type="primary"
               icon={<LinkOutlined />}
-              href={environment.url}
+              href={envData?.url}
               target="_blank"
             >
               Access Environment
@@ -187,7 +189,7 @@ export default function EnvironmentDetails({ envId }: EnvironmentDetailsProps) {
           tab={<span><MonitorOutlined /> Overview</span>} 
           key="overview"
         >
-          <EnvironmentOverview environment={environment} />
+          <EnvironmentOverview environment={envData} />
         </Tabs.TabPane>
         
         <Tabs.TabPane 
@@ -201,7 +203,7 @@ export default function EnvironmentDetails({ envId }: EnvironmentDetailsProps) {
           tab={<span><SettingOutlined /> Configuration</span>} 
           key="configuration"
         >
-          <EnvironmentConfiguration environment={environment} />
+          <EnvironmentConfiguration environment={envData} />
         </Tabs.TabPane>
         
         <Tabs.TabPane 
@@ -236,10 +238,10 @@ function EnvironmentOverview({ environment }: EnvironmentOverviewProps) {
           <Card>
             <Statistic
               title="Status"
-              value={capitalize(environment.status)}
+              value={capitalize(envData?.status || 'unknown')}
               valueStyle={{ 
-                color: environment.status === 'running' ? '#52c41a' : 
-                       environment.status === 'pending' ? '#faad14' : '#f5222d' 
+                color: envData?.status === 'running' ? '#52c41a' : 
+                       envData?.status === 'pending' ? '#faad14' : '#f5222d' 
               }}
             />
           </Card>
@@ -248,8 +250,8 @@ function EnvironmentOverview({ environment }: EnvironmentOverviewProps) {
           <Card>
             <Statistic
               title="Uptime"
-              value={environment.created_at ? 
-                Math.floor((Date.now() - new Date(environment.created_at).getTime()) / (1000 * 60 * 60 * 24)) 
+              value={envData?.created_at ? 
+                Math.floor((Date.now() - new Date(envData.created_at).getTime()) / (1000 * 60 * 60 * 24)) 
                 : 0}
               suffix="days"
             />
@@ -259,8 +261,8 @@ function EnvironmentOverview({ environment }: EnvironmentOverviewProps) {
           <Card>
             <Statistic
               title="CPU Cores"
-              value={environment.resource_config?.cpu_limit || 'N/A'}
-              suffix={environment.resource_config?.cpu_limit ? 'cores' : ''}
+              value={envData?.resource_config?.cpu_limit || 'N/A'}
+              suffix={envData?.resource_config?.cpu_limit ? 'cores' : ''}
             />
           </Card>
         </Col>
@@ -268,7 +270,7 @@ function EnvironmentOverview({ environment }: EnvironmentOverviewProps) {
           <Card>
             <Statistic
               title="Memory"
-              value={environment.resource_config?.memory_limit || 'N/A'}
+              value={envData?.resource_config?.memory_limit || 'N/A'}
             />
           </Card>
         </Col>
@@ -278,28 +280,28 @@ function EnvironmentOverview({ environment }: EnvironmentOverviewProps) {
       <Card title="Environment Information">
         <Descriptions bordered column={2}>
           <Descriptions.Item label="Environment ID">
-            <Text code>{environment.id}</Text>
+            <Text code>{envData?.env_id || envData?.id}</Text>
           </Descriptions.Item>
           <Descriptions.Item label="Display ID">
-            <Text code>{getDisplayId(environment.id)}</Text>
+            <Text code>{getDisplayId(envData?.env_id || envData?.id)}</Text>
           </Descriptions.Item>
           <Descriptions.Item label="Status">
             <Badge 
-              status={environment.status === 'running' ? 'success' : 
-                     environment.status === 'pending' ? 'processing' : 'error'} 
-              text={capitalize(environment.status)} 
+              status={envData?.status === 'running' ? 'success' : 
+                     envData?.status === 'pending' ? 'processing' : 'error'} 
+              text={capitalize(envData?.status || 'unknown')} 
             />
           </Descriptions.Item>
           <Descriptions.Item label="Created">
-            {formatDateTime(environment.created_at)}
+            {formatDateTime(envData?.created_at)}
           </Descriptions.Item>
           <Descriptions.Item label="Last Activity">
-            {formatDateTime(environment.last_activity || environment.updated_at)}
+            {formatDateTime(envData?.last_activity || envData?.updated_at)}
           </Descriptions.Item>
           <Descriptions.Item label="Access URL">
-            {environment.url ? (
-              <a href={environment.url} target="_blank" rel="noopener noreferrer">
-                {environment.url}
+            {envData?.url ? (
+              <a href={envData.url} target="_blank" rel="noopener noreferrer">
+                {envData.url}
               </a>
             ) : 'Not available'}
           </Descriptions.Item>
@@ -307,14 +309,14 @@ function EnvironmentOverview({ environment }: EnvironmentOverviewProps) {
       </Card>
 
       {/* Resource Configuration */}
-      {environment.resource_config && (
+      {envData?.resource_config && (
         <Card title="Resource Configuration">
           <Row gutter={16}>
             <Col span={8}>
               <Card size="small">
                 <Statistic
                   title="CPU Allocation"
-                  value={environment.resource_config.cpu_limit}
+                  value={envData.resource_config.cpu_limit}
                   suffix="cores"
                   precision={1}
                 />
@@ -330,7 +332,7 @@ function EnvironmentOverview({ environment }: EnvironmentOverviewProps) {
               <Card size="small">
                 <Statistic
                   title="Memory Allocation"
-                  value={environment.resource_config.memory_limit}
+                  value={envData.resource_config.memory_limit}
                 />
                 <Progress 
                   percent={60} 
@@ -344,7 +346,7 @@ function EnvironmentOverview({ environment }: EnvironmentOverviewProps) {
               <Card size="small">
                 <Statistic
                   title="Storage Allocation"
-                  value={environment.resource_config.storage_size}
+                  value={envData.resource_config.storage_size}
                 />
                 <Progress 
                   percent={45} 
@@ -410,19 +412,19 @@ function EnvironmentConfiguration({ environment }: EnvironmentConfigurationProps
       <Card title="Current Configuration">
         <Descriptions bordered column={1}>
           <Descriptions.Item label="Environment ID">
-            {environment.id}
+            {envData?.env_id || envData?.id}
           </Descriptions.Item>
           <Descriptions.Item label="CPU Limit">
-            {environment.resource_config?.cpu_limit || 'Not configured'} cores
+            {envData?.resource_config?.cpu_limit || 'Not configured'} cores
           </Descriptions.Item>
           <Descriptions.Item label="Memory Limit">
-            {environment.resource_config?.memory_limit || 'Not configured'}
+            {envData?.resource_config?.memory_limit || 'Not configured'}
           </Descriptions.Item>
           <Descriptions.Item label="Storage Size">
-            {environment.resource_config?.storage_size || 'Not configured'}
+            {envData?.resource_config?.storage_size || 'Not configured'}
           </Descriptions.Item>
           <Descriptions.Item label="Access URL">
-            {environment.url || 'Not available'}
+            {envData?.url || 'Not available'}
           </Descriptions.Item>
         </Descriptions>
       </Card>
