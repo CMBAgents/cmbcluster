@@ -7,7 +7,7 @@
     "setup:env:dev": "node scripts/setup-env.js --dev",
     "dev": "npm run setup:env:dev && next dev -p 3001",
     "dev:prod": "npm run setup:env && next dev -p 8501",
-    "build": " next build --no-lint",
+    "build": "next build --no-lint",
     "build:analyze": "ANALYZE=true next build",
     "start": "next start -p 8501",
     "start:production": "NODE_ENV=production next start -p 8501",
@@ -15,7 +15,7 @@
     "lint:fix": "next lint --fix",
     "type-check": "tsc --noEmit",
     "clean": "rm -rf .next out node_modules/.cache",
-    "docker:build": "npm run setup:env && docker build -t cmbcluster-frontend .",
+    "docker:build": "docker build -t cmbcluster-frontend .",
     "docker:run": "docker run -p 8501:8501 cmbcluster-frontend"
   },
   "dependencies": {
