@@ -3,8 +3,6 @@
 import { Card, Typography } from 'antd';
 import MainLayout from '@/components/layout/MainLayout';
 
-// Force dynamic rendering
-export const dynamic = 'force-dynamic';
 
 const { Title, Text } = Typography;
 

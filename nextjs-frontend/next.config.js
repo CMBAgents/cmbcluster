@@ -7,9 +7,6 @@ const nextConfig = {
   // Enable standalone output for Docker deployment
   output: 'standalone',
   
-  // Disable static optimization completely
-  distDir: '.next',
-  
   // Transpile packages for better compatibility
   transpilePackages: [
     'antd',
@@ -34,11 +31,6 @@ const nextConfig = {
     ];
   },
   
-  // Redirect configuration to force dynamic rendering
-  async redirects() {
-    return [];
-  },
-  
   // Production optimizations
   compress: true,
   poweredByHeader: false,
@@ -53,17 +45,12 @@ const nextConfig = {
   // Disable static generation for authenticated pages
   trailingSlash: false,
   
-  // Disable static optimization for pages that require authentication
-  generateStaticParams: false,
-  
   // Experimental features for performance
   experimental: {
     optimizePackageImports: ['antd', '@ant-design/icons'],
     optimizeCss: true,
     // Disable PPR to avoid static generation issues with auth
     ppr: false,
-    // Disable static generation completely for SSR pages
-    staticGenerationAsyncStorage: false,
     turbo: {
       rules: {
         '*.svg': {
@@ -72,12 +59,6 @@ const nextConfig = {
         },
       },
     },
-  },
-  
-  // Disable static optimization completely
-  staticPageGenerationTimeout: 120,
-  generateBuildId: async () => {
-    return 'cmbcluster-build-' + Date.now();
   },
   
   // Performance optimizations
@@ -92,23 +73,7 @@ const nextConfig = {
     },
   },
   
-  // Bundle analyzer (only in development)
-  ...(process.env.ANALYZE === 'true' && {
-    webpack: (config, { buildId, dev, isServer, defaultLoaders, webpack }) => {
-      if (!isServer) {
-        const { BundleAnalyzerPlugin } = require('webpack-bundle-analyzer');
-        config.plugins.push(
-          new BundleAnalyzerPlugin({
-            analyzerMode: 'static',
-            openAnalyzer: false,
-          })
-        );
-      }
-      return config;
-    },
-  }),
-  
-  // Always use webpack config for better compatibility
+  // Webpack config for better compatibility
   webpack: (config, { buildId, dev, isServer, defaultLoaders, webpack }) => {
     // Handle serialization issues
     config.resolve.fallback = {

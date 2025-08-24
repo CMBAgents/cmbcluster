@@ -10,8 +10,6 @@ import EnvironmentPreferences from '@/components/settings/EnvironmentPreferences
 import EnvironmentVariables from '@/components/settings/EnvironmentVariables';
 import EnvironmentFiles from '@/components/settings/EnvironmentFiles';
 
-// Force dynamic rendering
-export const dynamic = 'force-dynamic';
 
 const { Title, Text } = Typography;
 
