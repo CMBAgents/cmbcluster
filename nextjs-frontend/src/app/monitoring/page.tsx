@@ -7,6 +7,9 @@ import ProtectedRoute from '@/components/auth/ProtectedRoute';
 import MainLayout from '@/components/layout/MainLayout';
 import MonitoringDashboard from '@/components/monitoring/MonitoringDashboard';
 
+// Force dynamic rendering
+export const dynamic = 'force-dynamic';
+
 export default function MonitoringPage() {
   const { data: session, status } = useSession();
   const router = useRouter();

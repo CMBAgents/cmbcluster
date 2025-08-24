@@ -7,6 +7,9 @@ import ProtectedRoute from '@/components/auth/ProtectedRoute';
 import MainLayout from '@/components/layout/MainLayout';
 import StorageManagement from '@/components/storage/StorageManagement';
 
+// Force dynamic rendering
+export const dynamic = 'force-dynamic';
+
 export default function StoragePage() {
   const { data: session, status } = useSession();
   const router = useRouter();

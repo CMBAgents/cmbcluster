@@ -16,6 +16,9 @@ import MainLayout from '@/components/layout/MainLayout';
 import apiClient from '@/lib/api-client';
 import { Environment, StorageItem } from '@/types';
 
+// Force dynamic rendering
+export const dynamic = 'force-dynamic';
+
 const { Title, Text, Paragraph } = Typography;
 
 export default function DashboardPage() {

@@ -17,6 +17,9 @@ import ProtectedRoute from '@/components/auth/ProtectedRoute';
 import apiClient from '@/lib/api-client';
 import { Environment, StorageItem } from '@/types';
 
+// Force dynamic rendering
+export const dynamic = 'force-dynamic';
+
 const { Title, Text, Paragraph } = Typography;
 
 function DashboardContent() {

@@ -3,10 +3,8 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "setup:env": "node scripts/setup-env.js",
-    "setup:env:dev": "node scripts/setup-env.js --dev",
-    "dev": "npm run setup:env:dev && next dev -p 3001",
-    "dev:prod": "npm run setup:env && next dev -p 8501",
+    "dev": "next dev -p 3001",
+    "dev:prod": "next dev -p 8501",
     "build": "next build --no-lint",
     "build:analyze": "ANALYZE=true next build",
     "start": "next start -p 8501",

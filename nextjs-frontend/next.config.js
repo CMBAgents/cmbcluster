@@ -41,12 +41,15 @@ const nextConfig = {
     minimumCacheTTL: 60,
   },
   
-  // Other configurations
+  // Disable static generation for authenticated pages
+  trailingSlash: false,
   
   // Experimental features for performance
   experimental: {
     optimizePackageImports: ['antd', '@ant-design/icons'],
     optimizeCss: true,
+    // Disable PPR to avoid static generation issues with auth
+    ppr: false,
     turbo: {
       rules: {
         '*.svg': {
