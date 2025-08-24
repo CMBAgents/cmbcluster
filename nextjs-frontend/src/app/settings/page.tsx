@@ -1,14 +1,18 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Tabs, Card } from 'antd';
+import { Tabs, Card, Typography } from 'antd';
 import { UserOutlined, SettingOutlined, CodeOutlined, FileOutlined } from '@ant-design/icons';
+import MainLayout from '@/components/layout/MainLayout';
+import ProtectedRoute from '@/components/auth/ProtectedRoute';
 import ProfileSettings from '@/components/settings/ProfileSettings';
 import EnvironmentPreferences from '@/components/settings/EnvironmentPreferences';
 import EnvironmentVariables from '@/components/settings/EnvironmentVariables';
 import EnvironmentFiles from '@/components/settings/EnvironmentFiles';
 
-export default function SettingsPage() {
+const { Title, Text } = Typography;
+
+function SettingsContent() {
   const [activeTab, setActiveTab] = useState('profile');
 
   const tabItems = [
@@ -55,14 +59,37 @@ export default function SettingsPage() {
   ];
 
   return (
-    <Card className="bg-background-secondary border-border-primary">
-      <Tabs
-        activeKey={activeTab}
-        onChange={setActiveTab}
-        items={tabItems}
-        size="large"
-        className="settings-tabs"
-      />
-    </Card>
+    <MainLayout>
+      <div className="space-y-6">
+        {/* Header Section */}
+        <div>
+          <Title level={2} className="text-text-primary mb-2">
+            Settings
+          </Title>
+          <Text className="text-text-secondary">
+            Manage your account, environment preferences, and workspace configuration.
+          </Text>
+        </div>
+
+        {/* Settings Content */}
+        <Card className="bg-background-secondary border-border-primary">
+          <Tabs
+            activeKey={activeTab}
+            onChange={setActiveTab}
+            items={tabItems}
+            size="large"
+            className="settings-tabs"
+          />
+        </Card>
+      </div>
+    </MainLayout>
+  );
+}
+
+export default function SettingsPage() {
+  return (
+    <ProtectedRoute>
+      <SettingsContent />
+    </ProtectedRoute>
   );
 }

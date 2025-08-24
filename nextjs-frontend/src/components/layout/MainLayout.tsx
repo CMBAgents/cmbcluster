@@ -1,7 +1,8 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useSession, signOut } from 'next-auth/react';
+import { useRouter, usePathname } from 'next/navigation';
 import {
   Layout,
   Menu,
@@ -40,26 +41,21 @@ export default function MainLayout({ children }: MainLayoutProps) {
   const [collapsed, setCollapsed] = useState(false);
   const [darkMode, setDarkMode] = useState(true);
   const { data: session } = useSession();
-  const [pathname, setPathname] = useState(() => {
-    if (typeof window !== 'undefined') {
-      return window.location.pathname;
-    }
-    return '/dashboard';
-  });
+  const router = useRouter();
+  const pathname = usePathname();
 
-  // Simple navigation handler
+  // Simple navigation handler using Next.js router
   const navigateTo = (path: string) => {
-    setPathname(path);
-    window.location.href = path;
+    router.push(path);
   };
 
   // Menu items based on Main.py structure
   const menuItems: MenuProps['items'] = [
     {
-      key: '/dashboard',
+      key: '/',
       icon: <DashboardOutlined />,
       label: 'Dashboard',
-      onClick: () => navigateTo('/dashboard'),
+      onClick: () => navigateTo('/'),
     },
     {
       key: '/environments',
@@ -223,7 +219,6 @@ export default function MainLayout({ children }: MainLayoutProps) {
             {/* Page Title */}
             <Title level={4} className="text-text-primary mb-0">
               {pathname === '/' ? 'Dashboard' :
-               pathname === '/dashboard' ? 'Dashboard' :
                pathname === '/environments' ? 'Environments' :
                pathname === '/storage' ? 'Storage' :
                pathname === '/monitoring' ? 'Monitoring' :

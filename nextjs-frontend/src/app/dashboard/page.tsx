@@ -1,6 +1,7 @@
 'use client';
 
 import { useSession } from 'next-auth/react';
+import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { Card, Row, Col, Statistic, Typography, Space, Button, Alert, Spin } from 'antd';
 import {
@@ -19,6 +20,7 @@ const { Title, Text, Paragraph } = Typography;
 
 export default function DashboardPage() {
   const { data: session } = useSession();
+  const router = useRouter();
   const [environments, setEnvironments] = useState<Environment[]>([]);
   const [storages, setStorages] = useState<StorageItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -86,7 +88,7 @@ export default function DashboardPage() {
       title: 'Launch Environment',
       description: 'Start a new computational environment',
       icon: <PlayCircleOutlined />,
-      action: '/environments/new',
+      action: '/environments',
     },
     {
       title: 'Manage Storage',
@@ -173,7 +175,7 @@ export default function DashboardPage() {
                 <Card
                   className="bg-background-secondary border-border-primary hover:shadow-lg transition-all hover:border-primary cursor-pointer h-full"
                   bodyStyle={{ padding: '24px' }}
-                  onClick={() => window.location.href = action.action}
+                  onClick={() => router.push(action.action)}
                 >
                   <Space direction="vertical" size={16} className="w-full">
                     <div className="text-primary text-3xl">

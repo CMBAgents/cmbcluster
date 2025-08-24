@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { 
   Card, 
   Button, 
@@ -84,6 +85,7 @@ const PRESET_CONFIGS = {
 };
 
 export default function EnvironmentManagement() {
+  const router = useRouter();
   const [activeTab, setActiveTab] = useState('environments');
   const [launchModalVisible, setLaunchModalVisible] = useState(false);
   const [selectedPreset, setSelectedPreset] = useState<keyof typeof PRESET_CONFIGS>('standard');
@@ -428,8 +430,8 @@ export default function EnvironmentManagement() {
               icon={<EyeOutlined />}
               size="small"
               onClick={() => {
-                // Navigate to environment details page
-                window.location.href = `/environments/${record.id}`;
+                // Navigate to environment details page using Next.js router
+                router.push(`/environments/${record.id}`);
               }}
             />
           </Tooltip>
