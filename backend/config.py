@@ -2,6 +2,9 @@ from pydantic_settings import BaseSettings
 from typing import Optional, List
 import os
 import secrets
+import logging
+
+logger = logging.getLogger(__name__)
 
 class Settings(BaseSettings):
     # Project settings
@@ -102,14 +105,68 @@ class Settings(BaseSettings):
                 self.frontend_url,
             ]
         else:
-            # Production - strict CORS policy
+            # Production - include actual deployed URLs
             origins = []
+            
+            # Always add the configured frontend URL
+            if self.frontend_url:
+                origins.append(self.frontend_url)
+            
+            # Add default trusted domains with https
             for domain in self.trusted_domains:
                 origins.extend([
                     f"https://{domain}",
                     f"https://www.{domain}",
                 ])
-            return origins
+            
+            # Extract domain from frontend_url and add common variations
+            if self.frontend_url:
+                try:
+                    from urllib.parse import urlparse
+                    parsed = urlparse(self.frontend_url)
+                    if parsed.hostname:
+                        # Add the exact domain from frontend_url
+                        origins.extend([
+                            f"https://{parsed.hostname}",
+                            f"http://{parsed.hostname}",  # For development/testing
+                        ])
+                        
+                        # For nip.io domains, add the base IP pattern
+                        if 'nip.io' in parsed.hostname:
+                            # Extract IP and add common nip.io patterns
+                            ip_part = parsed.hostname.replace('.nip.io', '')
+                            origins.extend([
+                                f"https://{ip_part}.nip.io",
+                                f"https://api.{ip_part}.nip.io",
+                                f"http://{ip_part}.nip.io",
+                                f"http://api.{ip_part}.nip.io",
+                            ])
+                except Exception as e:
+                    logger.warning(f"Failed to parse frontend_url for CORS: {e}")
+            
+            # Special handling for nip.io domains - extract from API_URL if available
+            if self.api_url and 'nip.io' in self.api_url:
+                try:
+                    from urllib.parse import urlparse
+                    parsed = urlparse(self.api_url)
+                    if parsed.hostname and 'nip.io' in parsed.hostname:
+                        # Extract IP from api.IP.nip.io format
+                        hostname_parts = parsed.hostname.split('.')
+                        if len(hostname_parts) >= 3 and hostname_parts[0] == 'api':
+                            ip_part = '.'.join(hostname_parts[1:-2])  # Get IP part
+                            origins.extend([
+                                f"https://{ip_part}.nip.io",
+                                f"http://{ip_part}.nip.io",
+                                f"https://api.{ip_part}.nip.io",
+                                f"http://api.{ip_part}.nip.io",
+                            ])
+                except Exception as e:
+                    logger.warning(f"Failed to parse api_url for CORS: {e}")
+            
+            # Remove duplicates and return
+            unique_origins = list(set(origins))
+            logger.info(f"Production CORS origins: {unique_origins}")
+            return unique_origins
     
     def validate_production_config(self) -> bool:
         """Validate that production configuration is secure"""

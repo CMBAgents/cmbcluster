@@ -15,6 +15,7 @@ python-dotenv==1.0.0
 asyncio-mqtt==0.16.1
 structlog==23.2.0
 cryptography==41.0.7
+aiohttp==3.9.1
 
 # Security dependencies for enhanced authentication
 google-auth==2.23.4

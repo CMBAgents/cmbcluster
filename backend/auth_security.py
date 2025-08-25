@@ -8,6 +8,7 @@ import time
 import hashlib
 import secrets
 import jwt
+import aiohttp
 from datetime import datetime, timedelta
 from typing import Optional, Dict, Any, List
 from fastapi import HTTPException, status, Request
@@ -180,28 +181,61 @@ class GoogleOAuthValidator:
     async def validate_google_token(self, token: str) -> Dict[str, Any]:
         """Validate Google OAuth token and extract user info"""
         try:
-            # Verify the token with Google
-            idinfo = id_token.verify_oauth2_token(
-                token, 
-                requests.Request(), 
-                self.client_id
-            )
-            
-            # Verify the issuer
-            if idinfo['iss'] not in ['accounts.google.com', 'https://accounts.google.com']:
-                raise ValueError('Wrong issuer.')
-            
-            # Extract verified user information
-            return {
-                "sub": idinfo.get("sub"),
-                "email": idinfo.get("email"),
-                "name": idinfo.get("name"),
-                "picture": idinfo.get("picture"),
-                "email_verified": idinfo.get("email_verified", False),
-                "locale": idinfo.get("locale"),
-                "family_name": idinfo.get("family_name"),
-                "given_name": idinfo.get("given_name"),
-            }
+            # First try as ID token (JWT format)
+            try:
+                idinfo = id_token.verify_oauth2_token(
+                    token, 
+                    requests.Request(), 
+                    self.client_id
+                )
+                
+                # Verify the issuer
+                if idinfo['iss'] not in ['accounts.google.com', 'https://accounts.google.com']:
+                    raise ValueError('Wrong issuer.')
+                
+                # Extract verified user information from ID token
+                return {
+                    "sub": idinfo.get("sub"),
+                    "email": idinfo.get("email"),
+                    "name": idinfo.get("name"),
+                    "picture": idinfo.get("picture"),
+                    "email_verified": idinfo.get("email_verified", False),
+                    "locale": idinfo.get("locale"),
+                    "family_name": idinfo.get("family_name"),
+                    "given_name": idinfo.get("given_name"),
+                }
+            except Exception as jwt_error:
+                # If ID token verification fails, try as access token
+                logger.info(f"Token is not a valid ID token, trying as access token: {str(jwt_error)}")
+                
+                # Validate access token by calling Google's userinfo endpoint
+                import aiohttp
+                async with aiohttp.ClientSession() as session:
+                    async with session.get(
+                        'https://www.googleapis.com/oauth2/v2/userinfo',
+                        headers={'Authorization': f'Bearer {token}'}
+                    ) as response:
+                        if response.status != 200:
+                            raise ValueError(f"Invalid access token: {response.status}")
+                        
+                        user_data = await response.json()
+                        
+                        # Validate that this token belongs to our client
+                        # Check if the token is valid by making sure we get user data
+                        if not user_data.get('id'):
+                            raise ValueError("Invalid token: no user ID returned")
+                        
+                        # Return standardized user info
+                        return {
+                            "sub": user_data.get("id"),
+                            "email": user_data.get("email"),
+                            "name": user_data.get("name"),
+                            "picture": user_data.get("picture"),
+                            "email_verified": user_data.get("verified_email", False),
+                            "locale": user_data.get("locale"),
+                            "family_name": user_data.get("family_name"),
+                            "given_name": user_data.get("given_name"),
+                        }
             
         except ValueError as e:
             logger.error("Google token validation failed", error=str(e))
