@@ -3,6 +3,9 @@ import GoogleProvider from 'next-auth/providers/google';
 import type { NextAuthOptions } from 'next-auth';
 import { JWT } from 'next-auth/jwt';
 
+// Force dynamic rendering for NextAuth
+export const dynamic = 'force-dynamic';
+
 // Only validate environment variables at runtime, not during build
 const isRuntime = typeof window === 'undefined' && !process.env.SKIP_ENV_VALIDATION;
 
