@@ -3,12 +3,15 @@ import GoogleProvider from 'next-auth/providers/google';
 import type { NextAuthOptions } from 'next-auth';
 import { JWT } from 'next-auth/jwt';
 
-// Validate required environment variables
-if (!process.env.GOOGLE_CLIENT_ID || !process.env.GOOGLE_CLIENT_SECRET) {
+// Only validate environment variables at runtime, not during build
+const isRuntime = typeof window === 'undefined' && !process.env.SKIP_ENV_VALIDATION;
+
+// Validate required environment variables only at runtime
+if (isRuntime && (!process.env.GOOGLE_CLIENT_ID || !process.env.GOOGLE_CLIENT_SECRET)) {
   throw new Error('Missing required OAuth environment variables');
 }
 
-if (!process.env.NEXTAUTH_SECRET) {
+if (isRuntime && !process.env.NEXTAUTH_SECRET) {
   throw new Error('NEXTAUTH_SECRET environment variable is required');
 }
 
@@ -45,21 +48,37 @@ async function exchangeTokenWithBackend(googleToken: string, userInfo: any): Pro
   }
 }
 
-const authOptions: NextAuthOptions = {
-  providers: [
-    GoogleProvider({
-      clientId: process.env.GOOGLE_CLIENT_ID,
-      clientSecret: process.env.GOOGLE_CLIENT_SECRET,
-      authorization: {
-        params: {
-          scope: 'openid email profile',
-          // Add security parameters
-          prompt: 'consent',
-          access_type: 'offline',
+/**
+ * Get NextAuth configuration with runtime validation
+ */
+function getAuthOptions(): NextAuthOptions {
+  // Only validate at runtime when actually handling requests
+  const isHandlingRequest = process.env.NODE_ENV === 'production' && !process.env.SKIP_ENV_VALIDATION;
+  
+  if (isHandlingRequest) {
+    if (!process.env.GOOGLE_CLIENT_ID || !process.env.GOOGLE_CLIENT_SECRET) {
+      throw new Error('Missing required OAuth environment variables at runtime');
+    }
+    if (!process.env.NEXTAUTH_SECRET) {
+      throw new Error('NEXTAUTH_SECRET environment variable is required at runtime');
+    }
+  }
+
+  return {
+    providers: [
+      GoogleProvider({
+        clientId: process.env.GOOGLE_CLIENT_ID || 'build-time-placeholder',
+        clientSecret: process.env.GOOGLE_CLIENT_SECRET || 'build-time-placeholder',
+        authorization: {
+          params: {
+            scope: 'openid email profile',
+            // Add security parameters
+            prompt: 'consent',
+            access_type: 'offline',
+          },
         },
-      },
-    }),
-  ],
+      }),
+    ],
   pages: {
     signIn: '/auth/signin',
     error: '/auth/error',
@@ -172,7 +191,7 @@ const authOptions: NextAuthOptions = {
     maxAge: 8 * 60 * 60, // 8 hours
   },
   
-  secret: process.env.NEXTAUTH_SECRET,
+  secret: process.env.NEXTAUTH_SECRET || 'build-time-placeholder',
   
   // Security configurations
   useSecureCookies: process.env.NODE_ENV === 'production',
@@ -225,7 +244,8 @@ const authOptions: NextAuthOptions = {
     },
   },
 };
+}
 
-const handler = NextAuth(authOptions);
+const handler = NextAuth(getAuthOptions());
 
 export { handler as GET, handler as POST };
