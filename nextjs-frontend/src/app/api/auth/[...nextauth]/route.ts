@@ -26,6 +26,8 @@ const BACKEND_API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:800
  */
 async function exchangeTokenWithBackend(googleToken: string, userInfo: any): Promise<string | null> {
   try {
+    console.log('Attempting token exchange with backend...');
+    
     const response = await fetch(`${BACKEND_API_URL}/auth/token-exchange`, {
       method: 'POST',
       headers: {
@@ -39,11 +41,13 @@ async function exchangeTokenWithBackend(googleToken: string, userInfo: any): Pro
     });
 
     if (!response.ok) {
-      console.error('Token exchange failed:', response.status, response.statusText);
+      const errorText = await response.text().catch(() => 'Unknown error');
+      console.error('Token exchange failed:', response.status, response.statusText, errorText);
       return null;
     }
 
     const data = await response.json();
+    console.log('Token exchange successful');
     return data.access_token;
   } catch (error) {
     console.error('Token exchange error:', error);
@@ -89,18 +93,30 @@ function getAuthOptions(): NextAuthOptions {
   callbacks: {
     async jwt({ token, account, profile }) {
       // Initial OAuth callback - exchange Google token for backend JWT
-      if (account?.provider === 'google' && account.access_token) {
+      if (account?.provider === 'google') {
         try {
-          // Exchange Google token for backend JWT
-          const backendToken = await exchangeTokenWithBackend(
-            account.access_token,
-            {
-              sub: profile?.sub,
-              email: profile?.email,
-              name: profile?.name,
-              picture: profile?.picture,
-            }
-          );
+          console.log('Processing Google OAuth callback...');
+          
+          const userInfo = {
+            sub: profile?.sub,
+            email: profile?.email,
+            name: profile?.name,
+            picture: profile?.picture,
+          };
+
+          let backendToken = null;
+
+          // Try ID token first (preferred for backend validation)
+          if (account.id_token) {
+            console.log('Trying token exchange with ID token...');
+            backendToken = await exchangeTokenWithBackend(account.id_token, userInfo);
+          }
+
+          // If ID token exchange failed, try access token
+          if (!backendToken && account.access_token) {
+            console.log('Trying token exchange with access token...');
+            backendToken = await exchangeTokenWithBackend(account.access_token, userInfo);
+          }
 
           if (backendToken) {
             token.backendAccessToken = backendToken;
@@ -108,14 +124,19 @@ function getAuthOptions(): NextAuthOptions {
             token.email = profile?.email;
             token.name = profile?.name;
             token.picture = profile?.picture;
+            console.log('Successfully obtained backend token for user:', profile?.email);
             return token;
           } else {
-            // Token exchange failed - return token without backend access
-            console.error('Backend token exchange failed');
+            // Token exchange failed - this will result in a session without API access
+            console.error('Backend token exchange failed for user:', profile?.email);
+            console.error('Available tokens:', {
+              hasIdToken: !!account.id_token,
+              hasAccessToken: !!account.access_token,
+            });
             return token;
           }
         } catch (error) {
-          console.error('JWT callback error:', error);
+          console.error('JWT callback error for user:', profile?.email, error);
           return token;
         }
       }
@@ -150,6 +171,9 @@ function getAuthOptions(): NextAuthOptions {
       // Only send backend JWT to client, never Google tokens
       if (token.backendAccessToken) {
         session.accessToken = token.backendAccessToken as string;
+      } else {
+        // No backend token available - user will have limited access
+        console.warn('Session created without backend token for user:', token.email);
       }
       
       session.user = {
