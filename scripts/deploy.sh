@@ -1,6 +1,88 @@
 #!/bin/bash
 set -e
 
+# --- Security Configuration Validation ---
+echo "🔒 Validating security configuration for production deployment..."
+
+# Function to validate security requirements
+validate_security_config() {
+    local errors=0
+    
+    echo "Checking required security environment variables..."
+    
+    # Check critical security variables
+    if [ -z "$SECRET_KEY" ] || [ "$SECRET_KEY" == "dev-secret-key-change-in-production" ]; then
+        echo "❌ ERROR: SECRET_KEY not set or using development default"
+        echo "   Generate a secure key: openssl rand -hex 32"
+        errors=$((errors + 1))
+    elif [ ${#SECRET_KEY} -lt 32 ]; then
+        echo "❌ ERROR: SECRET_KEY too short (minimum 32 characters required)"
+        errors=$((errors + 1))
+    else
+        echo "✅ SECRET_KEY configured securely"
+    fi
+    
+    if [ -z "$GOOGLE_CLIENT_ID" ]; then
+        echo "❌ ERROR: GOOGLE_CLIENT_ID not configured"
+        echo "   Configure Google OAuth in Google Cloud Console"
+        errors=$((errors + 1))
+    else
+        echo "✅ GOOGLE_CLIENT_ID configured"
+    fi
+    
+    if [ -z "$GOOGLE_CLIENT_SECRET" ]; then
+        echo "❌ ERROR: GOOGLE_CLIENT_SECRET not configured"
+        echo "   Configure Google OAuth in Google Cloud Console"
+        errors=$((errors + 1))
+    else
+        echo "✅ GOOGLE_CLIENT_SECRET configured"
+    fi
+    
+    if [ -z "$NEXTAUTH_SECRET" ] || [ "$NEXTAUTH_SECRET" == "your-secret-key-here-replace-in-production" ]; then
+        echo "❌ ERROR: NEXTAUTH_SECRET not set or using development default"
+        echo "   Generate a secure key: openssl rand -base64 32"
+        errors=$((errors + 1))
+    elif [ ${#NEXTAUTH_SECRET} -lt 32 ]; then
+        echo "❌ ERROR: NEXTAUTH_SECRET too short (minimum 32 characters required)"
+        errors=$((errors + 1))
+    else
+        echo "✅ NEXTAUTH_SECRET configured securely"
+    fi
+    
+    # Validate production settings
+    if [ "$DEV_MODE" == "true" ]; then
+        echo "⚠️  WARNING: DEV_MODE is enabled in production deployment"
+        echo "   Set DEV_MODE=false for production security"
+    else
+        echo "✅ DEV_MODE disabled for production"
+    fi
+    
+    if [ "$DEBUG" == "true" ]; then
+        echo "⚠️  WARNING: DEBUG mode is enabled in production deployment"
+        echo "   Set DEBUG=false for production security"
+    else
+        echo "✅ DEBUG mode disabled for production"
+    fi
+    
+    # Check TLS configuration
+    if [ "$TLS_ENABLED" != "true" ]; then
+        echo "❌ ERROR: TLS_ENABLED must be true for production"
+        errors=$((errors + 1))
+    else
+        echo "✅ TLS enabled for production"
+    fi
+    
+    if [ $errors -gt 0 ]; then
+        echo ""
+        echo "❌ Security validation failed with $errors error(s)"
+        echo "Please fix the above issues before deploying to production"
+        exit 1
+    fi
+    
+    echo "✅ Security configuration validation passed"
+    echo ""
+}
+
 # --- Configuration Loading ---
 # 1. Load defaults from .env file if it exists.
 # 2. Allow overrides from command-line arguments.
@@ -32,12 +114,24 @@ ZONE=${ZONE:-"${ZONE}"}
 TAG=${TAG:-"latest"}
 SKIP_BUILD=${SKIP_BUILD:-"false"}
 
+# Security defaults for production
+DEV_MODE=${DEV_MODE:-"false"}
+DEBUG=${DEBUG:-"false"}
+TLS_ENABLED=${TLS_ENABLED:-"true"}
+TOKEN_EXPIRE_HOURS=${TOKEN_EXPIRE_HOURS:-"8"}
+RATE_LIMIT_ENABLED=${RATE_LIMIT_ENABLED:-"true"}
+ENABLE_SECURITY_HEADERS=${ENABLE_SECURITY_HEADERS:-"true"}
+CSP_ENABLED=${CSP_ENABLED:-"true"}
+
 # Validate required variables
 if [ -z "$PROJECT_ID" ] || [ -z "$DOMAIN" ]; then
     echo "Error: PROJECT_ID and DOMAIN are required. Set them in .env or pass as arguments."
     echo "Usage: $0 [PROJECT_ID] [CLUSTER_NAME] [DOMAIN] [REGION] [ZONE] [TAG] [SKIP_BUILD]"
     exit 1
 fi
+
+# Run security validation
+validate_security_config
 
 # Define derived variables
 IMAGE_REPO="${REGION}-docker.pkg.dev/${PROJECT_ID}/${CLUSTER_NAME}-images"
@@ -54,6 +148,9 @@ echo "Image Repo:      $IMAGE_REPO"
 echo "Image Tag:       $TAG"
 echo "Skip Build:      $SKIP_BUILD"
 echo "K8s Namespace:   $K8S_NAMESPACE"
+echo "Security Mode:   Production (DEV_MODE=$DEV_MODE, DEBUG=$DEBUG)"
+echo "TLS Enabled:     $TLS_ENABLED"
+echo "Token Expiry:    $TOKEN_EXPIRE_HOURS hours"
 echo "--------------------------------------------------"
 
 # Ensure we have cluster access (using the same zone as setup-cluster.sh)
@@ -97,27 +194,62 @@ fi
 kubectl create namespace $K8S_NAMESPACE --dry-run=client -o yaml | kubectl apply -f -
 
 # Create secrets
-echo "🔐 Creating secrets..."
+echo "🔐 Creating enhanced security secrets..."
 
-# Generate encryption key if not provided
+# Generate secure encryption key if not provided
 if [ -z "$FILE_ENCRYPTION_KEY" ]; then
     echo "📝 Generating encryption key for environment files..."
     FILE_ENCRYPTION_KEY=$(python3 -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())" 2>/dev/null || openssl rand -base64 32)
     echo "✅ Generated FILE_ENCRYPTION_KEY (store this securely for future deployments)"
 fi
 
-# Create a secret for the backend. The keys must be uppercase to be correctly
-# mapped to environment variables by the Helm chart's 'envFrom' directive.
+# Generate secure secret key if not provided
+if [ -z "$SECRET_KEY" ] || [ "$SECRET_KEY" == "dev-secret-key-change-in-production" ]; then
+    echo "📝 Generating secure SECRET_KEY for JWT tokens..."
+    SECRET_KEY=$(openssl rand -hex 32)
+    echo "✅ Generated SECRET_KEY (store this securely for future deployments)"
+fi
+
+# Generate secure NextAuth secret if not provided
+if [ -z "$NEXTAUTH_SECRET" ] || [ "$NEXTAUTH_SECRET" == "your-secret-key-here-replace-in-production" ]; then
+    echo "📝 Generating secure NEXTAUTH_SECRET for session management..."
+    NEXTAUTH_SECRET=$(openssl rand -base64 32)
+    echo "✅ Generated NEXTAUTH_SECRET (store this securely for future deployments)"
+fi
+
+# Create comprehensive backend secrets
 kubectl create secret generic cmbcluster-backend-secrets \
     --from-literal=GOOGLE_CLIENT_ID="${GOOGLE_CLIENT_ID}" \
     --from-literal=GOOGLE_CLIENT_SECRET="${GOOGLE_CLIENT_SECRET}" \
-    --from-literal=SECRET_KEY="${SECRET_KEY:-$(openssl rand -hex 32)}" \
+    --from-literal=SECRET_KEY="${SECRET_KEY}" \
     --from-literal=FILE_ENCRYPTION_KEY="${FILE_ENCRYPTION_KEY}" \
+    --from-literal=DEV_MODE="${DEV_MODE}" \
+    --from-literal=DEBUG="${DEBUG}" \
+    --from-literal=TLS_ENABLED="${TLS_ENABLED}" \
+    --from-literal=RATE_LIMIT_ENABLED="${RATE_LIMIT_ENABLED}" \
+    --from-literal=ENABLE_SECURITY_HEADERS="${ENABLE_SECURITY_HEADERS}" \
+    --from-literal=CSP_ENABLED="${CSP_ENABLED}" \
+    --from-literal=API_URL="${API_URL}" \
+    --from-literal=FRONTEND_URL="${FRONTEND_URL}" \
+    --from-literal=JWT_ALGORITHM="${JWT_ALGORITHM}" \
+    --from-literal=TOKEN_EXPIRE_HOURS="${TOKEN_EXPIRE_HOURS}" \
     --namespace=$K8S_NAMESPACE \
     --dry-run=client -o yaml | kubectl apply -f -
 
-# Deploy using Helm
-echo "⚙️ Deploying with Helm..."
+# Create frontend secrets for NextAuth
+kubectl create secret generic cmbcluster-frontend-secrets \
+    --from-literal=NEXTAUTH_SECRET="${NEXTAUTH_SECRET}" \
+    --from-literal=GOOGLE_CLIENT_ID="${GOOGLE_CLIENT_ID}" \
+    --from-literal=GOOGLE_CLIENT_SECRET="${GOOGLE_CLIENT_SECRET}" \
+    --from-literal=NEXTAUTH_URL="https://${DOMAIN}" \
+    --from-literal=NEXT_PUBLIC_API_URL="https://api.${DOMAIN}" \
+    --namespace=$K8S_NAMESPACE \
+    --dry-run=client -o yaml | kubectl apply -f -
+
+echo "✅ Security secrets created successfully"
+
+# Deploy using Helm with enhanced security configuration
+echo "⚙️ Deploying with Helm and enhanced security settings..."
 # Pass configuration from .env and other scripts to the Helm chart.
 # This ensures the backend gets all required environment variables and prevents Pydantic validation errors.
 helm upgrade --install cmbcluster  ./helm \
@@ -141,11 +273,18 @@ helm upgrade --install cmbcluster  ./helm \
     --set userEnvironment.image.repository=$IMAGE_REPO/cmbcluster-user-env \
     --set userEnvironment.image.tag=$TAG \
     --set backend.secretName=cmbcluster-backend-secrets \
+    --set frontend.secretName=cmbcluster-frontend-secrets \
     --set-string backend.config.tokenExpireHours="$TOKEN_EXPIRE_HOURS" \
     --set-string backend.config.maxInactiveHours="$MAX_INACTIVE_HOURS" \
     --set-string backend.config.maxUserPods="$MAX_USER_PODS" \
     --set-string backend.config.devMode="$DEV_MODE" \
     --set-string backend.config.debug="$DEBUG" \
+    --set-string backend.config.tlsEnabled="$TLS_ENABLED" \
+    --set-string backend.config.rateLimitEnabled="$RATE_LIMIT_ENABLED" \
+    --set-string backend.config.enableSecurityHeaders="$ENABLE_SECURITY_HEADERS" \
+    --set-string backend.config.cspEnabled="$CSP_ENABLED" \
+    --set-string frontend.config.nextAuthUrl="https://${DOMAIN}" \
+    --set-string frontend.config.apiUrl="https://api.${DOMAIN}" \
     --set serviceAccount.name=$KSA_NAME \
     --set workloadIdentity.gsaEmail=$GSA_EMAIL
 
@@ -256,17 +395,39 @@ if [[ $? -ne 0 ]]; then
 fi
 
 echo "DNS automation complete."
-echo "✅ CMBCluster deployed successfully!"
+echo "✅ CMBCluster deployed successfully with enhanced security!"
+echo ""
+echo "🔒 Security Configuration:"
+echo "- JWT Token Expiry: $TOKEN_EXPIRE_HOURS hours"
+echo "- Rate Limiting: $RATE_LIMIT_ENABLED"
+echo "- Security Headers: $ENABLE_SECURITY_HEADERS"
+echo "- Content Security Policy: $CSP_ENABLED"
+echo "- TLS/HTTPS: $TLS_ENABLED"
+echo "- Development Mode: $DEV_MODE"
+echo "- Debug Mode: $DEBUG"
 echo ""
 echo "🌐 Access your deployment:"
 echo "Frontend: https://$DOMAIN"
 echo "API: https://api.$DOMAIN"
-echo "Docs: https://api.$DOMAIN/docs"
+echo "Docs: https://api.$DOMAIN/docs (disabled in production)"
 echo ""
-echo "📋 Useful commands:"
+echo "� Security Verification:"
+echo "1. Test authentication: https://$DOMAIN/auth/signin"
+echo "2. Verify security headers: curl -I https://$DOMAIN"
+echo "3. Check API authentication: curl -H 'Authorization: Bearer TOKEN' https://api.$DOMAIN/health"
+echo ""
+echo "�📋 Useful commands:"
 echo "kubectl get pods -n cmbcluster"
 echo "kubectl logs -f deployment/cmbcluster-backend -n cmbcluster"
 echo "kubectl logs -f deployment/cmbcluster-frontend -n cmbcluster"
+echo "kubectl get secrets -n cmbcluster"
 echo ""
 echo "🔍 Get ingress IP:"
 echo "kubectl get ingress -n cmbcluster"
+echo ""
+echo "⚠️  Important Security Notes:"
+echo "- Store generated secrets securely (SECRET_KEY, NEXTAUTH_SECRET, FILE_ENCRYPTION_KEY)"
+echo "- Monitor authentication logs for suspicious activity"
+echo "- Regularly update dependencies for security patches"
+echo "- Review and rotate secrets periodically"
+echo "- Configure monitoring and alerting for security events"

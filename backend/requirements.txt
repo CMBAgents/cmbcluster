@@ -16,6 +16,12 @@ asyncio-mqtt==0.16.1
 structlog==23.2.0
 cryptography==41.0.7
 
+# Security dependencies for enhanced authentication
+google-auth==2.23.4
+google-auth-oauthlib==1.1.0
+google-auth-httplib2==0.1.1
+redis>=4.5.0  # For distributed rate limiting and session storage
+
 # Testing dependencies
 pytest==7.4.3
 pytest-asyncio==0.21.1

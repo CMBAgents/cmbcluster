@@ -72,6 +72,28 @@ frontend:
     pullPolicy: Always
   replicaCount: 1
   resources: {}
+  config:
+    appTitle: "CMBAgent Cloud"
+    appTagline: "Your gateway to autonomous research"
+    nextAuthUrl: ""  # Set by deploy.sh
+    apiUrl: ""       # Set by deploy.sh
+
+# Security configuration
+security:
+  enableSecurityHeaders: true
+  cspEnabled: true
+  tlsEnabled: true
+  rateLimitEnabled: true
+
+# Authentication configuration
+auth:
+  jwt:
+    algorithm: "HS256"
+    expireHours: 8
+  oauth:
+    googleClientId: ""      # Set by deploy.sh
+    googleClientSecret: ""  # Set by deploy.sh
+  nextAuthSecret: ""        # Set by deploy.sh
 
 userEnvironment:
   image:

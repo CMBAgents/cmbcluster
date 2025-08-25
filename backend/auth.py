@@ -2,23 +2,31 @@ import os
 import time
 import jwt
 from datetime import datetime, timedelta
-from typing import Optional, Dict
+from typing import Optional, Dict, Any
 from fastapi import Depends, HTTPException, status, Request
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from fastapi import APIRouter
+from fastapi import APIRouter, Body
 from authlib.integrations.starlette_client import OAuth
 from starlette.responses import RedirectResponse
 import structlog
+from pydantic import BaseModel
 
 from config import settings
 from models import User, UserRole
 from database import get_database
+from auth_security import (
+    jwt_handler, 
+    google_validator, 
+    secure_bearer, 
+    check_rate_limit,
+    get_client_ip,
+    validate_csrf_token
+)
 
 logger = structlog.get_logger()
-security = HTTPBearer()
 oauth_router = APIRouter()
 
-# OAuth setup
+# OAuth setup (for legacy support if needed)
 oauth = OAuth()
 oauth.register(
     name='google',
@@ -28,19 +36,209 @@ oauth.register(
     client_kwargs={'scope': 'openid email profile'}
 )
 
+# Pydantic models for requests
+class TokenExchangeRequest(BaseModel):
+    google_token: str
+    user_info: Dict[str, Any]
+
+class TokenVerifyResponse(BaseModel):
+    valid: bool
+    user_data: Optional[Dict[str, Any]] = None
+    expires_at: Optional[datetime] = None
+
+@oauth_router.post("/token-exchange")
+async def exchange_google_token(
+    request: Request,
+    token_request: TokenExchangeRequest
+):
+    """
+    Exchange Google OAuth token for backend JWT token
+    This is the secure token exchange endpoint called by NextAuth
+    """
+    try:
+        # Rate limiting
+        await check_rate_limit(request, "token_exchange")
+        
+        client_ip = get_client_ip(request)
+        logger.info("Token exchange request", client_ip=client_ip)
+        
+        # Validate Google token
+        user_info = await google_validator.validate_google_token(token_request.google_token)
+        
+        # Additional security checks
+        if not user_info.get("email_verified", False):
+            logger.warning("Unverified email attempted login", 
+                         email=user_info.get("email"),
+                         client_ip=client_ip)
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Email address not verified"
+            )
+        
+        # Create or update user in database
+        user = await create_or_update_user(user_info)
+        
+        # Create secure JWT token
+        token_data = {
+            "sub": user.id,
+            "email": user.email,
+            "name": user.name,
+            "role": user.role.value,
+            "email_verified": True
+        }
+        
+        access_token = jwt_handler.create_access_token(token_data)
+        
+        logger.info("Token exchange successful", 
+                   user_id=user.id,
+                   user_email=user.email,
+                   client_ip=client_ip)
+        
+        return {
+            "access_token": access_token,
+            "token_type": "bearer",
+            "expires_in": 8 * 60 * 60,  # 8 hours
+            "user": {
+                "id": user.id,
+                "email": user.email,
+                "name": user.name,
+                "role": user.role.value
+            }
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("Token exchange failed", 
+                    error=str(e),
+                    client_ip=get_client_ip(request))
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Authentication failed"
+        )
+
+@oauth_router.get("/verify-token")
+async def verify_token_endpoint(
+    request: Request,
+    credentials: HTTPAuthorizationCredentials = Depends(secure_bearer)
+):
+    """
+    Verify JWT token endpoint
+    Called by NextAuth to validate backend tokens
+    """
+    try:
+        # Rate limiting
+        await check_rate_limit(request, "token_verify")
+        
+        token = credentials.credentials
+        
+        # Verify token using secure handler
+        payload = jwt_handler.verify_token(token)
+        
+        logger.debug("Token verification successful", 
+                    user_id=payload.get("sub"),
+                    client_ip=get_client_ip(request))
+        
+        return TokenVerifyResponse(
+            valid=True,
+            user_data={
+                "sub": payload.get("sub"),
+                "email": payload.get("email"),
+                "name": payload.get("name"),
+                "role": payload.get("role")
+            },
+            expires_at=datetime.fromtimestamp(payload.get("exp", 0))
+        )
+        
+    except HTTPException:
+        # Token verification failed - return specific error
+        raise
+    except Exception as e:
+        logger.error("Token verification error", 
+                    error=str(e),
+                    client_ip=get_client_ip(request))
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Token verification failed"
+        )
+
+@oauth_router.post("/refresh-token")
+async def refresh_token_endpoint(
+    request: Request,
+    credentials: HTTPAuthorizationCredentials = Depends(secure_bearer)
+):
+    """
+    Refresh JWT token endpoint
+    Provides token rotation for enhanced security
+    """
+    try:
+        # Rate limiting
+        await check_rate_limit(request, "token_refresh")
+        
+        token = credentials.credentials
+        
+        # Verify current token
+        payload = jwt_handler.verify_token(token)
+        
+        # Get fresh user data from database
+        db = get_database()
+        user = await db.get_user(payload.get("sub"))
+        
+        if not user or not user.is_active:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="User account inactive"
+            )
+        
+        # Create new token with fresh data
+        token_data = {
+            "sub": user.id,
+            "email": user.email,
+            "name": user.name,
+            "role": user.role.value,
+            "email_verified": True
+        }
+        
+        new_token = jwt_handler.create_access_token(token_data)
+        
+        logger.info("Token refresh successful", 
+                   user_id=user.id,
+                   client_ip=get_client_ip(request))
+        
+        return {
+            "access_token": new_token,
+            "token_type": "bearer",
+            "expires_in": 8 * 60 * 60,  # 8 hours
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("Token refresh failed", 
+                    error=str(e),
+                    client_ip=get_client_ip(request))
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Token refresh failed"
+        )
+
+# Legacy OAuth endpoints (kept for backward compatibility)
 @oauth_router.get("/login")
 async def oauth_login(request: Request):
-    """Initiate Google OAuth login"""
-    redirect_uri = f"{settings.api_url}/auth/callback"
+    """Initiate Google OAuth login (legacy endpoint)"""
+    await check_rate_limit(request, "oauth_login")
     
+    redirect_uri = f"{settings.api_url}/auth/callback"
     logger.info("OAuth login initiated", redirect_uri=redirect_uri)
     
     return await oauth.google.authorize_redirect(request, redirect_uri)
 
 @oauth_router.get("/callback")
 async def oauth_callback(request: Request):
-    """Handle OAuth callback from Google"""
+    """Handle OAuth callback from Google (legacy endpoint)"""
     try:
+        await check_rate_limit(request, "oauth_callback")
+        
         # Get access token from Google
         token = await oauth.google.authorize_access_token(request)
         user_info = token.get('userinfo')
@@ -55,7 +253,15 @@ async def oauth_callback(request: Request):
         user = await create_or_update_user(user_info)
         
         # Create JWT access token
-        access_token = create_access_token(user)
+        token_data = {
+            "sub": user.id,
+            "email": user.email,
+            "name": user.name,
+            "role": user.role.value,
+            "email_verified": True
+        }
+        
+        access_token = jwt_handler.create_access_token(token_data)
         
         # Redirect to frontend with token
         frontend_url = f"{settings.frontend_url}?token={access_token}"
@@ -79,13 +285,16 @@ async def create_or_update_user(user_info: Dict) -> User:
     email = user_info.get('email')
     name = user_info.get('name', email)
     
+    if not user_id or not email:
+        raise ValueError("Missing required user information")
+    
     db = get_database()
     
     # Try to get existing user
     existing_user = await db.get_user(user_id)
     
     if existing_user:
-        # Update existing user's last login
+        # Update existing user's last login and info
         await db.update_user_login(user_id)
         existing_user.last_login = datetime.utcnow()
         existing_user.name = name
@@ -103,49 +312,35 @@ async def create_or_update_user(user_info: Dict) -> User:
             is_active=True
         )
         await db.create_user(user)
+        
+        logger.info("New user created", 
+                   user_id=user_id, 
+                   email=email)
+        
         return user
-    
-    return user
 
 def create_access_token(user: User) -> str:
-    """Create JWT access token for user"""
-    payload = {
+    """Create JWT access token for user (legacy compatibility)"""
+    token_data = {
         "sub": user.id,
         "email": user.email,
         "name": user.name,
         "role": user.role.value,
-        "exp": datetime.utcnow() + timedelta(hours=settings.token_expire_hours),
-        "iat": datetime.utcnow()
+        "email_verified": True
     }
-    
-    return jwt.encode(payload, settings.secret_key, algorithm=settings.jwt_algorithm)
+    return jwt_handler.create_access_token(token_data)
 
 def verify_token(token: str) -> Dict:
-    """Verify and decode JWT token"""
-    try:
-        payload = jwt.decode(
-            token, 
-            settings.secret_key, 
-            algorithms=[settings.jwt_algorithm]
-        )
-        return payload
-    except jwt.ExpiredSignatureError:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Token has expired"
-        )
-    except jwt.JWTError:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid token"
-        )
+    """Verify and decode JWT token (legacy compatibility)"""
+    return jwt_handler.verify_token(token)
 
-async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)) -> Dict:
-    """Get current authenticated user"""
+async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(secure_bearer)) -> Dict:
+    """Get current authenticated user with enhanced security"""
     token = credentials.credentials
     
+    # Development mode bypass (with security warnings)
     if settings.dev_mode and token == "dev-token":
-        # Development mode bypass
+        logger.warning("Development mode authentication bypass used - NOT FOR PRODUCTION")
         exp = datetime.utcnow() + timedelta(hours=settings.token_expire_hours)
         return {
             "sub": "dev-user-123",
@@ -156,7 +351,8 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(s
             "iat": datetime.utcnow().timestamp()
         }
     
-    return verify_token(token)
+    # Use secure token verification
+    return jwt_handler.verify_token(token)
 
 async def get_user_info(user_data: Dict) -> User:
     """Get user info from token data using database"""
@@ -191,3 +387,30 @@ def require_role(required_role: UserRole):
             )
         return current_user
     return role_checker
+
+# Additional security endpoints
+@oauth_router.post("/logout")
+async def logout_endpoint(
+    request: Request,
+    credentials: HTTPAuthorizationCredentials = Depends(secure_bearer)
+):
+    """
+    Logout endpoint - invalidate token
+    In a full implementation, you would add the token to a blacklist
+    """
+    try:
+        token = credentials.credentials
+        payload = jwt_handler.verify_token(token)
+        
+        logger.info("User logout", 
+                   user_id=payload.get("sub"),
+                   client_ip=get_client_ip(request))
+        
+        # In a production system, add token to blacklist here
+        # blacklist_token(payload.get("jti"))
+        
+        return {"message": "Logged out successfully"}
+        
+    except Exception as e:
+        logger.error("Logout error", error=str(e))
+        return {"message": "Logout completed"}

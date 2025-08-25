@@ -1,12 +1,63 @@
 import NextAuth from 'next-auth';
 import GoogleProvider from 'next-auth/providers/google';
 import type { NextAuthOptions } from 'next-auth';
+import { JWT } from 'next-auth/jwt';
+
+// Validate required environment variables
+if (!process.env.GOOGLE_CLIENT_ID || !process.env.GOOGLE_CLIENT_SECRET) {
+  throw new Error('Missing required OAuth environment variables');
+}
+
+if (!process.env.NEXTAUTH_SECRET) {
+  throw new Error('NEXTAUTH_SECRET environment variable is required');
+}
+
+// Backend API URL for token exchange
+const BACKEND_API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+
+/**
+ * Exchange Google OAuth token for backend JWT token
+ */
+async function exchangeTokenWithBackend(googleToken: string, userInfo: any): Promise<string | null> {
+  try {
+    const response = await fetch(`${BACKEND_API_URL}/auth/token-exchange`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${googleToken}`,
+      },
+      body: JSON.stringify({
+        google_token: googleToken,
+        user_info: userInfo
+      }),
+    });
+
+    if (!response.ok) {
+      console.error('Token exchange failed:', response.status, response.statusText);
+      return null;
+    }
+
+    const data = await response.json();
+    return data.access_token;
+  } catch (error) {
+    console.error('Token exchange error:', error);
+    return null;
+  }
+}
 
 const authOptions: NextAuthOptions = {
   providers: [
     GoogleProvider({
-      clientId: process.env.GOOGLE_CLIENT_ID || 'dummy-client-id-for-build',
-      clientSecret: process.env.GOOGLE_CLIENT_SECRET || 'dummy-client-secret-for-build',
+      clientId: process.env.GOOGLE_CLIENT_ID,
+      clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+      authorization: {
+        params: {
+          scope: 'openid email profile',
+          // Add security parameters
+          prompt: 'consent',
+          access_type: 'offline',
+        },
+      },
     }),
   ],
   pages: {
@@ -15,44 +66,164 @@ const authOptions: NextAuthOptions = {
   },
   callbacks: {
     async jwt({ token, account, profile }) {
-      // Store the access_token and refresh_token
-      if (account) {
-        token.accessToken = account.access_token;
-        token.refreshToken = account.refresh_token;
+      // Initial OAuth callback - exchange Google token for backend JWT
+      if (account?.provider === 'google' && account.access_token) {
+        try {
+          // Exchange Google token for backend JWT
+          const backendToken = await exchangeTokenWithBackend(
+            account.access_token,
+            {
+              sub: profile?.sub,
+              email: profile?.email,
+              name: profile?.name,
+              picture: profile?.picture,
+            }
+          );
+
+          if (backendToken) {
+            token.backendAccessToken = backendToken;
+            token.sub = profile?.sub;
+            token.email = profile?.email;
+            token.name = profile?.name;
+            token.picture = profile?.picture;
+            return token;
+          } else {
+            // Token exchange failed - return token without backend access
+            console.error('Backend token exchange failed');
+            return token;
+          }
+        } catch (error) {
+          console.error('JWT callback error:', error);
+          return token;
+        }
       }
-      
-      // Add user info from profile
-      if (profile) {
-        token.name = profile.name;
-        token.email = profile.email;
-        token.sub = profile.sub;
+
+      // Token refresh logic - check if backend token is still valid
+      if (token.backendAccessToken) {
+        try {
+          // Verify token with backend
+          const response = await fetch(`${BACKEND_API_URL}/auth/verify-token`, {
+            method: 'GET',
+            headers: {
+              'Authorization': `Bearer ${token.backendAccessToken}`,
+            },
+          });
+
+          if (!response.ok) {
+            // Backend token is invalid - remove it
+            console.log('Backend token invalid, removing from session');
+            delete token.backendAccessToken;
+          }
+        } catch (error) {
+          console.error('Token verification error:', error);
+          // Remove invalid token
+          delete token.backendAccessToken;
+        }
       }
-      
+
       return token;
     },
+    
     async session({ session, token }) {
-      // Send properties to the client
-      session.accessToken = token.accessToken as string;
-      session.refreshToken = token.refreshToken as string;
+      // Only send backend JWT to client, never Google tokens
+      if (token.backendAccessToken) {
+        session.accessToken = token.backendAccessToken as string;
+      }
+      
       session.user = {
-        ...session.user,
+        id: token.sub as string,
         name: token.name as string,
         email: token.email as string,
+        image: token.picture as string,
         sub: token.sub as string,
       };
       
       return session;
     },
+
+    async signIn({ user, account, profile }) {
+      // Additional security checks
+      if (account?.provider === 'google') {
+        // Verify email domain if needed (add your domain restrictions here)
+        // if (!user.email?.endsWith('@yourdomain.com')) {
+        //   return false;
+        // }
+        
+        // Email verification check
+        if (profile?.email_verified === false) {
+          console.error('Email not verified for user:', user.email);
+          return false;
+        }
+        
+        return true;
+      }
+      
+      return false;
+    },
   },
+  
   session: {
     strategy: 'jwt',
-    maxAge: 24 * 60 * 60, // 24 hours (matching auth.py patterns)
+    maxAge: 8 * 60 * 60, // 8 hours maximum
+    updateAge: 60 * 60, // Update session every hour
   },
+  
   jwt: {
-    maxAge: 24 * 60 * 60, // 24 hours
+    maxAge: 8 * 60 * 60, // 8 hours
   },
-  secret: process.env.NEXTAUTH_SECRET || 'dummy-secret-for-build',
+  
+  secret: process.env.NEXTAUTH_SECRET,
+  
+  // Security configurations
+  useSecureCookies: process.env.NODE_ENV === 'production',
+  cookies: {
+    sessionToken: {
+      name: process.env.NODE_ENV === 'production' ? '__Secure-next-auth.session-token' : 'next-auth.session-token',
+      options: {
+        httpOnly: true,
+        sameSite: 'lax',
+        path: '/',
+        secure: process.env.NODE_ENV === 'production',
+        maxAge: 8 * 60 * 60, // 8 hours
+      },
+    },
+    callbackUrl: {
+      name: process.env.NODE_ENV === 'production' ? '__Secure-next-auth.callback-url' : 'next-auth.callback-url',
+      options: {
+        sameSite: 'lax',
+        path: '/',
+        secure: process.env.NODE_ENV === 'production',
+      },
+    },
+    csrfToken: {
+      name: process.env.NODE_ENV === 'production' ? '__Host-next-auth.csrf-token' : 'next-auth.csrf-token',
+      options: {
+        httpOnly: true,
+        sameSite: 'lax',
+        path: '/',
+        secure: process.env.NODE_ENV === 'production',
+      },
+    },
+  },
+  
+  // Enable debug only in development
   debug: process.env.NODE_ENV === 'development',
+  
+  // Additional security
+  events: {
+    async signIn({ user, account, profile, isNewUser }) {
+      console.log(`User signed in: ${user.email} (New user: ${isNewUser})`);
+    },
+    async signOut({ session, token }) {
+      console.log(`User signed out: ${session?.user?.email}`);
+    },
+    async session({ session, token }) {
+      // Log session access for security monitoring
+      if (process.env.NODE_ENV === 'development') {
+        console.log(`Session accessed: ${session?.user?.email}`);
+      }
+    },
+  },
 };
 
 const handler = NextAuth(authOptions);

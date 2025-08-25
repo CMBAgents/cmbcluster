@@ -40,6 +40,8 @@ spec:
           value: "0.0.0.0"
         - name: API_URL
           value: "https://api.{{ .Values.ingress.baseDomain }}"
+        - name: NEXT_PUBLIC_API_URL
+          value: "https://api.{{ .Values.ingress.baseDomain }}"
         - name: BASE_DOMAIN
           value: "{{ .Values.ingress.baseDomain }}"
         - name: NEXTAUTH_URL
@@ -48,10 +50,53 @@ spec:
           value: "1"
         - name: DEV_MODE
           value: "false"
-        # Authentication secrets from the same secret as backend
-        envFrom:
-        - secretRef:
-            name: {{ .Values.backend.secretName }}
+        # Frontend-specific configuration
+        {{- if .Values.frontend.config }}
+        {{- if .Values.frontend.config.nextAuthUrl }}
+        - name: NEXTAUTH_URL
+          value: {{ .Values.frontend.config.nextAuthUrl | quote }}
+        {{- end }}
+        {{- if .Values.frontend.config.apiUrl }}
+        - name: NEXT_PUBLIC_API_URL
+          value: {{ .Values.frontend.config.apiUrl | quote }}
+        {{- end }}
+        {{- end }}
+        # Application branding
+        - name: NEXT_PUBLIC_APP_TITLE
+          value: {{ .Values.frontend.config.appTitle | default "CMBAgent Cloud" | quote }}
+        - name: NEXT_PUBLIC_APP_TAGLINE
+          value: {{ .Values.frontend.config.appTagline | default "Your gateway to autonomous research" | quote }}
+        # OAuth and Authentication secrets
+        - name: NEXTAUTH_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: cmbcluster-frontend-secrets
+              key: NEXTAUTH_SECRET
+        - name: GOOGLE_CLIENT_ID
+          valueFrom:
+            secretKeyRef:
+              name: cmbcluster-frontend-secrets
+              key: GOOGLE_CLIENT_ID
+        - name: GOOGLE_CLIENT_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: cmbcluster-frontend-secrets
+              key: GOOGLE_CLIENT_SECRET
+        - name: NEXTAUTH_URL
+          valueFrom:
+            secretKeyRef:
+              name: cmbcluster-frontend-secrets
+              key: NEXTAUTH_URL
+        - name: NEXT_PUBLIC_API_URL
+          valueFrom:
+            secretKeyRef:
+              name: cmbcluster-frontend-secrets
+              key: NEXT_PUBLIC_API_URL
+        # Security Configuration
+        - name: ENABLE_SECURITY_HEADERS
+          value: {{ .Values.security.enableSecurityHeaders | default "true" | quote }}
+        - name: CSP_ENABLED
+          value: {{ .Values.security.cspEnabled | default "true" | quote }}
         volumeMounts:
         - name: tmp-volume
           mountPath: /tmp

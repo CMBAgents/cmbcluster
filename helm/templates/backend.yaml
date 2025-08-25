@@ -63,14 +63,29 @@ spec:
           value: {{ .Values.backend.config.maxUserPods | quote }}
         - name: DEV_MODE
           value: {{ .Values.backend.config.devMode | quote }}
-        - name: USER_POD_SA_NAME
-          value: {{ .Values.userEnvironment.serviceAccount.name | quote }}
         - name: DEBUG
           value: {{ .Values.backend.config.debug | quote }}
+        - name: USER_POD_SA_NAME
+          value: {{ .Values.userEnvironment.serviceAccount.name | quote }}
         - name: DATABASE_PATH
           value: "/app/data/cmbcluster.db"
         - name: DATABASE_BUCKET
           value: "{{ .Values.global.projectId }}-{{ .Release.Name }}-db"
+        # Enhanced security configuration
+        - name: TLS_ENABLED
+          value: {{ .Values.backend.config.tlsEnabled | default "true" | quote }}
+        - name: RATE_LIMIT_ENABLED
+          value: {{ .Values.backend.config.rateLimitEnabled | default "true" | quote }}
+        - name: ENABLE_SECURITY_HEADERS
+          value: {{ .Values.backend.config.enableSecurityHeaders | default "true" | quote }}
+        - name: CSP_ENABLED
+          value: {{ .Values.backend.config.cspEnabled | default "true" | quote }}
+        {{- if .Values.backend.config.redisEnabled }}
+        - name: REDIS_ENABLED
+          value: {{ .Values.backend.config.redisEnabled | quote }}
+        - name: REDIS_URL
+          value: {{ .Values.backend.config.redisUrl | quote }}
+        {{- end }}
         # Mounts sensitive values (SECRET_KEY, GOOGLE_CLIENT_ID, etc.)
         # from the Kubernetes secret created by deploy.sh.
         envFrom:

@@ -98,18 +98,20 @@ app = FastAPI(
     lifespan=lifespan
 )
 
-# CORS middleware
+# CORS middleware with enhanced security
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:8501",
-        "https://localhost:8501",
-        settings.frontend_url,
-        f"https://*.{settings.base_domain}",
-    ],
+    allow_origins=settings.get_allowed_origins(),
     allow_credentials=True,
-    allow_methods=["GET", "POST", "PUT", "DELETE"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allow_headers=[
+        "Authorization",
+        "Content-Type", 
+        "X-Requested-With",
+        "X-CSRF-Token"
+    ],
+    expose_headers=["X-Total-Count"],
+    max_age=3600,  # Cache preflight requests for 1 hour
 )
 
 # Add SessionMiddleware LAST - Required for OAuth
@@ -127,20 +129,76 @@ app.include_router(storage_api.router)
 app.include_router(file_api.router)
 
 @app.middleware("http")
+async def security_headers_middleware(request: Request, call_next):
+    """Add security headers to all responses"""
+    response = await call_next(request)
+    
+    if settings.enable_security_headers:
+        # Security headers
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        response.headers["X-Frame-Options"] = "DENY"
+        response.headers["X-XSS-Protection"] = "1; mode=block"
+        response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+        response.headers["Permissions-Policy"] = "geolocation=(), microphone=(), camera=()"
+        
+        # HSTS for HTTPS
+        if request.url.scheme == "https":
+            response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+        
+        # Content Security Policy
+        if settings.csp_enabled:
+            csp_parts = [
+                f"default-src 'self'",
+                f"script-src {' '.join(settings.csp_script_src)}",
+                f"style-src {' '.join(settings.csp_style_src)}",
+                f"font-src {' '.join(settings.csp_font_src)}",
+                f"img-src {' '.join(settings.csp_img_src)}",
+                f"connect-src {' '.join(settings.csp_connect_src)}",
+                f"frame-ancestors 'none'",
+                f"base-uri 'self'",
+                f"form-action 'self'"
+            ]
+            response.headers["Content-Security-Policy"] = "; ".join(csp_parts)
+    
+    return response
+
+@app.middleware("http")
 async def log_requests(request: Request, call_next):
-    """Log all HTTP requests"""
+    """Log all HTTP requests with security context"""
     start_time = time.time()
+    
+    # Get client info for security logging
+    client_ip = request.headers.get("X-Forwarded-For", 
+                                   request.headers.get("X-Real-IP", 
+                                   request.client.host if request.client else "unknown"))
+    user_agent = request.headers.get("User-Agent", "unknown")
     
     response = await call_next(request)
     
     process_time = time.time() - start_time
-    logger.info(
-        "HTTP request processed",
-        method=request.method,
-        url=str(request.url),
-        status_code=response.status_code,
-        process_time=round(process_time, 4)
-    )
+    
+    # Enhanced logging for security events
+    log_data = {
+        "method": request.method,
+        "url": str(request.url),
+        "status_code": response.status_code,
+        "process_time": round(process_time, 4),
+        "client_ip": client_ip,
+        "user_agent": user_agent[:200],  # Truncate long user agents
+    }
+    
+    # Log auth-related requests with higher priority
+    if "/auth/" in str(request.url):
+        log_data["auth_endpoint"] = True
+        if settings.log_auth_events:
+            logger.info("Auth request processed", **log_data)
+    elif response.status_code >= 400:
+        # Log errors for security monitoring
+        log_data["error"] = True
+        if settings.log_security_events:
+            logger.warning("HTTP error response", **log_data)
+    else:
+        logger.debug("HTTP request processed", **log_data)
     
     return response
 
