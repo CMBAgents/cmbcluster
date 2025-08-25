@@ -36,6 +36,12 @@ const nextConfig = {
   poweredByHeader: false,
   generateEtags: true,
   
+  // Cache busting for authentication fixes
+  generateBuildId: async () => {
+    // Use timestamp + random for cache busting in auth fixes
+    return `auth-fix-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+  },
+  
   // Image optimization for production
   images: {
     formats: ['image/webp', 'image/avif'],

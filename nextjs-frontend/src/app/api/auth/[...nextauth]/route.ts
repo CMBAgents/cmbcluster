@@ -26,7 +26,10 @@ const BACKEND_API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:800
  */
 async function exchangeTokenWithBackend(googleToken: string, userInfo: any): Promise<string | null> {
   try {
-    console.log('Attempting token exchange with backend...');
+    console.log('=== TOKEN EXCHANGE DEBUG ===');
+    console.log('Backend API URL:', BACKEND_API_URL);
+    console.log('User Info:', { email: userInfo.email, sub: userInfo.sub });
+    console.log('Token length:', googleToken?.length);
     
     const response = await fetch(`${BACKEND_API_URL}/auth/token-exchange`, {
       method: 'POST',
@@ -40,17 +43,27 @@ async function exchangeTokenWithBackend(googleToken: string, userInfo: any): Pro
       }),
     });
 
+    console.log('Response status:', response.status);
+    console.log('Response headers:', Object.fromEntries(response.headers.entries()));
+
     if (!response.ok) {
       const errorText = await response.text().catch(() => 'Unknown error');
-      console.error('Token exchange failed:', response.status, response.statusText, errorText);
+      console.error('=== TOKEN EXCHANGE FAILED ===');
+      console.error('Status:', response.status, response.statusText);
+      console.error('Error:', errorText);
+      console.error('============================');
       return null;
     }
 
     const data = await response.json();
-    console.log('Token exchange successful');
+    console.log('=== TOKEN EXCHANGE SUCCESS ===');
+    console.log('Received backend token length:', data.access_token?.length);
+    console.log('==============================');
     return data.access_token;
   } catch (error) {
-    console.error('Token exchange error:', error);
+    console.error('=== TOKEN EXCHANGE ERROR ===');
+    console.error('Error:', error);
+    console.error('============================');
     return null;
   }
 }
@@ -141,39 +154,25 @@ function getAuthOptions(): NextAuthOptions {
         }
       }
 
-      // Token refresh logic - check if backend token is still valid
-      if (token.backendAccessToken) {
-        try {
-          // Verify token with backend
-          const response = await fetch(`${BACKEND_API_URL}/auth/verify-token`, {
-            method: 'GET',
-            headers: {
-              'Authorization': `Bearer ${token.backendAccessToken}`,
-            },
-          });
-
-          if (!response.ok) {
-            // Backend token is invalid - remove it
-            console.log('Backend token invalid, removing from session');
-            delete token.backendAccessToken;
-          }
-        } catch (error) {
-          console.error('Token verification error:', error);
-          // Remove invalid token
-          delete token.backendAccessToken;
-        }
-      }
-
+      // For existing sessions, just return the token as-is
+      // Token verification will happen at the API level when needed
       return token;
     },
     
     async session({ session, token }) {
+      // Debug session creation
+      console.log('=== SESSION CALLBACK DEBUG ===');
+      console.log('Token has backendAccessToken:', !!token.backendAccessToken);
+      console.log('User email:', token.email);
+      
       // Only send backend JWT to client, never Google tokens
       if (token.backendAccessToken) {
         session.accessToken = token.backendAccessToken as string;
+        console.log('✅ Session has backend token');
       } else {
         // No backend token available - user will have limited access
-        console.warn('Session created without backend token for user:', token.email);
+        console.warn('❌ Session created without backend token for user:', token.email);
+        console.warn('User will not be able to access protected API endpoints');
       }
       
       session.user = {
@@ -183,6 +182,12 @@ function getAuthOptions(): NextAuthOptions {
         image: token.picture as string,
         sub: token.sub as string,
       };
+      
+      console.log('Final session:', { 
+        hasAccessToken: !!session.accessToken, 
+        userEmail: session.user.email 
+      });
+      console.log('==============================');
       
       return session;
     },

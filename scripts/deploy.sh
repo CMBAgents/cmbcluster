@@ -1,6 +1,13 @@
 #!/bin/bash
 set -e
 
+# Parse command line arguments
+FORCE_REBUILD=false
+if [ "$1" = "--force-rebuild" ] || [ "$1" = "-f" ]; then
+    FORCE_REBUILD=true
+    echo "🔄 Force rebuild mode enabled"
+fi
+
 # --- Security Configuration Validation ---
 echo "🔒 Validating security configuration for production deployment..."
 
@@ -185,6 +192,20 @@ gcloud iam service-accounts add-iam-policy-binding $GSA_EMAIL \
 # Conditionally build images
 if [ "$SKIP_BUILD" != "true" ]; then
     echo "🏗️ Building images..."
+    
+    # Force clean build if requested
+    if [ "$FORCE_REBUILD" = "true" ]; then
+        echo "🧹 Force cleaning previous builds..."
+        rm -rf ./nextjs-frontend/.next
+        rm -rf ./nextjs-frontend/out
+        docker system prune -f || true
+        
+        echo "🏗️ Rebuilding NextJS frontend..."
+        cd nextjs-frontend
+        npm run build
+        cd ..
+    fi
+    
     ./scripts/build-images.sh $PROJECT_ID $TAG $IMAGE_REPO
 else
     echo "⏭️ Skipping image build..."
