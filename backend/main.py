@@ -99,16 +99,36 @@ app = FastAPI(
 )
 
 # CORS middleware
+# Get CORS origins from environment or use defaults
+cors_origins = [
+    "http://localhost:8501",
+    "https://localhost:8501",
+    settings.frontend_url,
+]
+
+# Add domain-based origins from environment
+if settings.base_domain:
+    cors_origins.extend([
+        f"https://{settings.base_domain}",
+        f"https://api.{settings.base_domain}",
+    ])
+
+# Add custom origins from environment variable
+import os
+custom_origins = os.getenv("CORS_ORIGINS", "").split(",")
+for origin in custom_origins:
+    origin = origin.strip()
+    if origin:
+        cors_origins.append(origin)
+
+# Log CORS origins for debugging
+logger.info("CORS origins configured", origins=cors_origins)
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:8501",
-        "https://localhost:8501",
-        settings.frontend_url,
-        f"https://*.{settings.base_domain}",
-    ],
+    allow_origins=cors_origins,
     allow_credentials=True,
-    allow_methods=["GET", "POST", "PUT", "DELETE"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allow_headers=["*"],
 )
 
@@ -123,8 +143,16 @@ security = HTTPBearer()
 
 # Include routers
 app.include_router(oauth_router, prefix="/auth")
-app.include_router(storage_api.router)
-app.include_router(file_api.router)
+app.include_router(storage_api.router, prefix="/api/user")
+app.include_router(file_api.router, prefix="/api/user")
+
+# Import and include new API routers
+import environment_api
+import env_vars_api  
+import user_api
+app.include_router(environment_api.router, prefix="/api/user")
+app.include_router(env_vars_api.router, prefix="/api/user")
+app.include_router(user_api.router, prefix="/api/user")
 
 @app.middleware("http")
 async def log_requests(request: Request, call_next):

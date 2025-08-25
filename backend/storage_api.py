@@ -24,7 +24,7 @@ router = APIRouter(prefix="/storage", tags=["storage"])
 # Global storage manager instance
 storage_manager = StorageManager()
 
-@router.get("/list", response_model=StorageListResponse)
+@router.get("", response_model=StorageListResponse)
 async def list_user_storages(current_user: Dict = Depends(get_current_user)):
     """List all storage buckets for the current user"""
     user_id = current_user["sub"]
@@ -79,7 +79,7 @@ async def list_user_storages(current_user: Dict = Depends(get_current_user)):
             detail="Failed to retrieve storage list"
         )
 
-@router.post("/create", response_model=StorageCreationResponse)
+@router.post("", response_model=StorageCreationResponse)
 async def create_storage(
     request: StorageRequest,
     background_tasks: BackgroundTasks,
@@ -407,7 +407,7 @@ async def download_file_from_storage(
             detail=f"Failed to download file: {str(e)}"
         )
 
-@router.get("/{storage_id}/list")
+@router.get("/{storage_id}/files")
 async def list_storage_objects(
     storage_id: str,
     prefix: str = "",
@@ -459,10 +459,10 @@ async def list_storage_objects(
             detail=f"Failed to list objects: {str(e)}"
         )
 
-@router.delete("/{storage_id}/objects/{object_path:path}")
+@router.delete("/{storage_id}/files")
 async def delete_storage_object(
     storage_id: str,
-    object_path: str,
+    request: Dict[str, str],
     current_user: Dict = Depends(get_current_user)
 ):
     """Delete an object from storage bucket"""
@@ -476,6 +476,14 @@ async def delete_storage_object(
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Storage not found"
+            )
+        
+        # Get file path from request body
+        object_path = request.get("file_path")
+        if not object_path:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="file_path is required"
             )
         
         # Delete object from bucket

@@ -30,15 +30,11 @@ RUN npm ci --prefer-offline --no-audit --progress=false
 # Copy source code
 COPY . .
 
-# Set build-time environment variables (dummy values for static generation)
+# Set build-time environment variables (minimal values for build)
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV SKIP_ENV_VALIDATION=true
-ENV NEXT_PUBLIC_API_URL=https://api.example.com
-ENV NEXTAUTH_URL=https://app.example.com
-ENV NEXTAUTH_SECRET=build-time-secret-will-be-replaced-at-runtime
-ENV GOOGLE_CLIENT_ID=build-time-id
-ENV GOOGLE_CLIENT_SECRET=build-time-secret
+# Remove hardcoded NEXT_PUBLIC_* vars - these will be set at runtime via API routes
 
 # Build the application with production optimizations
 RUN npm run build

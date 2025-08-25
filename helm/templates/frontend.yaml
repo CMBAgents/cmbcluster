@@ -48,6 +48,13 @@ spec:
           value: "1"
         - name: DEV_MODE
           value: "false"
+        # Client-side environment variables (NEXT_PUBLIC_* prefix)
+        - name: NEXT_PUBLIC_API_URL
+          value: "https://api.{{ .Values.ingress.baseDomain }}"
+        - name: NEXT_PUBLIC_API_DOMAIN
+          value: "api.{{ .Values.ingress.baseDomain }}"
+        - name: NEXT_PUBLIC_DOMAIN
+          value: "{{ .Values.ingress.baseDomain }}"
         # Authentication secrets from the same secret as backend
         envFrom:
         - secretRef:

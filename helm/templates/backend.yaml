@@ -71,6 +71,8 @@ spec:
           value: "/app/data/cmbcluster.db"
         - name: DATABASE_BUCKET
           value: "{{ .Values.global.projectId }}-{{ .Release.Name }}-db"
+        - name: CORS_ORIGINS
+          value: "https://{{ .Values.ingress.baseDomain }},https://api.{{ .Values.ingress.baseDomain }}"
         # Mounts sensitive values (SECRET_KEY, GOOGLE_CLIENT_ID, etc.)
         # from the Kubernetes secret created by deploy.sh.
         envFrom:
