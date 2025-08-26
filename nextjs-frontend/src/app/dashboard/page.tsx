@@ -25,6 +25,7 @@ export default function DashboardPage() {
   const [environments, setEnvironments] = useState<Environment[]>([]);
   const [storages, setStorages] = useState<StorageItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   // Fetch dashboard data
   useEffect(() => {
@@ -39,15 +40,24 @@ export default function DashboardPage() {
           apiClient.listUserStorages()
         ]);
 
+        console.log('Dashboard envResponse:', envResponse);
+        console.log('Dashboard storageResponse:', storageResponse);
+
+        // Handle environment response - now properly structured
         if (envResponse.status === 'success' && envResponse.environments) {
           setEnvironments(envResponse.environments);
         }
 
+        // Handle storage response - now properly structured
         if (storageResponse.status === 'success' && storageResponse.storages) {
           setStorages(storageResponse.storages);
         }
       } catch (error) {
         console.error('Error fetching dashboard data:', error);
+        setError(error instanceof Error ? error.message : 'Failed to load dashboard data');
+        // Set empty arrays as fallback to prevent UI issues
+        setEnvironments([]);
+        setStorages([]);
       } finally {
         setLoading(false);
       }
@@ -111,6 +121,24 @@ export default function DashboardPage() {
         <div className="flex items-center justify-center h-64">
           <Spin size="large" />
         </div>
+      </MainLayout>
+    );
+  }
+
+  if (error) {
+    return (
+      <MainLayout>
+        <Alert
+          message="Dashboard Loading Error"
+          description={error}
+          type="error"
+          showIcon
+          action={
+            <Button size="small" onClick={() => window.location.reload()}>
+              Retry
+            </Button>
+          }
+        />
       </MainLayout>
     );
   }

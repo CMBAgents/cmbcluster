@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev -p 3001",
+    "dev": "next dev -p 8501",
     "dev:prod": "next dev -p 8501",
     "build": "next build --no-lint",
     "build:analyze": "ANALYZE=true next build",

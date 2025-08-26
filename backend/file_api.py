@@ -20,7 +20,7 @@ from models import User
 
 logger = structlog.get_logger()
 
-router = APIRouter(prefix="/files", tags=["user-files"])
+router = APIRouter(prefix="/user-files", tags=["user-files"])
 
 # File size limit (1MB)
 MAX_FILE_SIZE = 1024 * 1024

@@ -27,9 +27,9 @@ gcloud auth configure-docker "$REGISTRY_HOSTNAME" --quiet
 
 #SERVICES=("backend" "frontend" "user-environment")
 
-# SERVICES=("frontend")
+SERVICES=("frontend")
 #  SERVICES=("backend" )
-SERVICES=("frontend" "backend")
+# SERVICES=("frontend" "backend")
 for SERVICE in "${SERVICES[@]}"; do
     # Use nextjs-frontend directory for frontend service
     if [ "$SERVICE" == "frontend" ]; then

@@ -91,10 +91,10 @@ class EnvironmentValidator {
       } else {
         // Server side - use environment variables directly
         this.runtimeConfig = {
-          apiUrl: process.env.API_URL || process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000',
-          domain: process.env.NEXT_PUBLIC_DOMAIN || 'localhost',
-          apiDomain: process.env.NEXT_PUBLIC_API_DOMAIN || 'api.localhost',
-          nextAuthUrl: process.env.NEXTAUTH_URL || 'http://localhost:3001'
+          apiUrl: process.env.API_URL || process.env.NEXT_PUBLIC_API_URL || 'https://api.35.188.79.156.nip.io',
+          domain: process.env.NEXT_PUBLIC_DOMAIN || '35.188.79.156.nip.io',
+          apiDomain: process.env.NEXT_PUBLIC_API_DOMAIN || 'api.35.188.79.156.nip.io',
+          nextAuthUrl: process.env.NEXTAUTH_URL || 'https://35.188.79.156.nip.io'
         };
         console.log('Server-side config loaded:', this.runtimeConfig);
         return this.runtimeConfig;
@@ -105,10 +105,10 @@ class EnvironmentValidator {
     
     // Fallback to defaults
     this.runtimeConfig = {
-      apiUrl: 'http://localhost:8000',
-      domain: 'localhost',
-      apiDomain: 'api.localhost',
-      nextAuthUrl: 'http://localhost:3001'
+      apiUrl: 'https://api.35.188.79.156.nip.io',
+      domain: '35.188.79.156.nip.io',
+      apiDomain: 'api.35.188.79.156.nip.io',
+      nextAuthUrl: 'https://35.188.79.156.nip.io'
     };
     
     console.warn('Using fallback config:', this.runtimeConfig);
@@ -150,7 +150,7 @@ class EnvironmentValidator {
     // Build configuration object
     this.config = {
       // API Configuration - fallback for server-side, will be updated client-side
-      apiUrl: process.env.API_URL || process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000',
+      apiUrl: process.env.API_URL || process.env.NEXT_PUBLIC_API_URL || 'https://api.35.188.79.156.nip.io',
       
       // NextAuth Configuration
       nextAuthUrl: process.env.NEXTAUTH_URL || 'https://35.188.79.156.nip.io',
@@ -207,7 +207,7 @@ class EnvironmentValidator {
     const runtimeConfig = await this.fetchRuntimeConfig();
     
     // Ensure we have a valid API URL
-    const baseUrl = runtimeConfig.apiUrl || 'http://localhost:8000';
+    const baseUrl = runtimeConfig.apiUrl || 'https://api.35.188.79.156.nip.io';
     const cleanBaseUrl = baseUrl.replace(/\/$/, '');
     
     if (!endpoint) {

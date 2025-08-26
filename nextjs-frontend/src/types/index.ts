@@ -42,13 +42,13 @@ export interface StorageItem {
 
 export interface UserFile {
   id: string;
-  filename: string;
+  file_name: string;
   file_type: 'json' | 'gcp' | 'config';
   environment_variable_name?: string;
   container_path?: string;
   created_at: string;
   updated_at?: string;
-  size_bytes: number;
+  file_size: number;
 }
 
 export interface UserEnvVar {

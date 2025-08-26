@@ -97,7 +97,7 @@ export default function StorageFileManager({ storageId, storageName }: StorageFi
   // Delete mutation
   const deleteMutation = useMutation({
     mutationFn: (fileName: string) =>
-      apiClient.deleteStorageFile(storageId, fileName),
+      apiClient.deleteFileFromStorage(storageId, fileName),
     onSuccess: () => {
       message.success('File deleted successfully');
       refetch();

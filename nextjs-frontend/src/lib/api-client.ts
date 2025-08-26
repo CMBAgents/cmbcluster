@@ -1,5 +1,6 @@
 import axios, { AxiosInstance, AxiosResponse, AxiosError, InternalAxiosRequestConfig } from 'axios';
 import { getSession, signOut } from 'next-auth/react';
+import { getApiUrlAsync } from '@/lib/env-validator';
 import type { 
   Environment, 
   StorageItem, 
@@ -11,7 +12,7 @@ import type {
 
 // Production configuration with enhanced security
 const API_CONFIG = {
-  baseURL: process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000',
+  // baseURL is now set dynamically at runtime in the request interceptor
   timeout: 30000, // 30 seconds
   retries: 3,
   retryDelay: 1000, // 1 second
@@ -24,7 +25,6 @@ class CMBClusterAPIClient {
 
   constructor() {
     this.api = axios.create({
-      baseURL: API_CONFIG.baseURL,
       timeout: API_CONFIG.timeout,
       headers: {
         'Content-Type': 'application/json',
@@ -32,12 +32,18 @@ class CMBClusterAPIClient {
       },
       validateStatus: (status) => status < 500, // Don't throw on 4xx errors
       withCredentials: true, // Include cookies for CSRF protection
+      // Add timeout for requests
+      timeout: API_CONFIG.timeout,
     });
 
     // Request interceptor to add auth token and security headers
     this.api.interceptors.request.use(
       async (config: InternalAxiosRequestConfig) => {
         try {
+          // Dynamically set the baseURL from runtime configuration to solve build-time env var issues
+          config.baseURL = await getApiUrlAsync();
+          console.log('API Client: Using baseURL:', config.baseURL);
+
           // Get backend token (either from session or throw error)
           const backendToken = await this.getBackendToken();
           
@@ -206,34 +212,28 @@ class CMBClusterAPIClient {
   }
 
   private handleError(error: any): ApiResponse {
-    if (error.response?.data) {
-      return {
-        status: 'error',
-        message: error.response.data.detail || error.response.data.message || 'An error occurred',
-      };
-    }
-    if (error.code === 'ECONNABORTED') {
-      return {
-        status: 'error',
-        message: 'Request timeout - please try again',
-      };
-    }
-    if (error.code === 'ERR_NETWORK') {
-      return {
-        status: 'error',
-        message: 'Network error - please check your connection',
-      };
-    }
-    if (error.message) {
-      return {
-        status: 'error',
-        message: error.message,
-      };
-    }
-    return {
+    console.error('API Error:', error);
+    
+    const errorResponse: ApiResponse = {
       status: 'error',
-      message: 'An unexpected error occurred',
+      environments: [],
+      storages: [],
+      data: null
     };
+
+    if (error.response?.data) {
+      errorResponse.message = error.response.data.detail || error.response.data.message || 'An error occurred';
+    } else if (error.code === 'ECONNABORTED') {
+      errorResponse.message = 'Request timeout - please try again';
+    } else if (error.code === 'ERR_NETWORK') {
+      errorResponse.message = 'Network error - please check your connection';
+    } else if (error.message) {
+      errorResponse.message = error.message;
+    } else {
+      errorResponse.message = 'An unexpected error occurred';
+    }
+    
+    return errorResponse;
   }
 
   // Health check with enhanced error handling
@@ -266,8 +266,34 @@ class CMBClusterAPIClient {
   async listEnvironments(): Promise<ApiResponse<Environment[]>> {
     try {
       const response = await this.api.get('/environments/list');
-      return await this.handleResponse(response);
+      const data = await this.handleResponse(response);
+      console.log('listEnvironments raw response:', data);
+      
+      // Backend returns { environments: [...] }
+      if (data && typeof data === 'object' && 'environments' in data) {
+        return {
+          status: 'success',
+          environments: data.environments,
+          data: data.environments
+        };
+      }
+      
+      // Fallback for direct array response
+      if (Array.isArray(data)) {
+        return {
+          status: 'success',
+          environments: data,
+          data: data
+        };
+      }
+      
+      return {
+        status: 'error',
+        message: 'Invalid response format',
+        environments: []
+      };
     } catch (error) {
+      console.error('listEnvironments error:', error);
       return this.handleError(error);
     }
   }
@@ -283,7 +309,26 @@ class CMBClusterAPIClient {
 
   async getEnvironmentById(envId: string): Promise<ApiResponse<Environment>> {
     try {
-      // First try to get from list
+      console.log('Getting environment by ID:', envId);
+      
+      // Try direct API endpoint first
+      try {
+        const response = await this.api.get(`/environments/${envId}/info`);
+        const data = await this.handleResponse(response);
+        console.log('Direct environment API response:', data);
+        
+        if (data && data.environment) {
+          return {
+            status: 'success',
+            data: data.environment,
+            environment: data.environment
+          };
+        }
+      } catch (directError) {
+        console.log('Direct endpoint failed, trying list approach:', directError);
+      }
+
+      // Fallback to list approach
       const listResponse = await this.listEnvironments();
       if (listResponse.environments) {
         const env = listResponse.environments.find(
@@ -297,31 +342,57 @@ class CMBClusterAPIClient {
           };
         }
       }
+      
       return {
         status: 'error',
         message: 'Environment not found'
       };
     } catch (error) {
+      console.error('getEnvironmentById error:', error);
       return this.handleError(error);
     }
   }
 
   async restartEnvironment(envId?: string, config?: EnvironmentConfig): Promise<ApiResponse> {
     try {
+      console.log('Restarting environment with ID:', envId);
+      
+      // Get current environment configuration before deleting
+      let currentConfig = config;
+      if (!currentConfig && envId) {
+        try {
+          const envResponse = await this.getEnvironmentById(envId);
+          if (envResponse.environment?.resource_config) {
+            currentConfig = {
+              cpu_limit: envResponse.environment.resource_config.cpu_limit,
+              memory_limit: envResponse.environment.resource_config.memory_limit,
+              storage_size: envResponse.environment.resource_config.storage_size
+            };
+            console.log('Using existing config for restart:', currentConfig);
+          }
+        } catch (e) {
+          console.log('Could not get current config, using defaults');
+        }
+      }
+
       // Stop environment first
+      console.log('Stopping environment before restart...');
       const deleteResponse = await this.deleteEnvironment(envId);
+      console.log('Delete response:', deleteResponse);
+      
       if (deleteResponse.status !== 'deleted' && deleteResponse.status !== 'success') {
-        return {
-          status: 'error',
-          message: `Failed to stop environment: ${deleteResponse.message}`
-        };
+        throw new Error(`Failed to stop environment: ${deleteResponse.message}`);
       }
 
       // Wait a moment for cleanup
+      console.log('Waiting for cleanup...');
       await new Promise(resolve => setTimeout(resolve, 3000));
 
-      // Create new environment
-      const createResponse = await this.createEnvironment(config);
+      // Create new environment with previous config
+      console.log('Creating new environment with config:', currentConfig);
+      const createResponse = await this.createEnvironment(currentConfig);
+      console.log('Create response:', createResponse);
+      
       if (createResponse.status === 'created' || createResponse.status === 'existing') {
         return {
           status: 'success',
@@ -330,30 +401,28 @@ class CMBClusterAPIClient {
         };
       }
 
-      return {
-        status: 'error',
-        message: `Failed to create new environment: ${createResponse.message}`
-      };
+      throw new Error(`Failed to create new environment: ${createResponse.message}`);
     } catch (error) {
-      return this.handleError(error);
+      console.error('Restart environment error:', error);
+      throw error;
     }
   }
 
   async stopEnvironment(envId?: string): Promise<ApiResponse> {
     try {
+      console.log('Stopping environment with ID:', envId);
       const result = await this.deleteEnvironment(envId);
-      if (result.status === 'deleted') {
+      console.log('Stop environment result:', result);
+      if (result.status === 'deleted' || result.status === 'success') {
         return {
           status: 'success',
           message: 'Environment stopped successfully'
         };
       }
-      return {
-        status: 'error',
-        message: result.message || 'Failed to stop environment'
-      };
+      throw new Error(result.message || 'Failed to stop environment');
     } catch (error) {
-      return this.handleError(error);
+      console.error('Stop environment error:', error);
+      throw error;
     }
   }
 
@@ -363,7 +432,7 @@ class CMBClusterAPIClient {
       const response = await this.api.delete('/environments', { params });
       return await this.handleResponse(response);
     } catch (error) {
-      return this.handleError(error);
+      throw error;
     }
   }
 
@@ -380,8 +449,36 @@ class CMBClusterAPIClient {
   async listUserStorages(): Promise<ApiResponse<StorageItem[]>> {
     try {
       const response = await this.api.get('/storage');
-      return await this.handleResponse(response);
+      const data = await this.handleResponse(response);
+      console.log('listUserStorages raw response:', data);
+      
+      // Backend returns { storages: [...], total_count: number, usage_stats: {...} }
+      if (data && typeof data === 'object' && 'storages' in data) {
+        return {
+          status: 'success',
+          storages: data.storages,
+          data: data.storages,
+          total_count: data.total_count,
+          usage_stats: data.usage_stats
+        };
+      }
+      
+      // Fallback for direct array response
+      if (Array.isArray(data)) {
+        return {
+          status: 'success',
+          storages: data,
+          data: data
+        };
+      }
+      
+      return {
+        status: 'error',
+        message: 'Invalid response format',
+        storages: []
+      };
     } catch (error) {
+      console.error('listUserStorages error:', error);
       return this.handleError(error);
     }
   }
@@ -451,7 +548,7 @@ class CMBClusterAPIClient {
   // User file management
   async listUserFiles(): Promise<ApiResponse<UserFile[]>> {
     try {
-      const response = await this.api.get('/files');
+      const response = await this.api.get('/user-files');
       return await this.handleResponse(response);
     } catch (error) {
       return this.handleError(error);
@@ -476,7 +573,7 @@ class CMBClusterAPIClient {
         formData.append('container_path', containerPath);
       }
 
-      const response = await this.api.post('/files/upload', formData, {
+      const response = await this.api.post('/user-files/upload', formData, {
         headers: {
           'Content-Type': 'multipart/form-data',
         },
@@ -489,7 +586,7 @@ class CMBClusterAPIClient {
 
   async getUserFile(fileId: string): Promise<ApiResponse<UserFile>> {
     try {
-      const response = await this.api.get(`/files/${fileId}`);
+      const response = await this.api.get(`/user-files/${fileId}`);
       return await this.handleResponse(response);
     } catch (error) {
       return this.handleError(error);
@@ -498,7 +595,7 @@ class CMBClusterAPIClient {
 
   async updateUserFile(fileId: string, updates: Partial<UserFile>): Promise<ApiResponse<UserFile>> {
     try {
-      const response = await this.api.put(`/files/${fileId}`, updates);
+      const response = await this.api.put(`/user-files/${fileId}`, updates);
       return await this.handleResponse(response);
     } catch (error) {
       return this.handleError(error);
@@ -507,7 +604,7 @@ class CMBClusterAPIClient {
 
   async deleteUserFile(fileId: string): Promise<ApiResponse> {
     try {
-      const response = await this.api.delete(`/files/${fileId}`);
+      const response = await this.api.delete(`/user-files/${fileId}`);
       return await this.handleResponse(response);
     } catch (error) {
       return this.handleError(error);
@@ -516,7 +613,7 @@ class CMBClusterAPIClient {
 
   async downloadUserFile(fileId: string): Promise<ApiResponse> {
     try {
-      const response = await this.api.get(`/files/${fileId}/download`);
+      const response = await this.api.get(`/user-files/${fileId}/download`);
       return await this.handleResponse(response);
     } catch (error) {
       return this.handleError(error);

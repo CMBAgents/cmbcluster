@@ -60,10 +60,8 @@ export default function EnvironmentFiles() {
     queryKey: ['userFiles'],
     queryFn: async () => {
       const response = await apiClient.listUserFiles();
-      if (response.status === 'error') {
-        throw new Error(response.message);
-      }
-      return response.data || [];
+      // API returns array directly for user files
+      return Array.isArray(response) ? response : [];
     },
   });
 
@@ -94,9 +92,6 @@ export default function EnvironmentFiles() {
         values.environment_variable_name,
         values.container_path
       );
-      if (response.status === 'error') {
-        throw new Error(response.message);
-      }
       return response;
     },
     onSuccess: () => {
@@ -122,9 +117,6 @@ export default function EnvironmentFiles() {
         environment_variable_name: values.environment_variable_name,
         container_path: values.container_path,
       });
-      if (response.status === 'error') {
-        throw new Error(response.message);
-      }
       return response;
     },
     onSuccess: () => {
@@ -143,9 +135,6 @@ export default function EnvironmentFiles() {
   const deleteMutation = useMutation({
     mutationFn: async (fileId: string) => {
       const response = await apiClient.deleteUserFile(fileId);
-      if (response.status === 'error') {
-        throw new Error(response.message);
-      }
       return response;
     },
     onSuccess: () => {
@@ -161,15 +150,12 @@ export default function EnvironmentFiles() {
   const downloadMutation = useMutation({
     mutationFn: async (fileId: string) => {
       const response = await apiClient.downloadUserFile(fileId);
-      if (response.status === 'error') {
-        throw new Error(response.message);
-      }
       return response;
     },
     onSuccess: (data, fileId) => {
       // Find the file to get its name
       const file = filesData?.find(f => f.id === fileId);
-      const filename = file?.filename || 'download.json';
+      const filename = file?.file_name || 'download.json';
       
       // Create and trigger download
       const dataStr = JSON.stringify(data, null, 2);
@@ -191,7 +177,7 @@ export default function EnvironmentFiles() {
 
   // Filter files based on search
   const filteredFiles = files.filter(file =>
-    file.filename.toLowerCase().includes(searchText.toLowerCase()) ||
+    file.file_name.toLowerCase().includes(searchText.toLowerCase()) ||
     file.file_type.toLowerCase().includes(searchText.toLowerCase()) ||
     (file.environment_variable_name && 
      file.environment_variable_name.toLowerCase().includes(searchText.toLowerCase()))
@@ -346,9 +332,9 @@ export default function EnvironmentFiles() {
   const columns: ColumnsType<UserFile> = [
     {
       title: 'File Name',
-      dataIndex: 'filename',
-      key: 'filename',
-      sorter: (a, b) => a.filename.localeCompare(b.filename),
+      dataIndex: 'file_name',
+      key: 'file_name',
+      sorter: (a, b) => a.file_name.localeCompare(b.file_name),
       render: (text, record) => (
         <div className="flex items-center space-x-2">
           {getFileTypeIcon(record.file_type)}
@@ -398,14 +384,14 @@ export default function EnvironmentFiles() {
     },
     {
       title: 'Size',
-      dataIndex: 'size_bytes',
-      key: 'size_bytes',
+      dataIndex: 'file_size',
+      key: 'file_size',
       render: (size) => (
         <Text className="text-text-secondary">
           {formatFileSize(size)}
         </Text>
       ),
-      sorter: (a, b) => a.size_bytes - b.size_bytes,
+      sorter: (a, b) => a.file_size - b.file_size,
     },
     {
       title: 'Created',
@@ -444,7 +430,7 @@ export default function EnvironmentFiles() {
           </Tooltip>
           <Popconfirm
             title="Delete file"
-            description={`Are you sure you want to delete "${record.filename}"?`}
+            description={`Are you sure you want to delete "${record.file_name}"?`}
             onConfirm={() => handleDelete(record.id)}
             okText="Delete"
             cancelText="Cancel"
@@ -479,7 +465,7 @@ export default function EnvironmentFiles() {
     transition: 'all 0.3s ease',
   };
 
-  const totalSize = files.reduce((sum, file) => sum + file.size_bytes, 0);
+  const totalSize = files.reduce((sum, file) => sum + file.file_size, 0);
 
   return (
     <div className="space-y-6">
@@ -708,11 +694,11 @@ export default function EnvironmentFiles() {
         >
           {editingRecord && (
             <div className="mb-4 p-3 bg-gray-800 rounded">
-              <Text className="text-white font-medium">File: {editingRecord.filename}</Text>
+              <Text className="text-white font-medium">File: {editingRecord.file_name}</Text>
               <br />
               <Text className="text-text-secondary text-sm">
                 Type: {editingRecord.file_type.toUpperCase()} • 
-                Size: {formatFileSize(editingRecord.size_bytes)}
+                Size: {formatFileSize(editingRecord.file_size)}
               </Text>
             </div>
           )}

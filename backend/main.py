@@ -11,6 +11,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi import Body, Path
 from fastapi.security import HTTPBearer
+from pydantic import BaseModel
 
 from auth import get_current_user, oauth_router, get_user_info
 from starlette.middleware.sessions import SessionMiddleware
@@ -100,6 +101,21 @@ app = FastAPI(
 
 # CORS middleware with enhanced security
 allowed_origins = settings.get_allowed_origins()
+
+# Emergency fallback for production CORS issues
+# If we have frontend_url and api_url from environment but they're not in allowed_origins, add them
+import os
+frontend_url = os.getenv('FRONTEND_URL')
+api_url = os.getenv('API_URL')
+
+if frontend_url and frontend_url not in allowed_origins:
+    allowed_origins.append(frontend_url)
+    logger.warning(f"Added missing FRONTEND_URL to CORS origins: {frontend_url}")
+
+if api_url and api_url not in allowed_origins:
+    allowed_origins.append(api_url)
+    logger.warning(f"Added missing API_URL to CORS origins: {api_url}")
+
 logger.info(f"CORS allowed origins: {allowed_origins}")
 
 app.add_middleware(
@@ -111,7 +127,9 @@ app.add_middleware(
         "Authorization",
         "Content-Type", 
         "X-Requested-With",
-        "X-CSRF-Token"
+        "X-CSRF-Token",
+        "X-Client-Version",
+        "X-Client-Type"
     ],
     expose_headers=["X-Total-Count"],
     max_age=3600,  # Cache preflight requests for 1 hour
@@ -134,7 +152,6 @@ app.include_router(oauth_router, prefix="/auth")
 
 # Files endpoints: /user-files/* (not /api/user/files/*)
 import file_api
-app.include_router(oauth_router, prefix="/auth")
 app.include_router(storage_api.router)
 app.include_router(file_api.router)
 
@@ -182,40 +199,6 @@ async def security_headers_middleware(request: Request, call_next):
     return response
 
 @app.middleware("http")
-async def security_headers_middleware(request: Request, call_next):
-    """Add security headers to all responses"""
-    response = await call_next(request)
-    
-    if settings.enable_security_headers:
-        # Security headers
-        response.headers["X-Content-Type-Options"] = "nosniff"
-        response.headers["X-Frame-Options"] = "DENY"
-        response.headers["X-XSS-Protection"] = "1; mode=block"
-        response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
-        response.headers["Permissions-Policy"] = "geolocation=(), microphone=(), camera=()"
-        
-        # HSTS for HTTPS
-        if request.url.scheme == "https":
-            response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
-        
-        # Content Security Policy
-        if settings.csp_enabled:
-            csp_parts = [
-                f"default-src 'self'",
-                f"script-src {' '.join(settings.csp_script_src)}",
-                f"style-src {' '.join(settings.csp_style_src)}",
-                f"font-src {' '.join(settings.csp_font_src)}",
-                f"img-src {' '.join(settings.csp_img_src)}",
-                f"connect-src {' '.join(settings.csp_connect_src)}",
-                f"frame-ancestors 'none'",
-                f"base-uri 'self'",
-                f"form-action 'self'"
-            ]
-            response.headers["Content-Security-Policy"] = "; ".join(csp_parts)
-    
-    return response
-
-@app.middleware("http")
 async def log_requests(request: Request, call_next):
     """Log all HTTP requests with security context"""
     start_time = time.time()
@@ -225,6 +208,15 @@ async def log_requests(request: Request, call_next):
                                    request.headers.get("X-Real-IP", 
                                    request.client.host if request.client else "unknown"))
     user_agent = request.headers.get("User-Agent", "unknown")
+    
+    # Special logging for OPTIONS requests to debug CORS issues
+    if request.method == "OPTIONS":
+        headers_dict = dict(request.headers)
+        logger.warning("OPTIONS preflight request received", 
+                      method=request.method,
+                      url=str(request.url),
+                      headers=headers_dict,
+                      client_ip=client_ip)
     
     response = await call_next(request)
     
@@ -246,7 +238,7 @@ async def log_requests(request: Request, call_next):
         if settings.log_auth_events:
             logger.info("Auth request processed", **log_data)
     elif response.status_code >= 400:
-        # Log errors for security monitoring
+        # Log errors for security monitoring  
         log_data["error"] = True
         if settings.log_security_events:
             logger.warning("HTTP error response", **log_data)
@@ -421,6 +413,27 @@ async def get_environment_status(current_user: Dict = Depends(get_current_user))
             detail="Failed to get environment status"
         )
 
+@app.post("/environments/heartbeat", tags=["environments"])
+async def send_heartbeat(current_user: Dict = Depends(get_current_user)):
+    """Send heartbeat to keep environment alive"""
+    user_id = current_user["sub"]
+    
+    try:
+        # For now, just return success - in the future this could update last activity time
+        # Currently environments are managed based on uptime, not activity
+        await log_activity(user_id, "heartbeat", "Heartbeat sent")
+        
+        return {
+            "status": "success",
+            "message": "Heartbeat received"
+        }
+    except Exception as e:
+        logger.error("Failed to process heartbeat", user_id=user_id, error=str(e))
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to process heartbeat"
+        )
+
 
 # Delete a specific environment by env_id (multi-env support)
 from fastapi import Query
@@ -468,23 +481,6 @@ async def delete_environment(
             detail=f"Failed to delete environment: {str(e)}"
         )
 
-@app.post("/environments", tags=["environments"])
-async def create_environment(
-    request: EnvironmentRequest,
-    background_tasks: BackgroundTasks,
-    current_user: Dict = Depends(get_current_user)
-):
-    """Create a new user environment"""
-    user_id = current_user["sub"]
-    user_email = current_user["email"]
-    pod_manager: PodManager = app_state["pod_manager"]
-    # Pass env_vars through to pod_manager
-    environment = await pod_manager.create_user_environment(
-        user_id=user_id,
-        user_email=user_email,
-        config=request
-    )
-    return environment
 
 @app.get("/activity", tags=["activity"])
 async def get_user_activity(
@@ -552,10 +548,13 @@ async def get_user_env_vars(current_user: Dict = Depends(get_current_user)):
         logger.error("Failed to get user env vars", user_id=user_id, error=str(e))
         raise HTTPException(status_code=500, detail="Failed to get environment variables")
 
+class EnvVarRequest(BaseModel):
+    key: str
+    value: str
+
 @app.post("/user-env-vars", tags=["user-env-vars"])
 async def set_user_env_var(
-    key: str = Body(..., embed=True),
-    value: str = Body(..., embed=True),
+    request: EnvVarRequest,
     current_user: Dict = Depends(get_current_user)
 ):
     """Add or update an environment variable for the current user"""
@@ -564,10 +563,10 @@ async def set_user_env_var(
     if not db_manager:
         raise HTTPException(status_code=500, detail="Database unavailable")
     try:
-        await db_manager.set_user_env_var(user_id, key, value)
-        return {"status": "success", "key": key, "value": value}
+        await db_manager.set_user_env_var(user_id, request.key, request.value)
+        return {"status": "success", "key": request.key, "value": request.value}
     except Exception as e:
-        logger.error("Failed to set user env var", user_id=user_id, key=key, error=str(e))
+        logger.error("Failed to set user env var", user_id=user_id, key=request.key, error=str(e))
         raise HTTPException(status_code=500, detail="Failed to set environment variable")
 
 @app.delete("/user-env-vars/{key}", tags=["user-env-vars"])

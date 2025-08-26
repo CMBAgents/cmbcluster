@@ -40,7 +40,9 @@ import {
   EyeOutlined,
   CheckCircleOutlined,
   ExclamationCircleOutlined,
-  LoadingOutlined
+  LoadingOutlined,
+  PlusCircleOutlined,
+ 
 } from '@ant-design/icons';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import type { Environment, StorageSelection, StorageItem } from '@/types';
@@ -117,13 +119,43 @@ export default function EnvironmentManagement() {
       try {
         const response = await apiClient.listEnvironments();
         console.log('Environments API response:', response);
-        return response.environments || [];
+        
+        // Debug pending environments
+        const envs = response.environments || [];
+        const pendingEnvs = envs.filter(env => env.status === 'pending');
+        if (pendingEnvs.length > 0) {
+          console.log('Pending environments detected:', pendingEnvs.map(env => ({
+            id: env.id,
+            env_id: env.env_id,
+            status: env.status,
+            created_at: env.created_at
+          })));
+          
+          // Check for environments stuck in pending for more than 5 minutes
+          const now = new Date();
+          const stuckEnvs = pendingEnvs.filter(env => {
+            const createdTime = new Date(env.created_at);
+            const diffMinutes = (now.getTime() - createdTime.getTime()) / (1000 * 60);
+            return diffMinutes > 5;
+          });
+          
+          if (stuckEnvs.length > 0) {
+            console.warn('Environments stuck in pending state for >5 minutes:', stuckEnvs);
+          }
+        }
+        
+        return envs;
       } catch (error) {
         console.error('Failed to fetch environments:', error);
         throw error;
       }
     },
-    refetchInterval: 10000, // Refresh every 10 seconds for real-time updates
+    refetchInterval: (data) => {
+      // Only refetch frequently if there are pending environments
+      // Ensure data is an array before calling .some()
+      const hasPendingEnvs = Array.isArray(data) && data.some(env => env.status === 'pending');
+      return hasPendingEnvs ? 5000 : 30000; // 5s if pending, 30s otherwise
+    },
     refetchIntervalInBackground: true,
     retry: 3,
     retryDelay: 1000,
@@ -201,7 +233,8 @@ export default function EnvironmentManagement() {
   // Restart environment mutation  
   const restartMutation = useMutation({
     mutationFn: async (envId: string) => {
-      return await apiClient.restartEnvironment(envId);
+      const result = await apiClient.restartEnvironment(envId);
+      return result;
     },
     onSuccess: async () => {
       notifySuccess(
@@ -223,7 +256,8 @@ export default function EnvironmentManagement() {
   // Stop environment mutation
   const stopMutation = useMutation({
     mutationFn: async (envId: string) => {
-      return await apiClient.stopEnvironment(envId);
+      const result = await apiClient.stopEnvironment(envId);
+      return result;
     },
     onSuccess: async () => {
       notifySuccess(
@@ -242,30 +276,6 @@ export default function EnvironmentManagement() {
     }
   });
 
-  // Delete environment mutation
-  const deleteMutation = useMutation({
-    mutationFn: async (envId: string) => {
-      console.log('Deleting environment:', envId);
-      const result = await apiClient.deleteEnvironment(envId);
-      console.log('Delete result:', result);
-      return result;
-    },
-    onSuccess: async () => {
-      notifySuccess(
-        'Environment Deleted',
-        'Environment has been deleted successfully.'
-      );
-      // Force immediate refresh
-      await refetch();
-      queryClient.invalidateQueries({ queryKey: ['environments'] });
-    },
-    onError: (error: any) => {
-      notifyError(
-        'Delete Failed',
-        error.message || 'Failed to delete environment'
-      );
-    }
-  });
 
   const handleLaunch = async (values: any) => {
     const preset = PRESET_CONFIGS[selectedPreset];
@@ -323,19 +333,9 @@ export default function EnvironmentManagement() {
     });
   };
 
-  const handleDelete = (envId: string) => {
-    Modal.confirm({
-      title: 'Delete Environment',
-      content: 'Are you sure you want to delete this environment? This action cannot be undone.',
-      icon: <ExclamationCircleOutlined />,
-      okText: 'Delete',
-      okType: 'danger',
-      onOk: () => deleteMutation.mutate(envId),
-    });
-  };
 
   // Filter environments based on search and status
-  const filteredEnvironments = environments?.filter((env) => {
+  const filteredEnvironments = (environments || []).filter((env) => {
     const matchesSearch = !searchText || 
       env.id.toLowerCase().includes(searchText.toLowerCase()) ||
       (env.env_id && env.env_id.toLowerCase().includes(searchText.toLowerCase()));
@@ -436,6 +436,17 @@ export default function EnvironmentManagement() {
               <Button
                 type="link"
                 icon={<LinkOutlined />}
+                onClick={() => router.push(`/environment/${record.env_id || record.id}`)}
+                size="small"
+              />
+            </Tooltip>
+          )}
+          
+          {record.url && (
+            <Tooltip title="Open External Link">
+              <Button
+                type="link"
+                icon={<LinkOutlined />}
                 href={record.url}
                 target="_blank"
                 size="small"
@@ -448,7 +459,7 @@ export default function EnvironmentManagement() {
             <Button
               icon={<RedoOutlined />}
               size="small"
-              onClick={() => handleRestart(record.id)}
+              onClick={() => handleRestart(record.env_id || record.id)}
               loading={restartMutation.isPending}
             />
           </Tooltip>
@@ -458,20 +469,11 @@ export default function EnvironmentManagement() {
               icon={<StopOutlined />}
               size="small"
               danger
-              onClick={() => handleStop(record.id)}
+              onClick={() => handleStop(record.env_id || record.id)}
               loading={stopMutation.isPending}
             />
           </Tooltip>
           
-          <Tooltip title="Delete">
-            <Button
-              icon={<DeleteOutlined />}
-              size="small"
-              danger
-              onClick={() => handleDelete(record.id)}
-              loading={deleteMutation.isPending}
-            />
-          </Tooltip>
         </Space>
       ),
     },
@@ -480,6 +482,11 @@ export default function EnvironmentManagement() {
   const runningCount = filteredEnvironments.filter(env => env.status === 'running').length;
   const totalCount = filteredEnvironments.length;
   const pendingCount = filteredEnvironments.filter(env => env.status === 'pending').length;
+  const stoppedCount = filteredEnvironments.filter(env => env.status === 'stopped' || env.status === 'failed').length;
+  
+  // Calculate available slots based on a reasonable limit (e.g., 10 max environments per user)
+  const MAX_ENVIRONMENTS = 10;
+  const availableSlots = Math.max(0, MAX_ENVIRONMENTS - totalCount);
 
   if (error) {
     return (
@@ -556,8 +563,8 @@ export default function EnvironmentManagement() {
                 <Statistic
                   title="Pending"
                   value={pendingCount}
-                  valueStyle={{ color: '#faad14' }}
-                  prefix={<LoadingOutlined />}
+                  valueStyle={{ color: pendingCount > 0 ? '#faad14' : '#d9d9d9' }}
+                  prefix={pendingCount > 0 ? <LoadingOutlined spin /> : <LoadingOutlined />}
                 />
               </Card>
             </Col>
@@ -565,8 +572,9 @@ export default function EnvironmentManagement() {
               <Card>
                 <Statistic
                   title="Available"
-                  value={totalCount - runningCount}
-                  valueStyle={{ color: '#d9d9d9' }}
+                  value={availableSlots}
+                  valueStyle={{ color: '#52c41a' }}
+                  prefix={<PlusCircleOutlined />}
                 />
               </Card>
             </Col>
@@ -609,7 +617,13 @@ export default function EnvironmentManagement() {
           <Card>
             <Table
               columns={columns}
-              dataSource={filteredEnvironments.map(env => ({ ...env, key: env.id }))}
+              dataSource={filteredEnvironments.map(env => ({ 
+                ...env, 
+                key: env.env_id || env.id,
+                // Ensure both id and env_id are available
+                env_id: env.env_id || env.id,
+                id: env.id || env.env_id
+              }))}
               loading={isLoading}
               pagination={{
                 pageSize: 10,
@@ -665,7 +679,11 @@ export default function EnvironmentManagement() {
                   <Button 
                     size="small" 
                     onClick={() => {
-                      selectedRowKeys.forEach(key => handleStop(key));
+                      // Find the selected environments and use their env_id
+                      const selectedEnvs = filteredEnvironments.filter(env => 
+                        selectedRowKeys.includes(env.env_id || env.id)
+                      );
+                      selectedEnvs.forEach(env => handleStop(env.env_id || env.id));
                       setSelectedRowKeys([]);
                     }}
                     loading={stopMutation.isPending}
@@ -675,7 +693,11 @@ export default function EnvironmentManagement() {
                   <Button 
                     size="small" 
                     onClick={() => {
-                      selectedRowKeys.forEach(key => handleRestart(key));
+                      // Find the selected environments and use their env_id
+                      const selectedEnvs = filteredEnvironments.filter(env => 
+                        selectedRowKeys.includes(env.env_id || env.id)
+                      );
+                      selectedEnvs.forEach(env => handleRestart(env.env_id || env.id));
                       setSelectedRowKeys([]);
                     }}
                     loading={restartMutation.isPending}
