@@ -10,6 +10,7 @@ import {
   Empty,
   Space,
   Tag,
+  Alert,
 } from 'antd';
 import {
   LineChartOutlined,
@@ -25,36 +26,32 @@ const { Option } = Select;
 interface MetricsChartsProps {
   environments: Environment[];
   timeRange: string;
+  healthData?: any;
 }
 
-export default function MetricsCharts({ environments, timeRange }: MetricsChartsProps) {
-  // Generate mock time series data for demonstration
-  const generateMockTimeSeriesData = (count: number = 24) => {
+export default function MetricsCharts({ environments, timeRange, healthData }: MetricsChartsProps) {
+
+  // Show message about real-time metrics
+  const hasRealData = healthData?.environment_metrics?.length > 0;
+  const realTimeData = useMemo(() => {
+    if (!hasRealData) return [];
+    
     const now = new Date();
-    const data = [];
+    const avgCpu = healthData.aggregate_cpu_usage || 0;
+    const totalMemory = healthData.total_memory_usage_mb || 0;
+    const networkIn = (healthData.total_network_rx_mb || 0) * 1024; // MB to KB
+    const networkOut = (healthData.total_network_tx_mb || 0) * 1024;
     
-    for (let i = count; i >= 0; i--) {
-      const time = new Date(now.getTime() - i * (timeRange === '1h' ? 300000 : // 5 minutes
-                                                   timeRange === '6h' ? 900000 : // 15 minutes  
-                                                   timeRange === '24h' ? 3600000 : // 1 hour
-                                                   timeRange === '7d' ? 86400000 : // 1 day
-                                                   604800000)); // 1 week
-
-      data.push({
-        time: time.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        fullTime: time,
-        cpu: Math.floor(Math.random() * 80) + 10, // 10-90%
-        memory: Math.floor(Math.random() * 70) + 20, // 20-90%
-        storage: Math.floor(Math.random() * 50) + 30, // 30-80%
-        networkIn: Math.floor(Math.random() * 1000), // KB/s
-        networkOut: Math.floor(Math.random() * 500), // KB/s
-      });
-    }
-    
-    return data;
-  };
-
-  const mockData = useMemo(() => generateMockTimeSeriesData(), [timeRange]);
+    return [{
+      time: now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      fullTime: now,
+      cpu: avgCpu,
+      memory: totalMemory / Math.max(environments.filter(e => e.status === 'running').length, 1),
+      storage: 0, // Not available yet
+      networkIn,
+      networkOut,
+    }];
+  }, [healthData, environments, timeRange]);
 
   const chartHeight = 300;
 
@@ -137,32 +134,44 @@ export default function MetricsCharts({ environments, timeRange }: MetricsCharts
         </Select>
       }
     >
-      <Row gutter={[16, 16]}>
-        <Col span={8}>
-          <SimpleLineChart
-            data={mockData}
-            dataKey="cpu"
-            color="#1890ff"
-            label="CPU Usage"
-          />
-        </Col>
-        <Col span={8}>
-          <SimpleLineChart
-            data={mockData}
-            dataKey="memory"
-            color="#52c41a"
-            label="Memory Usage"
-          />
-        </Col>
-        <Col span={8}>
-          <SimpleLineChart
-            data={mockData}
-            dataKey="storage"
-            color="#722ed1"
-            label="Storage Usage"
-          />
-        </Col>
-      </Row>
+      {!hasRealData ? (
+        <Alert
+          message="Real-time Metrics Unavailable"
+          description="Metrics collection requires running environments with metrics-server enabled. Start an environment to see live resource usage charts."
+          type="info"
+          showIcon
+        />
+      ) : (
+        <Row gutter={[16, 16]}>
+          <Col span={8}>
+            <SimpleLineChart
+              data={realTimeData}
+              dataKey="cpu"
+              color="#1890ff"
+              label="CPU Usage"
+            />
+          </Col>
+          <Col span={8}>
+            <SimpleLineChart
+              data={realTimeData}
+              dataKey="memory"
+              color="#52c41a"
+              label="Memory Usage"
+              unit=" MB"
+            />
+          </Col>
+          <Col span={8}>
+            <div className="space-y-2">
+              <Text strong>Storage Usage</Text>
+              <Alert
+                message="Storage metrics collection in development"
+                type="warning"
+                size="small"
+              />
+            </div>
+          </Col>
+        </Row>
+      )}
     </Card>
   );
 
@@ -175,26 +184,35 @@ export default function MetricsCharts({ environments, timeRange }: MetricsCharts
         </Space>
       }
     >
-      <Row gutter={16}>
-        <Col span={12}>
-          <SimpleLineChart
-            data={mockData}
-            dataKey="networkIn"
-            color="#13c2c2"
-            label="Network In"
-            unit=" KB/s"
-          />
-        </Col>
-        <Col span={12}>
-          <SimpleLineChart
-            data={mockData}
-            dataKey="networkOut"
-            color="#eb2f96"
-            label="Network Out"
-            unit=" KB/s"
-          />
-        </Col>
-      </Row>
+      {!hasRealData ? (
+        <Alert
+          message="Network Metrics Unavailable"
+          description="Start running environments to see network I/O statistics."
+          type="info"
+          showIcon
+        />
+      ) : (
+        <Row gutter={16}>
+          <Col span={12}>
+            <SimpleLineChart
+              data={realTimeData}
+              dataKey="networkIn"
+              color="#13c2c2"
+              label="Network In"
+              unit=" KB/s"
+            />
+          </Col>
+          <Col span={12}>
+            <SimpleLineChart
+              data={realTimeData}
+              dataKey="networkOut"
+              color="#eb2f96"
+              label="Network Out"
+              unit=" KB/s"
+            />
+          </Col>
+        </Row>
+      )}
     </Card>
   );
 
@@ -293,7 +311,7 @@ export default function MetricsCharts({ environments, timeRange }: MetricsCharts
           <Col span={6}>
             <div className="text-center">
               <div className="text-2xl font-bold text-blue-500">
-                {Math.round(mockData[mockData.length - 1]?.cpu || 0)}%
+                {hasRealData ? Math.round(realTimeData[0]?.cpu || 0) : 0}%
               </div>
               <Text type="secondary">Current CPU</Text>
             </div>
@@ -301,7 +319,7 @@ export default function MetricsCharts({ environments, timeRange }: MetricsCharts
           <Col span={6}>
             <div className="text-center">
               <div className="text-2xl font-bold text-green-500">
-                {Math.round(mockData[mockData.length - 1]?.memory || 0)}%
+                {hasRealData ? Math.round(realTimeData[0]?.memory || 0) : 0} MB
               </div>
               <Text type="secondary">Current Memory</Text>
             </div>
@@ -309,7 +327,7 @@ export default function MetricsCharts({ environments, timeRange }: MetricsCharts
           <Col span={6}>
             <div className="text-center">
               <div className="text-2xl font-bold text-purple-500">
-                {mockData[mockData.length - 1]?.networkIn || 0} KB/s
+                {hasRealData ? Math.round(realTimeData[0]?.networkIn || 0) : 0} KB/s
               </div>
               <Text type="secondary">Network In</Text>
             </div>
@@ -317,9 +335,9 @@ export default function MetricsCharts({ environments, timeRange }: MetricsCharts
           <Col span={6}>
             <div className="text-center">
               <div className="text-2xl font-bold text-orange-500">
-                {Math.round(mockData.reduce((sum, item) => sum + item.cpu, 0) / mockData.length)}%
+                {environments.filter(e => e.status === 'running').length}
               </div>
-              <Text type="secondary">Avg CPU ({timeRange})</Text>
+              <Text type="secondary">Active Environments</Text>
             </div>
           </Col>
         </Row>

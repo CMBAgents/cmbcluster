@@ -3,6 +3,9 @@
 import { useState, useEffect } from 'react';
 import { useSession, signOut } from 'next-auth/react';
 import { useRouter, usePathname } from 'next/navigation';
+import { useQuery } from '@tanstack/react-query';
+import { apiClient } from '@/lib/api-client';
+import type { Environment } from '@/types';
 import {
   Layout,
   Menu,
@@ -14,19 +17,23 @@ import {
   Image,
   Switch,
   theme,
+  Badge,
+  Popover,
+  Alert,
+  Empty,
 } from 'antd';
 import {
   MenuFoldOutlined,
   MenuUnfoldOutlined,
   DashboardOutlined,
   RocketOutlined,
-  DatabaseOutlined,
-  MonitorOutlined,
   SettingOutlined,
   UserOutlined,
   LogoutOutlined,
   SunOutlined,
   MoonOutlined,
+  BellOutlined,
+  ExclamationCircleOutlined,
 } from '@ant-design/icons';
 import type { MenuProps } from 'antd';
 
@@ -44,6 +51,18 @@ export default function MainLayout({ children }: MainLayoutProps) {
   const router = useRouter();
   const pathname = usePathname();
 
+  // Fetch environments for system alerts
+  const { data: environmentsResponse } = useQuery({
+    queryKey: ['environments-alerts'],
+    queryFn: () => apiClient.listEnvironments(),
+    refetchInterval: 30000, // Check every 30 seconds
+    enabled: !!session,
+    retry: 1,
+  });
+
+  const environments = environmentsResponse?.environments || [];
+  const failedEnvironments = environments.filter(env => env.status === 'failed');
+
   // Simple navigation handler using Next.js router
   const navigateTo = (path: string) => {
     router.push(path);
@@ -54,7 +73,7 @@ export default function MainLayout({ children }: MainLayoutProps) {
     navigateTo(e.key);
   };
 
-  // Menu items based on Main.py structure - without onClick functions
+  // Menu items - removed monitoring and storage from sidebar
   const menuItems: MenuProps['items'] = [
     {
       key: '/',
@@ -65,16 +84,6 @@ export default function MainLayout({ children }: MainLayoutProps) {
       key: '/environments',
       icon: <RocketOutlined />,
       label: 'Environments',
-    },
-    {
-      key: '/storage',
-      icon: <DatabaseOutlined />,
-      label: 'Storage',
-    },
-    {
-      key: '/monitoring',
-      icon: <MonitorOutlined />,
-      label: 'Monitoring',
     },
     {
       key: '/settings',
@@ -228,14 +237,68 @@ export default function MainLayout({ children }: MainLayoutProps) {
             <Title level={4} className="text-text-primary mb-0">
               {pathname === '/' ? 'Dashboard' :
                pathname === '/environments' ? 'Environments' :
-               pathname === '/storage' ? 'Storage' :
-               pathname === '/monitoring' ? 'Monitoring' :
                pathname === '/settings' ? 'Settings' :
                'CMBAgent Cloud'}
             </Title>
           </div>
 
           <div className="flex items-center space-x-4">
+            {/* System Alerts Notification */}
+            <Popover
+              content={
+                <div style={{ width: 300 }}>
+                  <div className="mb-3">
+                    <Text strong>System Alerts</Text>
+                  </div>
+                  {failedEnvironments.length > 0 ? (
+                    <div className="space-y-2">
+                      {failedEnvironments.slice(0, 5).map((env) => (
+                        <Alert
+                          key={env.id}
+                          message={`Environment ${env.env_id?.substring(0, 8) || env.id?.substring(0, 8)} has failed`}
+                          type="error"
+                          size="small"
+                          showIcon
+                          icon={<ExclamationCircleOutlined />}
+                          action={
+                            <Button 
+                              size="small" 
+                              type="link"
+                              onClick={() => navigateTo('/environments')}
+                            >
+                              Fix
+                            </Button>
+                          }
+                        />
+                      ))}
+                      {failedEnvironments.length > 5 && (
+                        <Text type="secondary" className="block text-center">
+                          +{failedEnvironments.length - 5} more alerts
+                        </Text>
+                      )}
+                    </div>
+                  ) : (
+                    <Empty 
+                      image={Empty.PRESENTED_IMAGE_SIMPLE} 
+                      description="No system alerts"
+                      className="my-4"
+                    />
+                  )}
+                </div>
+              }
+              title={null}
+              trigger="click"
+              placement="bottomRight"
+            >
+              <Badge count={failedEnvironments.length} size="small">
+                <Button
+                  type="text"
+                  icon={<BellOutlined />}
+                  className="text-text-primary hover:bg-background-tertiary"
+                />
+              </Badge>
+            </Popover>
+
             {/* Theme Toggle */}
             <Space align="center">
               <SunOutlined className="text-text-secondary" />

@@ -55,11 +55,20 @@ export default function EnvironmentDetails({ envId }: EnvironmentDetailsProps) {
   } = useQuery({
     queryKey: ['environment', envId],
     queryFn: async () => {
-      const response = await apiClient.getEnvironmentById(envId);
-      return response.data || response.environment;
+      try {
+        console.log('Fetching environment details for ID:', envId);
+        const response = await apiClient.getEnvironmentById(envId);
+        console.log('Environment details API response:', response);
+        return response.environment || response.data || response;
+      } catch (error) {
+        console.error('Failed to fetch environment details:', error);
+        throw error;
+      }
     },
     refetchInterval: 15000, // Refresh every 15 seconds
     refetchIntervalInBackground: true,
+    retry: 3,
+    retryDelay: 1000,
   });
 
   // Restart environment mutation

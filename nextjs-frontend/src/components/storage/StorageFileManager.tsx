@@ -97,7 +97,7 @@ export default function StorageFileManager({ storageId, storageName }: StorageFi
   // Delete mutation
   const deleteMutation = useMutation({
     mutationFn: (fileName: string) =>
-      apiClient.deleteFileFromStorage(storageId, fileName),
+      apiClient.deleteStorageFile(storageId, fileName),
     onSuccess: () => {
       message.success('File deleted successfully');
       refetch();
@@ -159,7 +159,12 @@ export default function StorageFileManager({ storageId, storageName }: StorageFi
     try {
       const response = await apiClient.downloadFileFromStorage(storageId, fileName);
       
-      const url = window.URL.createObjectURL(new Blob([response.data]));
+      if (!response.ok) {
+        throw new Error('Download failed');
+      }
+      
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
       link.setAttribute('download', fileName.split('/').pop() || fileName);

@@ -94,11 +94,11 @@ export default function EnvironmentMonitoringCard({
     }
   };
 
-  // Mock resource usage data (in a real implementation, this would come from metrics)
-  const mockResourceUsage = {
-    cpu: Math.floor(Math.random() * 100),
-    memory: Math.floor(Math.random() * 100),
-    storage: Math.floor(Math.random() * 100),
+  // Get real resource usage data from environment metrics if available
+  const resourceUsage = {
+    cpu: environment.metrics?.cpu_usage_percent || 0,
+    memory: environment.metrics?.memory_usage_percent || 0,
+    storage: environment.metrics?.storage_usage_percent || 0,
   };
 
   const displayId = environment.env_id?.substring(0, 8) || environment.id?.substring(0, 8) || 'unknown';
@@ -110,7 +110,7 @@ export default function EnvironmentMonitoringCard({
       className="transition-all hover:shadow-md"
       style={{ borderLeft: `4px solid ${getCardBorderColor(environment.status)}` }}
       actions={[
-        <Tooltip title="View Details" key="details">
+        <Tooltip title="Access Environment" key="access">
           <Button 
             type="text" 
             size="small"
@@ -206,65 +206,7 @@ export default function EnvironmentMonitoringCard({
         </div>
       )}
 
-      {/* Resource Usage (Mock Data) */}
-      {environment.status === 'running' && (
-        <div className="space-y-2">
-          <Text type="secondary" className="text-xs block">Current Usage:</Text>
-          
-          <div>
-            <div className="flex justify-between text-xs mb-1">
-              <Text>CPU</Text>
-              <Text>{mockResourceUsage.cpu}%</Text>
-            </div>
-            <Progress 
-              percent={mockResourceUsage.cpu} 
-              size="small" 
-              strokeColor={mockResourceUsage.cpu > 80 ? '#ff4d4f' : '#52c41a'}
-              showInfo={false}
-            />
-          </div>
 
-          <div>
-            <div className="flex justify-between text-xs mb-1">
-              <Text>Memory</Text>
-              <Text>{mockResourceUsage.memory}%</Text>
-            </div>
-            <Progress 
-              percent={mockResourceUsage.memory} 
-              size="small"
-              strokeColor={mockResourceUsage.memory > 80 ? '#ff4d4f' : '#52c41a'}
-              showInfo={false}
-            />
-          </div>
-
-          <div>
-            <div className="flex justify-between text-xs mb-1">
-              <Text>Storage</Text>
-              <Text>{mockResourceUsage.storage}%</Text>
-            </div>
-            <Progress 
-              percent={mockResourceUsage.storage} 
-              size="small"
-              strokeColor={mockResourceUsage.storage > 80 ? '#ff4d4f' : '#52c41a'}
-              showInfo={false}
-            />
-          </div>
-        </div>
-      )}
-
-      {/* Alert Indicators */}
-      {environment.status === 'running' && (
-        mockResourceUsage.cpu > 90 || mockResourceUsage.memory > 90
-      ) && (
-        <div className="mt-3 p-2 bg-red-50 rounded border border-red-200">
-          <div className="flex items-center space-x-1">
-            <ExclamationCircleOutlined className="text-red-500 text-xs" />
-            <Text className="text-red-600 text-xs">
-              High resource usage detected
-            </Text>
-          </div>
-        </div>
-      )}
 
       {environment.status === 'failed' && (
         <div className="mt-3 p-2 bg-red-50 rounded border border-red-200">

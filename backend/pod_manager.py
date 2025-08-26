@@ -10,6 +10,8 @@ from typing import Dict, List, Optional
 import structlog
 from kubernetes import client, config
 from kubernetes.client.rest import ApiException
+import subprocess
+import re as regex
 
 from config import settings
 from models import Environment, EnvironmentRequest, PodStatus
@@ -1148,3 +1150,4 @@ class PodManager:
                 logger.warning("Failed to cleanup ingress", error=str(e))
 
         # Note: Keep PVC for potential retry/data recovery
+

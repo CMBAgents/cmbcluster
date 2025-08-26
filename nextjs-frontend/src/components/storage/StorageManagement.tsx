@@ -37,9 +37,11 @@ import StorageAnalytics from './StorageAnalytics';
 const { Title, Text, Paragraph } = Typography;
 const { TabPane } = Tabs;
 
-interface StorageManagementProps {}
+interface StorageManagementProps {
+  hideCreateButton?: boolean;
+}
 
-export default function StorageManagement({}: StorageManagementProps) {
+export default function StorageManagement({ hideCreateButton = false }: StorageManagementProps) {
   const [selectedStorage, setSelectedStorage] = useState<StorageItem | null>(null);
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [showDetails, setShowDetails] = useState<Record<string, boolean>>({});
@@ -138,49 +140,63 @@ export default function StorageManagement({}: StorageManagementProps) {
   }
 
   return (
-    <div className="space-y-6">
-      {/* Header Section */}
-      <Card>
-        <div className="flex justify-between items-start mb-4">
-          <div>
-            <Title level={3} className="mb-2 flex items-center">
-              <DatabaseOutlined className="mr-3 text-blue-500" />
-              Workspace Storage Management
-            </Title>
-            <Paragraph type="secondary" className="mb-0">
-              Manage your research workspace storage buckets. Each workspace provides isolated storage for your projects and data.
-            </Paragraph>
+    <div className="space-y-4">
+      {/* Compact Header - Only show full header when not embedded */}
+      {!hideCreateButton ? (
+        <Card>
+          <div className="flex justify-between items-start mb-4">
+            <div>
+              <Title level={3} className="mb-2 flex items-center">
+                <DatabaseOutlined className="mr-3 text-blue-500" />
+                Workspace Storage Management
+              </Title>
+              <Paragraph type="secondary" className="mb-0">
+                Manage your research workspace storage buckets. Each workspace provides isolated storage for your projects and data.
+              </Paragraph>
+            </div>
+            <Space>
+              <Button
+                icon={<ReloadOutlined />}
+                onClick={() => refetch()}
+                loading={isLoading}
+              >
+                Refresh
+              </Button>
+              <Button
+                type="primary"
+                icon={<PlusOutlined />}
+                onClick={() => setShowCreateForm(true)}
+              >
+                Create Workspace
+              </Button>
+            </Space>
           </div>
-          <Space>
-            <Button
-              icon={<ReloadOutlined />}
-              onClick={() => refetch()}
-              loading={isLoading}
-            >
-              Refresh
-            </Button>
-            <Button
-              type="primary"
-              icon={<PlusOutlined />}
-              onClick={() => setShowCreateForm(true)}
-            >
-              Create Workspace
-            </Button>
-          </Space>
+        </Card>
+      ) : (
+        <div className="flex justify-between items-center mb-4">
+          <Title level={4} className="mb-0 flex items-center">
+            <DatabaseOutlined className="mr-2 text-blue-500" />
+            Storage Management
+          </Title>
+          <Button
+            icon={<ReloadOutlined />}
+            onClick={() => refetch()}
+            loading={isLoading}
+          >
+            Refresh
+          </Button>
         </div>
-      </Card>
+      )}
 
-      {/* Workspace Selector (for environments) */}
-      <StorageWorkspaceSelector 
-        storages={storages} 
-        onStorageSelect={setSelectedStorage}
-      />
+      {/* Storage Analytics Overview - only show when not embedded in environments */}
+      {!hideCreateButton && <StorageAnalytics storages={storages} />}
 
-      {/* Storage Analytics Overview */}
-      <StorageAnalytics storages={storages} />
-
-      {/* Storage List */}
-      <Card title="Your Workspaces" loading={isLoading}>
+      {/* Storage List - Compact View */}
+      <Card 
+        title={hideCreateButton ? null : "Your Workspaces"} 
+        loading={isLoading}
+        size={hideCreateButton ? "small" : "default"}
+      >
         {storages.length === 0 ? (
           <Empty
             image={Empty.PRESENTED_IMAGE_SIMPLE}
@@ -193,80 +209,104 @@ export default function StorageManagement({}: StorageManagementProps) {
               </div>
             }
           >
-            <Button 
-              type="primary" 
-              icon={<PlusOutlined />} 
-              onClick={() => setShowCreateForm(true)}
-            >
-              Create Your First Workspace
-            </Button>
+            {!hideCreateButton && (
+              <Button 
+                type="primary" 
+                icon={<PlusOutlined />} 
+                onClick={() => setShowCreateForm(true)}
+              >
+                Create Your First Workspace
+              </Button>
+            )}
           </Empty>
         ) : (
-          <div className="space-y-4">
+          <div className={hideCreateButton ? "space-y-2" : "space-y-4"}>
             {storages.map((storage) => (
               <Card
                 key={storage.id}
                 size="small"
-                className="border border-gray-200 hover:border-blue-300 transition-colors"
+                className={`border border-gray-200 hover:border-blue-300 transition-colors ${
+                  hideCreateButton ? 'compact-storage-card' : ''
+                }`}
               >
-                <Row gutter={16} align="middle">
+                <Row gutter={hideCreateButton ? 8 : 16} align="middle">
                   {/* Storage Info */}
                   <Col flex="1">
                     <div className="flex items-center space-x-3">
-                      <CloudOutlined className="text-2xl text-blue-500" />
+                      <CloudOutlined className={hideCreateButton ? "text-lg text-blue-500" : "text-2xl text-blue-500"} />
                       <div>
-                        <Title level={5} className="mb-1">
+                        <Title level={hideCreateButton ? 6 : 5} className="mb-1">
                           {storage.display_name || 'Unknown Workspace'}
                         </Title>
-                        <Text type="secondary" className="text-sm">
-                          Bucket: {storage.bucket_name || 'unknown'}
+                        <Text type="secondary" className="text-xs">
+                          {storage.bucket_name || 'unknown'}
                         </Text>
                       </div>
                     </div>
                   </Col>
 
-                  {/* Status */}
-                  <Col>
-                    <Tag 
-                      color={storage.status === 'active' ? 'green' : 'default'}
-                      className="mb-0"
-                    >
-                      {storage.status === 'active' ? 'Active' : 'Inactive'}
-                    </Tag>
-                  </Col>
+                  {/* Status & Details Combined for Compact View */}
+                  {hideCreateButton ? (
+                    <Col>
+                      <div className="text-right">
+                        <Tag 
+                          color={storage.status === 'active' ? 'green' : 'default'}
+                          size="small"
+                        >
+                          {storage.status === 'active' ? 'Active' : 'Inactive'}
+                        </Tag>
+                        <br />
+                        <Text type="secondary" className="text-xs">
+                          {formatStorageSize(storage.size_bytes || 0)}
+                        </Text>
+                      </div>
+                    </Col>
+                  ) : (
+                    <>
+                      {/* Status */}
+                      <Col>
+                        <Tag 
+                          color={storage.status === 'active' ? 'green' : 'default'}
+                          className="mb-0"
+                        >
+                          {storage.status === 'active' ? 'Active' : 'Inactive'}
+                        </Tag>
+                      </Col>
 
-                  {/* Storage Details */}
-                  <Col>
-                    <div className="text-right">
-                      <Text strong>{storage.storage_class?.toUpperCase() || 'STANDARD'}</Text>
-                      <br />
-                      <Text type="secondary" className="text-sm">
-                        {formatStorageSize(storage.size_bytes || 0)}
-                      </Text>
-                    </div>
-                  </Col>
+                      {/* Storage Details */}
+                      <Col>
+                        <div className="text-right">
+                          <Text strong>{storage.storage_class?.toUpperCase() || 'STANDARD'}</Text>
+                          <br />
+                          <Text type="secondary" className="text-sm">
+                            {formatStorageSize(storage.size_bytes || 0)}
+                          </Text>
+                        </div>
+                      </Col>
 
-                  {/* Created Date */}
-                  <Col>
-                    <div className="text-right">
-                      <Text className="text-sm">Created</Text>
-                      <br />
-                      <Text type="secondary" className="text-sm">
-                        {formatDateTime(storage.created_at)}
-                      </Text>
-                    </div>
-                  </Col>
+                      {/* Created Date */}
+                      <Col>
+                        <div className="text-right">
+                          <Text className="text-sm">Created</Text>
+                          <br />
+                          <Text type="secondary" className="text-sm">
+                            {formatDateTime(storage.created_at)}
+                          </Text>
+                        </div>
+                      </Col>
+                    </>
+                  )}
 
                   {/* Actions */}
                   <Col>
-                    <Space direction="vertical" size="small">
+                    <Space direction={hideCreateButton ? "horizontal" : "vertical"} size="small">
                       <Button
                         type="text"
                         size="small"
                         icon={<InfoCircleOutlined />}
                         onClick={() => toggleDetails(storage.id)}
                       >
-                        {showDetails[storage.id] ? 'Hide' : 'Details'}
+                        {hideCreateButton ? '' : (showDetails[storage.id] ? 'Hide' : 'Details')}
                       </Button>
                       <Button
                         type="text"
@@ -276,7 +316,7 @@ export default function StorageManagement({}: StorageManagementProps) {
                         onClick={() => toggleDeleteConfirm(storage.id)}
                         loading={deleteMutation.isPending}
                       >
-                        Delete
+                        {hideCreateButton ? '' : 'Delete'}
                       </Button>
                     </Space>
                   </Col>
@@ -389,14 +429,16 @@ export default function StorageManagement({}: StorageManagementProps) {
       </Card>
 
       {/* Create Storage Form Modal */}
-      <StorageCreationForm
-        visible={showCreateForm}
-        onClose={() => setShowCreateForm(false)}
-        onSuccess={() => {
-          setShowCreateForm(false);
-          refetch();
-        }}
-      />
+      {!hideCreateButton && (
+        <StorageCreationForm
+          visible={showCreateForm}
+          onClose={() => setShowCreateForm(false)}
+          onSuccess={() => {
+            setShowCreateForm(false);
+            refetch();
+          }}
+        />
+      )}
     </div>
   );
 }

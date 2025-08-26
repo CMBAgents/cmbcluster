@@ -126,18 +126,26 @@ app.add_middleware(
 # Security
 security = HTTPBearer()
 
-# Include routers
+# Include routers - using working paths from Streamlit frontend
 app.include_router(oauth_router, prefix="/auth")
-app.include_router(storage_api.router, prefix="/api/user")
-app.include_router(file_api.router, prefix="/api/user")
 
-# Import and include new API routers
-import environment_api
-import env_vars_api  
-import user_api
-app.include_router(environment_api.router, prefix="/api/user")
-app.include_router(env_vars_api.router, prefix="/api/user")
-app.include_router(user_api.router, prefix="/api/user")
+# Storage endpoints: /storage/* (not /api/user/storage/*)  
+ # storage_api.router already has prefix="/storage"
+
+# Files endpoints: /user-files/* (not /api/user/files/*)
+import file_api
+app.include_router(oauth_router, prefix="/auth")
+app.include_router(storage_api.router)
+app.include_router(file_api.router)
+
+
+# Remove non-working router includes - main.py direct endpoints are used instead
+# import environment_api  
+# import env_vars_api   
+# import user_api
+# app.include_router(environment_api.router, prefix="/api/user")
+# app.include_router(env_vars_api.router, prefix="/api/user") 
+# app.include_router(user_api.router, prefix="/api/user")
 
 @app.middleware("http")
 async def security_headers_middleware(request: Request, call_next):
@@ -578,6 +586,7 @@ async def delete_user_env_var(
     except Exception as e:
         logger.error("Failed to delete user env var", user_id=user_id, key=key, error=str(e))
         raise HTTPException(status_code=500, detail="Failed to delete environment variable")
+
 
 # Background tasks
 # Note: Removed monitor_environment function since standalone environments 

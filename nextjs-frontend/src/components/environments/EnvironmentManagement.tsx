@@ -47,6 +47,8 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import type { Environment, StorageSelection, StorageItem } from '@/types';
 import { apiClient } from '@/lib/api-client';
 import { formatDateTime, getStatusColor, capitalize, getDisplayId } from '@/lib/utils';
+import StorageManagement from '@/components/storage/StorageManagement';
+import MonitoringDashboard from '@/components/monitoring/MonitoringDashboard';
 
 const { Title, Text } = Typography;
 const { Option } = Select;
@@ -96,6 +98,8 @@ export default function EnvironmentManagement() {
   const [launchProgress, setLaunchProgress] = useState(0);
   const [launchStep, setLaunchStep] = useState('');
   const [selectedRowKeys, setSelectedRowKeys] = useState<string[]>([]);
+  const [detailsModalVisible, setDetailsModalVisible] = useState(false);
+  const [selectedEnvironment, setSelectedEnvironment] = useState<Environment | null>(null);
 
   const [form] = Form.useForm();
   const queryClient = useQueryClient();
@@ -109,11 +113,19 @@ export default function EnvironmentManagement() {
   } = useQuery({
     queryKey: ['environments'],
     queryFn: async () => {
-      const response = await apiClient.listEnvironments();
-      return response.environments || [];
+      try {
+        const response = await apiClient.listEnvironments();
+        console.log('Environments API response:', response);
+        return response.environments || [];
+      } catch (error) {
+        console.error('Failed to fetch environments:', error);
+        throw error;
+      }
     },
     refetchInterval: 10000, // Refresh every 10 seconds for real-time updates
     refetchIntervalInBackground: true,
+    retry: 3,
+    retryDelay: 1000,
   });
 
   // Fetch storage options
@@ -195,12 +207,14 @@ export default function EnvironmentManagement() {
     mutationFn: async (envId: string) => {
       return await apiClient.restartEnvironment(envId);
     },
-    onSuccess: () => {
+    onSuccess: async () => {
       notification.success({
         message: 'Environment Restarting',
         description: 'Environment is restarting. Please check the Monitoring tab for status updates.',
         placement: 'topRight'
       });
+      // Force immediate refresh
+      await refetch();
       queryClient.invalidateQueries({ queryKey: ['environments'] });
     },
     onError: (error: any) => {
@@ -217,12 +231,14 @@ export default function EnvironmentManagement() {
     mutationFn: async (envId: string) => {
       return await apiClient.stopEnvironment(envId);
     },
-    onSuccess: () => {
+    onSuccess: async () => {
       notification.success({
         message: 'Environment Stopping',
         description: 'Environment is stopping. Please refresh to see updated status.',
         placement: 'topRight'
       });
+      // Force immediate refresh
+      await refetch();
       queryClient.invalidateQueries({ queryKey: ['environments'] });
     },
     onError: (error: any) => {
@@ -237,15 +253,27 @@ export default function EnvironmentManagement() {
   // Delete environment mutation
   const deleteMutation = useMutation({
     mutationFn: async (envId: string) => {
-      return await apiClient.deleteEnvironment(envId);
+      console.log('Deleting environment:', envId);
+      const result = await apiClient.deleteEnvironment(envId);
+      console.log('Delete result:', result);
+      return result;
     },
-    onSuccess: () => {
+    onSuccess: async () => {
       notification.success({
         message: 'Environment Deleted',
         description: 'Environment has been deleted successfully.',
         placement: 'topRight'
       });
+      // Force immediate refresh
+      await refetch();
       queryClient.invalidateQueries({ queryKey: ['environments'] });
+    },
+    onError: (error: any) => {
+      notification.error({
+        message: 'Delete Failed',
+        description: error.message || 'Failed to delete environment',
+        placement: 'topRight'
+      });
     }
   });
 
@@ -425,16 +453,6 @@ export default function EnvironmentManagement() {
             </Tooltip>
           )}
           
-          <Tooltip title="View Details">
-            <Button
-              icon={<EyeOutlined />}
-              size="small"
-              onClick={() => {
-                // Navigate to environment details page using Next.js router
-                router.push(`/environments/${record.id}`);
-              }}
-            />
-          </Tooltip>
           
           <Tooltip title="Restart">
             <Button
@@ -684,11 +702,11 @@ export default function EnvironmentManagement() {
         </Tabs.TabPane>
 
         <Tabs.TabPane tab="Storage" key="storage">
-          <StorageManagement />
+          <StorageManagement hideCreateButton={true} />
         </Tabs.TabPane>
 
         <Tabs.TabPane tab="Monitoring" key="monitoring">
-          <EnvironmentMonitoring environments={environments || []} />
+          <MonitoringDashboard />
         </Tabs.TabPane>
       </Tabs>
 
@@ -714,151 +732,217 @@ export default function EnvironmentManagement() {
         loading={launchMutation.isPending}
         form={form}
       />
+
+      {/* Environment Details Modal */}
+      <EnvironmentDetailsModal
+        visible={detailsModalVisible}
+        environment={selectedEnvironment}
+        onClose={() => {
+          setDetailsModalVisible(false);
+          setSelectedEnvironment(null);
+        }}
+        onRefresh={refetch}
+      />
     </div>
   );
 }
 
-// Storage Management Component (placeholder)
-function StorageManagement() {
-  return (
-    <div className="space-y-6">
-      <Card>
-        <Title level={4}>Storage Management</Title>
-        <Text type="secondary">Storage management will be integrated here from the existing StorageManagement component.</Text>
-      </Card>
-    </div>
-  );
+
+
+// Environment Details Modal Component
+interface EnvironmentDetailsModalProps {
+  visible: boolean;
+  environment: Environment | null;
+  onClose: () => void;
+  onRefresh: () => void;
 }
 
-// Environment Monitoring Component
-interface EnvironmentMonitoringProps {
-  environments: Environment[];
-}
+function EnvironmentDetailsModal({ visible, environment, onClose, onRefresh }: EnvironmentDetailsModalProps) {
+  if (!environment) return null;
 
-function EnvironmentMonitoring({ environments }: EnvironmentMonitoringProps) {
-  const [refreshInterval, setRefreshInterval] = useState(10);
-  const [autoRefresh, setAutoRefresh] = useState(true);
-
-  return (
-    <div className="space-y-6">
-      <Card>
-        <div className="flex justify-between items-center mb-4">
-          <Title level={4}>System Monitoring</Title>
-          <Space>
-            <Text type="secondary">Auto-refresh:</Text>
-            <Switch checked={autoRefresh} onChange={setAutoRefresh} />
-            <Select
-              value={refreshInterval}
-              onChange={setRefreshInterval}
-              style={{ width: 120 }}
-            >
-              <Option value={5}>5 seconds</Option>
-              <Option value={10}>10 seconds</Option>
-              <Option value={30}>30 seconds</Option>
-              <Option value={60}>1 minute</Option>
-            </Select>
-          </Space>
-        </div>
-
-        <Row gutter={16}>
-          {environments.map((env) => (
-            <Col span={12} key={env.id} className="mb-4">
-              <MonitoringCard environment={env} />
-            </Col>
-          ))}
-        </Row>
-
-        {environments.length === 0 && (
-          <Empty description="No environments to monitor" />
-        )}
-      </Card>
-    </div>
-  );
-}
-
-// Monitoring Card Component
-interface MonitoringCardProps {
-  environment: Environment;
-}
-
-function MonitoringCard({ environment }: MonitoringCardProps) {
   const statusConfig = {
-    running: { color: '#52c41a', text: 'Running' },
-    pending: { color: '#faad14', text: 'Starting' },
-    failed: { color: '#f5222d', text: 'Failed' },
-    stopped: { color: '#d9d9d9', text: 'Stopped' },
+    running: { color: 'success', text: 'Running', icon: <CheckCircleOutlined /> },
+    pending: { color: 'processing', text: 'Starting', icon: <LoadingOutlined spin /> },
+    failed: { color: 'error', text: 'Failed', icon: <ExclamationCircleOutlined /> },
+    stopped: { color: 'default', text: 'Stopped', icon: <StopOutlined /> },
   };
 
   const status = statusConfig[environment.status as keyof typeof statusConfig] || statusConfig.stopped;
 
   return (
-    <Card
-      size="small"
+    <Modal
       title={
-        <div className="flex items-center justify-between">
-          <span>Environment {getDisplayId(environment.id)}</span>
-          <Badge color={status.color} text={status.text} />
+        <div className="flex items-center space-x-3">
+          <RocketOutlined className="text-blue-500" />
+          <span>Environment Details</span>
+          <Badge status={status.color as any} text={status.text} />
         </div>
       }
+      open={visible}
+      onCancel={onClose}
+      footer={[
+        <Button key="refresh" icon={<ReloadOutlined />} onClick={onRefresh}>
+          Refresh
+        </Button>,
+        environment.url && (
+          <Button key="access" type="primary" icon={<LinkOutlined />} href={environment.url} target="_blank">
+            Access Environment
+          </Button>
+        ),
+        <Button key="close" onClick={onClose}>
+          Close
+        </Button>,
+      ].filter(Boolean)}
+      width={800}
     >
-      <div className="space-y-2">
-        <div className="flex justify-between">
-          <Text type="secondary">Created:</Text>
-          <Text>{formatDateTime(environment.created_at)}</Text>
-        </div>
-        
-        <div className="flex justify-between">
-          <Text type="secondary">Last Activity:</Text>
-          <Text>{formatDateTime(environment.last_activity || environment.updated_at)}</Text>
-        </div>
+      <div className="space-y-6">
+        {/* Basic Information */}
+        <Card size="small" title="Basic Information">
+          <Row gutter={16}>
+            <Col span={12}>
+              <div className="space-y-3">
+                <div>
+                  <Text type="secondary">Environment ID</Text>
+                  <br />
+                  <Text strong className="font-mono">{getDisplayId(environment.id)}</Text>
+                </div>
+                <div>
+                  <Text type="secondary">Full ID</Text>
+                  <br />
+                  <Text className="text-xs font-mono">{environment.env_id || environment.id}</Text>
+                </div>
+                <div>
+                  <Text type="secondary">Status</Text>
+                  <br />
+                  <Badge status={status.color as any} text={
+                    <span className="flex items-center space-x-1">
+                      {status.icon}
+                      <span>{status.text}</span>
+                    </span>
+                  } />
+                </div>
+              </div>
+            </Col>
+            <Col span={12}>
+              <div className="space-y-3">
+                <div>
+                  <Text type="secondary">Created</Text>
+                  <br />
+                  <Text>{formatDateTime(environment.created_at)}</Text>
+                </div>
+                <div>
+                  <Text type="secondary">Last Updated</Text>
+                  <br />
+                  <Text>{formatDateTime(environment.updated_at)}</Text>
+                </div>
+                {environment.url && (
+                  <div>
+                    <Text type="secondary">Access URL</Text>
+                    <br />
+                    <Button 
+                      type="link" 
+                      icon={<LinkOutlined />} 
+                      href={environment.url} 
+                      target="_blank"
+                      className="p-0"
+                    >
+                      Access Environment
+                    </Button>
+                  </div>
+                )}
+              </div>
+            </Col>
+          </Row>
+        </Card>
 
+        {/* Resource Configuration */}
         {environment.resource_config && (
-          <>
-            <Divider />
+          <Card size="small" title="Resource Configuration">
             <Row gutter={16}>
               <Col span={8}>
                 <Statistic
-                  title="CPU"
+                  title="CPU Cores"
                   value={environment.resource_config.cpu_limit}
-                  suffix="cores"
                   precision={1}
-                  valueStyle={{ fontSize: '14px' }}
+                  suffix="cores"
                 />
               </Col>
               <Col span={8}>
                 <Statistic
                   title="Memory"
                   value={environment.resource_config.memory_limit}
-                  valueStyle={{ fontSize: '14px' }}
                 />
               </Col>
               <Col span={8}>
                 <Statistic
                   title="Storage"
                   value={environment.resource_config.storage_size}
-                  valueStyle={{ fontSize: '14px' }}
                 />
               </Col>
             </Row>
-          </>
+          </Card>
         )}
 
-        {environment.url && (
-          <>
-            <Divider />
-            <Button
-              type="link"
-              icon={<LinkOutlined />}
-              href={environment.url}
-              target="_blank"
-              size="small"
-            >
-              Access Environment
-            </Button>
-          </>
-        )}
+        {/* Pod Information */}
+        <Card size="small" title="Pod Information">
+          <Row gutter={16}>
+            <Col span={12}>
+              <div className="space-y-3">
+                <div>
+                  <Text type="secondary">Pod Name</Text>
+                  <br />
+                  <Text className="font-mono">{environment.pod_name || 'N/A'}</Text>
+                </div>
+                <div>
+                  <Text type="secondary">Namespace</Text>
+                  <br />
+                  <Text className="font-mono">{environment.namespace || 'N/A'}</Text>
+                </div>
+              </div>
+            </Col>
+            <Col span={12}>
+              <div className="space-y-3">
+                <div>
+                  <Text type="secondary">Image</Text>
+                  <br />
+                  <Text className="text-xs">{environment.image || 'Default'}</Text>
+                </div>
+                <div>
+                  <Text type="secondary">Port</Text>
+                  <br />
+                  <Text>{environment.port || 8501}</Text>
+                </div>
+              </div>
+            </Col>
+          </Row>
+        </Card>
+
+        {/* Additional Information */}
+        <Card size="small" title="Additional Information">
+          <div className="space-y-2">
+            <Text>
+              <strong>Environment Type:</strong> Research Computing Environment
+            </Text>
+            <br />
+            <Text>
+              <strong>Platform:</strong> Kubernetes-based Streamlit Application
+            </Text>
+            <br />
+            {environment.last_activity && (
+              <>
+                <Text>
+                  <strong>Last Activity:</strong> {formatDateTime(environment.last_activity)}
+                </Text>
+                <br />
+              </>
+            )}
+            <Text type="secondary">
+              This environment provides an isolated computing workspace for your research activities.
+            </Text>
+          </div>
+        </Card>
       </div>
-    </Card>
+    </Modal>
   );
 }
 

@@ -12,46 +12,49 @@ import {
   Alert,
   Statistic,
   Progress,
-  Select,
   Switch,
-  Divider,
   Empty,
+  notification,
+  Badge,
 } from 'antd';
 import {
   MonitorOutlined,
   ReloadOutlined,
-  PlayCircleOutlined,
+  ExclamationCircleOutlined,
+  CheckCircleOutlined,
   PauseCircleOutlined,
-  BarChartOutlined,
-  LineChartOutlined,
-  DashboardOutlined,
-  SettingOutlined,
-  ExportOutlined,
-  EyeOutlined,
+  CloudServerOutlined,
+  StopOutlined,
+  ClockCircleOutlined,
 } from '@ant-design/icons';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '@/lib/api-client';
 import type { Environment } from '@/types';
 import EnvironmentMonitoringCard from './EnvironmentMonitoringCard';
-import MetricsCharts from './MetricsCharts';
-import AlertsPanel from './AlertsPanel';
 
-const { Title, Text, Paragraph } = Typography;
-const { Option } = Select;
+const { Title, Text } = Typography;
 
 export default function MonitoringDashboard() {
   const [autoRefresh, setAutoRefresh] = useState(true);
-  const [refreshInterval, setRefreshInterval] = useState(30); // seconds
-  const [timeRange, setTimeRange] = useState('1h');
-  const [selectedEnvironments, setSelectedEnvironments] = useState<string[]>([]);
+  const [refreshInterval, setRefreshInterval] = useState(30);
   const queryClient = useQueryClient();
 
   // Fetch environments for monitoring
   const { data: environmentsResponse, isLoading, error, refetch } = useQuery({
     queryKey: ['environments-monitoring'],
-    queryFn: () => apiClient.listEnvironments(),
+    queryFn: async () => {
+      try {
+        console.log('Fetching monitoring data...');
+        const response = await apiClient.listEnvironments();
+        return response;
+      } catch (error) {
+        console.error('Monitoring fetch error:', error);
+        throw error;
+      }
+    },
     refetchInterval: autoRefresh ? refreshInterval * 1000 : false,
     refetchIntervalInBackground: true,
+    retry: 2,
   });
 
   const environments = environmentsResponse?.environments || [];
@@ -85,26 +88,16 @@ export default function MonitoringDashboard() {
     }
   };
 
-  const getStatusColor = (status: string) => {
-    const colors = {
-      running: '#52c41a',
-      pending: '#faad14', 
-      failed: '#ff4d4f',
-      stopped: '#8c8c8c',
-      unknown: '#8c8c8c',
-    };
-    return colors[status as keyof typeof colors] || colors.unknown;
-  };
-
-  const handleExportMetrics = () => {
-    // Placeholder for metrics export functionality
+  const handleExportStatus = () => {
     const data = {
       timestamp: new Date().toISOString(),
       environments: environments.map(env => ({
         id: env.id,
+        env_id: env.env_id,
         status: env.status,
         created_at: env.created_at,
         resource_config: env.resource_config,
+        url: env.url,
       })),
       summary: stats,
     };
@@ -113,205 +106,155 @@ export default function MonitoringDashboard() {
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = `environment-metrics-${new Date().toISOString().split('T')[0]}.json`;
+    link.download = `environment-status-${new Date().toISOString().split('T')[0]}.json`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
     URL.revokeObjectURL(url);
   };
 
+  // Critical alerts based on failed environments
+  const criticalAlerts = environments.filter(env => 
+    env.status === 'failed'
+  );
+
   if (error) {
     return (
-      <Card>
-        <div className="text-center py-8">
-          <Title level={4} type="danger">
-            Failed to load monitoring data
-          </Title>
-          <Text type="secondary">
-            {error instanceof Error ? error.message : 'An unexpected error occurred'}
-          </Text>
-          <br />
-          <Button 
-            type="primary" 
-            icon={<ReloadOutlined />} 
-            onClick={() => refetch()} 
-            className="mt-4"
-          >
+      <Alert
+        message="Failed to load monitoring data"
+        description={error instanceof Error ? error.message : 'An unexpected error occurred'}
+        type="error"
+        showIcon
+        action={
+          <Button size="small" danger onClick={() => refetch()}>
             Retry
           </Button>
-        </div>
-      </Card>
+        }
+      />
     );
   }
 
   return (
-    <div className="space-y-6">
-      {/* Header Section */}
-      <Card>
-        <div className="flex justify-between items-start mb-4">
-          <div>
-            <Title level={3} className="mb-2 flex items-center">
-              <MonitorOutlined className="mr-3 text-blue-500" />
-              Environment Monitoring Dashboard
-            </Title>
-            <Paragraph type="secondary" className="mb-0">
-              Real-time monitoring of your research computing environments with health indicators and resource usage.
-            </Paragraph>
-          </div>
-          <Space>
-            <Button
-              icon={<ExportOutlined />}
-              onClick={handleExportMetrics}
-            >
-              Export Metrics
-            </Button>
-            <Button
-              icon={<ReloadOutlined />}
-              onClick={() => refetch()}
-              loading={isLoading}
-            >
-              Refresh
-            </Button>
-          </Space>
-        </div>
-
-        {/* Monitoring Controls */}
-        <Row gutter={16} align="middle" className="mb-4">
-          <Col>
-            <Space align="center">
-              <Text strong>Auto-refresh:</Text>
-              <Switch 
-                checked={autoRefresh}
-                onChange={setAutoRefresh}
-                checkedChildren={<EyeOutlined />}
-                unCheckedChildren={<PauseCircleOutlined />}
-              />
+    <div className="space-y-4">
+      {/* Critical Alerts */}
+      {criticalAlerts.length > 0 && (
+        <Alert
+          banner
+          type="error"
+          icon={<ExclamationCircleOutlined />}
+          message={
+            <Space>
+              <Text strong>Environment Alert</Text>
+              <Badge count={criticalAlerts.length} />
+              <Text>{criticalAlerts.length} environment(s) have failed and require attention</Text>
             </Space>
-          </Col>
-          
-          {autoRefresh && (
-            <Col>
-              <Space align="center">
-                <Text>Interval:</Text>
-                <Select
-                  value={refreshInterval}
-                  onChange={setRefreshInterval}
-                  style={{ width: 100 }}
-                  size="small"
-                >
-                  <Option value={10}>10s</Option>
-                  <Option value={30}>30s</Option>
-                  <Option value={60}>1m</Option>
-                  <Option value={300}>5m</Option>
-                </Select>
-              </Space>
-            </Col>
-          )}
+          }
+          closable
+        />
+      )}
 
-          <Col>
-            <Space align="center">
-              <Text>Time Range:</Text>
-              <Select
-                value={timeRange}
-                onChange={setTimeRange}
-                style={{ width: 100 }}
-                size="small"
-              >
-                <Option value="1h">1h</Option>
-                <Option value="6h">6h</Option>
-                <Option value="24h">24h</Option>
-                <Option value="7d">7d</Option>
-                <Option value="30d">30d</Option>
-              </Select>
-            </Space>
-          </Col>
+      {/* Header */}
+      <div className="flex justify-between items-center">
+        <Title level={4} className="mb-0 flex items-center">
+          <MonitorOutlined className="mr-2 text-blue-500" />
+          Environment Monitoring
+        </Title>
+        <Space>
+          <Switch 
+            size="small"
+            checked={autoRefresh}
+            onChange={setAutoRefresh}
+            checkedChildren="Live"
+            unCheckedChildren="Paused"
+          />
+          <Button
+            size="small"
+            icon={<ReloadOutlined />}
+            onClick={() => refetch()}
+            loading={isLoading}
+          >
+            Refresh
+          </Button>
+          <Button
+            size="small"
+            onClick={handleExportStatus}
+          >
+            Export Status
+          </Button>
+        </Space>
+      </div>
 
-          <Col flex="auto">
-            <div className="text-right">
-              <Text type="secondary" className="text-sm">
-                Last updated: {formatDateTime(new Date().toISOString())}
-              </Text>
-            </div>
-          </Col>
-        </Row>
-      </Card>
-
-      {/* Statistics Overview */}
-      <Card title="Environment Statistics">
-        <Row gutter={16}>
-          <Col xs={24} sm={12} md={6}>
+      {/* Environment Statistics */}
+      <Row gutter={[16, 16]}>
+        <Col xs={24} sm={6}>
+          <Card size="small" className="text-center">
             <Statistic
               title="Total Environments"
               value={stats.total}
-              prefix={<DashboardOutlined />}
-              valueStyle={{ color: '#1890ff' }}
+              prefix={<CloudServerOutlined />}
+              valueStyle={{ color: '#1890ff', fontSize: '24px' }}
             />
-          </Col>
-          <Col xs={24} sm={12} md={6}>
+          </Card>
+        </Col>
+        <Col xs={24} sm={6}>
+          <Card size="small" className="text-center">
             <Statistic
               title="Running"
               value={stats.running}
-              prefix={<PlayCircleOutlined />}
-              valueStyle={{ color: '#52c41a' }}
+              prefix={<CheckCircleOutlined />}
+              valueStyle={{ color: '#52c41a', fontSize: '24px' }}
             />
             <Progress 
               percent={stats.total > 0 ? (stats.running / stats.total) * 100 : 0} 
               strokeColor="#52c41a"
               size="small"
               showInfo={false}
-              className="mt-2"
             />
-          </Col>
-          <Col xs={24} sm={12} md={6}>
+          </Card>
+        </Col>
+        <Col xs={24} sm={6}>
+          <Card size="small" className="text-center">
             <Statistic
               title="Pending"
               value={stats.pending}
-              valueStyle={{ color: '#faad14' }}
+              prefix={<ClockCircleOutlined />}
+              valueStyle={{ color: '#faad14', fontSize: '24px' }}
             />
             <Progress 
               percent={stats.total > 0 ? (stats.pending / stats.total) * 100 : 0} 
               strokeColor="#faad14"
               size="small"
               showInfo={false}
-              className="mt-2"
             />
-          </Col>
-          <Col xs={24} sm={12} md={6}>
+          </Card>
+        </Col>
+        <Col xs={24} sm={6}>
+          <Card size="small" className="text-center">
             <Statistic
               title="Issues"
               value={stats.failed + stats.stopped}
-              valueStyle={{ color: stats.failed > 0 ? '#ff4d4f' : '#8c8c8c' }}
+              prefix={<ExclamationCircleOutlined />}
+              valueStyle={{ color: stats.failed > 0 ? '#ff4d4f' : '#8c8c8c', fontSize: '24px' }}
             />
             <Progress 
               percent={stats.total > 0 ? ((stats.failed + stats.stopped) / stats.total) * 100 : 0} 
               strokeColor={stats.failed > 0 ? "#ff4d4f" : "#8c8c8c"}
               size="small"
               showInfo={false}
-              className="mt-2"
             />
-          </Col>
-        </Row>
-      </Card>
+          </Card>
+        </Col>
+      </Row>
 
-      {/* Alerts Panel */}
-      <AlertsPanel environments={environments} />
-
-      {/* Environment Grid */}
-      <Card title="Environment Health Overview" loading={isLoading}>
+      {/* Environment Status Cards */}
+      <Card title="Environment Status Overview" size="small" loading={isLoading}>
         {environments.length === 0 ? (
           <Empty
             image={Empty.PRESENTED_IMAGE_SIMPLE}
-            description={
-              <div>
-                <Title level={4}>No Environments to Monitor</Title>
-                <Text type="secondary">
-                  Create and launch environments to see their monitoring data here.
-                </Text>
-              </div>
-            }
+            description="No environments to monitor"
           />
         ) : (
-          <Row gutter={[16, 16]}>
+          <Row gutter={[12, 12]}>
             {environments.map((environment) => (
               <Col key={environment.id} xs={24} sm={12} lg={8} xl={6}>
                 <EnvironmentMonitoringCard 
@@ -324,60 +267,33 @@ export default function MonitoringDashboard() {
         )}
       </Card>
 
-      {/* Metrics Charts */}
-      {environments.length > 0 && (
-        <MetricsCharts 
-          environments={environments.filter(env => 
-            selectedEnvironments.length === 0 || selectedEnvironments.includes(env.id)
-          )}
-          timeRange={timeRange}
-        />
-      )}
-
-      {/* System Health Status */}
-      <Card title="System Health Status">
-        <Row gutter={16}>
-          <Col span={8}>
-            <div className="text-center">
-              <div className="text-3xl mb-2">
-                {stats.running > 0 ? '🟢' : stats.pending > 0 ? '🟡' : '🔴'}
+      {/* Status Summary */}
+      <Card title="Environment Status Summary" size="small">
+        <div className="space-y-3">
+          {[
+            { label: 'Running', count: stats.running, color: '#52c41a', icon: <CheckCircleOutlined /> },
+            { label: 'Pending', count: stats.pending, color: '#faad14', icon: <ClockCircleOutlined /> },
+            { label: 'Failed', count: stats.failed, color: '#ff4d4f', icon: <ExclamationCircleOutlined /> },
+            { label: 'Stopped', count: stats.stopped, color: '#8c8c8c', icon: <StopOutlined /> },
+          ].map(({ label, count, color, icon }) => (
+            <div key={label} className="flex items-center justify-between p-3 bg-gray-50 rounded">
+              <div className="flex items-center space-x-3">
+                <div style={{ color }} className="text-lg">
+                  {icon}
+                </div>
+                <Text strong>{label} Environments</Text>
               </div>
-              <Text strong>
-                {stats.running > 0 ? 'Healthy' : stats.pending > 0 ? 'Scaling' : 'Critical'}
-              </Text>
-              <br />
-              <Text type="secondary" className="text-sm">
-                Overall system status
-              </Text>
+              <div className="flex items-center space-x-3">
+                <Tag color={color} className="m-0">
+                  {count}
+                </Tag>
+                <Text type="secondary">
+                  {stats.total > 0 ? Math.round((count / stats.total) * 100) : 0}%
+                </Text>
+              </div>
             </div>
-          </Col>
-          
-          <Col span={8}>
-            <div className="text-center">
-              <div className="text-3xl mb-2">📊</div>
-              <Text strong>
-                {((stats.running / Math.max(stats.total, 1)) * 100).toFixed(1)}%
-              </Text>
-              <br />
-              <Text type="secondary" className="text-sm">
-                Availability rate
-              </Text>
-            </div>
-          </Col>
-          
-          <Col span={8}>
-            <div className="text-center">
-              <div className="text-3xl mb-2">⚡</div>
-              <Text strong>
-                {autoRefresh ? 'Live' : 'Paused'}
-              </Text>
-              <br />
-              <Text type="secondary" className="text-sm">
-                Monitoring status
-              </Text>
-            </div>
-          </Col>
-        </Row>
+          ))}
+        </div>
       </Card>
     </div>
   );

@@ -267,9 +267,6 @@ export default function AlertsPanel({ environments }: AlertsPanelProps) {
             description={alert.message}
             action={
               <Space>
-                <Button size="small" type="link">
-                  View Details
-                </Button>
                 <Button size="small" type="text" icon={<CloseOutlined />}>
                   Dismiss
                 </Button>
