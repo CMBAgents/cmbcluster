@@ -13,6 +13,11 @@ metadata:
     nginx.ingress.kubernetes.io/ssl-redirect: "true"
     nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
     {{- end }}
+    # Disable caching for API routes only, use configuration-snippet for frontend auth routes
+    nginx.ingress.kubernetes.io/configuration-snippet: |
+      more_set_headers "Cache-Control: no-cache, no-store, must-revalidate";
+      more_set_headers "Pragma: no-cache";
+      more_set_headers "Expires: 0";
     {{- with .Values.ingress.annotations -}}
     {{- toYaml . | nindent 4 }}
     {{- end }}

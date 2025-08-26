@@ -7,7 +7,7 @@ PROJECT_ROOT=$(dirname "$SCRIPT_DIR")
 
 PROJECT_ID=${1:-$(gcloud config get-value project)}
 TAG=${2:-"latest"}
-IMAGE_REPO=${3:-"us-central1-docker.pkg.dev/$PROJECT_ID/cmbcluster-images"}
+IMAGE_REPO=${3:-"us-central1-docker.pkg.dev/$PROJECT_ID/cmbcluster-dev-images"}
 
 if [ -z "$PROJECT_ID" ]; then
     echo "Error: PROJECT_ID is required"
@@ -28,8 +28,8 @@ gcloud auth configure-docker "$REGISTRY_HOSTNAME" --quiet
 #SERVICES=("backend" "frontend" "user-environment")
 
 # SERVICES=("frontend")
-#  SERVICES=("backend" )
-SERVICES=("backend" )
+ SERVICES=("backend" )
+# SERVICES=("frontend" "backend")
 for SERVICE in "${SERVICES[@]}"; do
     # Use nextjs-frontend directory for frontend service
     if [ "$SERVICE" == "frontend" ]; then

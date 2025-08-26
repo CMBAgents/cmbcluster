@@ -248,6 +248,9 @@ class DatabaseManager:
                 conn.execute("PRAGMA synchronous=NORMAL")  # Balance between safety and performance
                 conn.execute("PRAGMA temp_store=memory")  # Store temp tables in memory
                 conn.execute("PRAGMA mmap_size=268435456")  # 256MB memory map
+                conn.execute("PRAGMA cache_size=10000")  # 10MB page cache
+                conn.execute("PRAGMA wal_autocheckpoint=1000")  # Auto checkpoint every 1000 pages
+                conn.execute("PRAGMA busy_timeout=30000")  # 30 second busy timeout
                 
                 # Create users table
                 conn.execute("""
@@ -454,6 +457,12 @@ class DatabaseManager:
             def create_connection():
                 connection = sqlite3.connect(self.db_path, timeout=30.0, check_same_thread=False)
                 connection.row_factory = sqlite3.Row  # Enable named column access
+                # Apply performance optimizations to each connection
+                connection.execute("PRAGMA journal_mode=WAL")
+                connection.execute("PRAGMA synchronous=NORMAL")
+                connection.execute("PRAGMA temp_store=memory")
+                connection.execute("PRAGMA cache_size=10000")
+                connection.execute("PRAGMA busy_timeout=30000")
                 return connection
             
             conn = await asyncio.get_event_loop().run_in_executor(None, create_connection)

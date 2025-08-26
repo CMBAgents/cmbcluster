@@ -557,7 +557,11 @@ class PodManager:
             {"name": "HOME", "value": "/cmbagent"},
             {"name": "CMBAGENT_ROOT", "value": "/cmbagent"},
             {"name": "CMBAGENT_OUTPUT_DIR", "value": "/cmbagent/cmbagent_output"},
-            {"name": "MPLCONFIGDIR", "value": "/cmbagent/.matplotlib"}
+            {"name": "MPLCONFIGDIR", "value": "/cmbagent/.matplotlib"},
+            # GCSFUSE optimization settings for better I/O performance
+            {"name": "GCSFUSE_WRITE_BUFFER_SIZE", "value": "67108864"},  # 64MB
+            {"name": "GCSFUSE_MAX_RETRY_SLEEP", "value": "30"},
+            {"name": "GCSFUSE_MAX_CONNS_PER_HOST", "value": "100"}
         ]
 
         env_from = []
@@ -577,7 +581,7 @@ class PodManager:
                 "driver": "gcsfuse.csi.storage.gke.io",
                 "volumeAttributes": {
                     "bucketName": storage.bucket_name,
-                    "mountOptions": "implicit-dirs,uid=1000,gid=1000,file-mode=644,dir-mode=755"
+                    "mountOptions": "implicit-dirs,uid=1000,gid=1000,file-mode=644,dir-mode=755,stat-cache-ttl=1h,type-cache-ttl=1h"
                 }
             }
         }]

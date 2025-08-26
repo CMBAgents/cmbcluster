@@ -46,7 +46,7 @@ class TokenVerifyResponse(BaseModel):
     user_data: Optional[Dict[str, Any]] = None
     expires_at: Optional[datetime] = None
 
-@oauth_router.post("/token-exchange")
+@oauth_router.post("/exchange")
 async def exchange_google_token(
     request: Request,
     token_request: TokenExchangeRequest
@@ -279,130 +279,7 @@ async def oauth_callback(request: Request):
             detail=f"Authentication failed: {str(e)}"
         )
 
-@oauth_router.post("/exchange")
-async def exchange_nextauth_jwt(request: Request):
-    """Exchange NextAuth JWT token for backend JWT token"""
-    try:
-        # Get the request body
-        body = await request.json()
-        nextauth_token = body.get('nextauth_token')
-        
-        if not nextauth_token:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Missing nextauth_token"
-            )
-        
-        # Validate and decode NextAuth JWT token
-        import json
-        import base64
-        
-        # Basic JWT structure validation
-        parts = nextauth_token.split('.')
-        if len(parts) != 3:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Invalid JWT token format"
-            )
-        
-        # Decode the payload to extract user info
-        try:
-            # Decode the payload (we'll validate signature using NextAuth secret)
-            payload_part = parts[1]
-            # Add padding if needed
-            payload_part += '=' * (4 - len(payload_part) % 4)
-            payload_bytes = base64.urlsafe_b64decode(payload_part)
-            token_payload = json.loads(payload_bytes)
-            
-            # Validate token hasn't expired
-            if token_payload.get('exp') and token_payload['exp'] < time.time():
-                raise HTTPException(
-                    status_code=status.HTTP_401_UNAUTHORIZED,
-                    detail="NextAuth token has expired"
-                )
-            
-            # Extract user info from JWT payload
-            user_info = {
-                'sub': token_payload.get('sub'),
-                'email': token_payload.get('email'),
-                'name': token_payload.get('name'),
-            }
-            
-            # Validate required fields
-            for field in ['sub', 'email', 'name']:
-                if not user_info.get(field):
-                    raise HTTPException(
-                        status_code=status.HTTP_400_BAD_REQUEST,
-                        detail=f"Missing required field in JWT: {field}"
-                    )
-                
-        except (json.JSONDecodeError, ValueError) as e:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Invalid JWT token payload"
-            )
-        
-        # Validate JWT signature with NextAuth secret
-        nextauth_secret = os.getenv('NEXTAUTH_SECRET')
-        if not nextauth_secret:
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="NextAuth secret not configured"
-            )
-        
-        try:
-            # Verify the JWT signature using NextAuth secret
-            verified_payload = jwt.decode(
-                nextauth_token,
-                nextauth_secret,
-                algorithms=['HS256']  # NextAuth uses HS256 by default
-            )
-            
-            # Update user_info with verified payload data
-            user_info = {
-                'sub': verified_payload.get('sub'),
-                'email': verified_payload.get('email'),
-                'name': verified_payload.get('name'),
-            }
-            
-        except JWTError as e:
-            logger.error("NextAuth JWT verification failed", error=str(e))
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Invalid NextAuth JWT signature"
-            )
-        
-        # Create or update user in our database using JWT payload data
-        user = await create_or_update_user(user_info)
-        
-        # Create our backend JWT token
-        backend_token = create_access_token(user)
-        
-        logger.info("JWT token exchange successful", 
-                   user_id=user.id, 
-                   user_email=user.email)
-        
-        return {
-            "status": "success",
-            "access_token": backend_token,
-            "token_type": "bearer",
-            "expires_in": settings.token_expire_hours * 3600,
-            "user": {
-                "id": user.id,
-                "email": user.email,
-                "name": user.name,
-                "role": user.role.value
-            }
-        }
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error("JWT exchange failed", error=str(e))
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Token exchange failed: {str(e)}"
-        )
+# Legacy endpoint removed - use /auth/exchange instead
 
 async def create_or_update_user(user_info: Dict) -> User:
     """Create or update user from OAuth info using database"""

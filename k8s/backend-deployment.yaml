@@ -70,6 +70,13 @@ spec:
             secretKeyRef:
               name: cmbcluster-secrets
               key: secret-key
+        # GCSFUSE optimization settings for better I/O performance
+        - name: GCSFUSE_WRITE_BUFFER_SIZE
+          value: "67108864"
+        - name: GCSFUSE_MAX_RETRY_SLEEP
+          value: "30"
+        - name: GCSFUSE_MAX_CONNS_PER_HOST
+          value: "100"
         resources:
           requests:
             cpu: 250m

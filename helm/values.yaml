@@ -3,6 +3,7 @@
 
 global:
   projectId: "your-gcp-project-id"
+  clusterName: "cmbcluster-dev"  # Used for database bucket naming - set via deploy.sh
   registryUrl: "us-central1-docker.pkg.dev/your-gcp-project-id/cmbcluster-images"
   imageTag: "latest"
 

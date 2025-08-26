@@ -31,7 +31,7 @@ async function exchangeTokenWithBackend(googleToken: string, userInfo: any): Pro
     console.log('User Info:', { email: userInfo.email, sub: userInfo.sub });
     console.log('Token length:', googleToken?.length);
     
-    const response = await fetch(`${BACKEND_API_URL}/auth/token-exchange`, {
+    const response = await fetch(`${BACKEND_API_URL}/auth/exchange`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

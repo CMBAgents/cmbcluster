@@ -11,6 +11,9 @@ services:
       - MOCK_KUBERNETES=true
       - API_URL=http://localhost:8000
       - FRONTEND_URL=http://localhost:8501
+      - GCSFUSE_WRITE_BUFFER_SIZE=67108864
+      - GCSFUSE_MAX_RETRY_SLEEP=30
+      - GCSFUSE_MAX_CONNS_PER_HOST=100
     volumes:
       - ./backend:/app
       - ~/.kube:/root/.kube:ro

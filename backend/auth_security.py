@@ -30,7 +30,7 @@ class RateLimiter:
         self.attempts = defaultdict(list)
         self.blocked_ips = {}
         
-    def is_rate_limited(self, identifier: str, max_attempts: int = 5, window_minutes: int = 15) -> bool:
+    def is_rate_limited(self, identifier: str, max_attempts: int = 100, window_minutes: int = 1) -> bool:
         """Check if identifier is rate limited"""
         now = time.time()
         window_start = now - (window_minutes * 60)
@@ -50,8 +50,8 @@ class RateLimiter:
         
         # Check rate limit
         if len(self.attempts[identifier]) >= max_attempts:
-            # Block for 1 hour
-            self.blocked_ips[identifier] = now + (60 * 60)
+            # Block for 5 minutes
+            self.blocked_ips[identifier] = now + (5 * 60)
             return True
         
         return False
@@ -281,7 +281,7 @@ async def check_rate_limit(request: Request, action: str = "auth") -> None:
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
             detail="Too many requests. Please try again later.",
-            headers={"Retry-After": "3600"}  # 1 hour
+            headers={"Retry-After": "300"}  # 5 minutes
         )
     
     rate_limiter.record_attempt(identifier)
@@ -298,8 +298,8 @@ class SecureBearerToken(HTTPBearer):
         super().__init__(auto_error=auto_error)
     
     async def __call__(self, request: Request) -> Optional[HTTPAuthorizationCredentials]:
-        # Check rate limiting first
-        await check_rate_limit(request, "token_validation")
+        # Skip rate limiting for token validation (too restrictive for API calls)
+        # await check_rate_limit(request, "token_validation")
         
         # Get credentials using parent class
         credentials = await super().__call__(request)

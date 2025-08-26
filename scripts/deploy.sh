@@ -279,6 +279,7 @@ helm upgrade --install cmbcluster  ./helm \
     --timeout=10m \
     --disable-openapi-validation \
     --set global.projectId=$PROJECT_ID \
+    --set global.clusterName=$CLUSTER_NAME \
     --set ingress.baseDomain=$DOMAIN \
     --set global.registryUrl=$IMAGE_REPO \
     --set global.imageTag=$TAG \

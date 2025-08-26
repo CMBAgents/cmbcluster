@@ -42,6 +42,28 @@ const nextConfig = {
     return `auth-fix-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
   },
   
+  // Force no-cache headers for dynamic content
+  async headers() {
+    return [
+      {
+        source: '/api/:path*',
+        headers: [
+          { key: 'Cache-Control', value: 'no-cache, no-store, must-revalidate' },
+          { key: 'Pragma', value: 'no-cache' },
+          { key: 'Expires', value: '0' },
+        ],
+      },
+      {
+        source: '/_next/static/chunks/:path*',
+        headers: [
+          { key: 'Cache-Control', value: 'no-cache, no-store, must-revalidate' },
+          { key: 'Pragma', value: 'no-cache' },
+          { key: 'Expires', value: '0' },
+        ],
+      },
+    ];
+  },
+  
   // Image optimization for production
   images: {
     formats: ['image/webp', 'image/avif'],
