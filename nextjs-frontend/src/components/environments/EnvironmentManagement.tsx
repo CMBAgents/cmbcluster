@@ -439,7 +439,7 @@ export default function EnvironmentManagement() {
                 onClick={() => router.push(`/environment/${record.env_id || record.id}`)}
                 size="small"
               />
-            </Tooltip>
+            // </Tooltip>
           )}
           
           {record.url && (

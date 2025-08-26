@@ -269,7 +269,7 @@ export default function EnvironmentAccessPage() {
         </Card>
 
         {/* iframe Container */}
-        <Card className="p-0 overflow-hidden" style={{ height: fullscreen ? 'calc(100vh - 200px)' : '800px' }}>
+        <Card className="p-0 overflow-hidden" style={{ height: fullscreen ? 'calc(100vh - 200px)' : '2000px' }}>
           {iframeError ? (
             <div className="flex flex-col items-center justify-center h-full space-y-4">
               <Alert

@@ -152,6 +152,7 @@ app.include_router(oauth_router, prefix="/auth")
 
 # Files endpoints: /user-files/* (not /api/user/files/*)
 import file_api
+app.include_router(oauth_router, prefix="/auth")
 app.include_router(storage_api.router)
 app.include_router(file_api.router)
 
@@ -163,6 +164,40 @@ app.include_router(file_api.router)
 # app.include_router(environment_api.router, prefix="/api/user")
 # app.include_router(env_vars_api.router, prefix="/api/user") 
 # app.include_router(user_api.router, prefix="/api/user")
+
+@app.middleware("http")
+async def security_headers_middleware(request: Request, call_next):
+    """Add security headers to all responses"""
+    response = await call_next(request)
+    
+    if settings.enable_security_headers:
+        # Security headers
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        response.headers["X-Frame-Options"] = "DENY"
+        response.headers["X-XSS-Protection"] = "1; mode=block"
+        response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+        response.headers["Permissions-Policy"] = "geolocation=(), microphone=(), camera=()"
+        
+        # HSTS for HTTPS
+        if request.url.scheme == "https":
+            response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+        
+        # Content Security Policy
+        if settings.csp_enabled:
+            csp_parts = [
+                f"default-src 'self'",
+                f"script-src {' '.join(settings.csp_script_src)}",
+                f"style-src {' '.join(settings.csp_style_src)}",
+                f"font-src {' '.join(settings.csp_font_src)}",
+                f"img-src {' '.join(settings.csp_img_src)}",
+                f"connect-src {' '.join(settings.csp_connect_src)}",
+                f"frame-ancestors 'none'",
+                f"base-uri 'self'",
+                f"form-action 'self'"
+            ]
+            response.headers["Content-Security-Policy"] = "; ".join(csp_parts)
+    
+    return response
 
 @app.middleware("http")
 async def security_headers_middleware(request: Request, call_next):
