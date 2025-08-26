@@ -24,7 +24,6 @@ import {
   Slider,
   Divider,
   Progress,
-  notification,
   Empty,
   Badge,
   Radio
@@ -47,6 +46,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import type { Environment, StorageSelection, StorageItem } from '@/types';
 import { apiClient } from '@/lib/api-client';
 import { formatDateTime, getStatusColor, capitalize, getDisplayId } from '@/lib/utils';
+import { useCommonNotifications } from '@/contexts/NotificationContext';
 import StorageManagement from '@/components/storage/StorageManagement';
 import MonitoringDashboard from '@/components/monitoring/MonitoringDashboard';
 
@@ -103,6 +103,7 @@ export default function EnvironmentManagement() {
 
   const [form] = Form.useForm();
   const queryClient = useQueryClient();
+  const { notifyEnvironmentAction, notifyError, notifySuccess } = useCommonNotifications();
 
   // Fetch environments with real-time updates
   const { 
@@ -157,31 +158,27 @@ export default function EnvironmentManagement() {
       setLaunchStep('Launch successful!');
       
       if (result.status === 'existing') {
-        notification.success({
-          message: 'Environment Ready',
-          description: `Environment already exists with ${PRESET_CONFIGS[selectedPreset].label} configuration!`,
-          placement: 'topRight'
-        });
+        notifySuccess(
+          'Environment Ready',
+          `Environment already exists with ${PRESET_CONFIGS[selectedPreset].label} configuration!`
+        );
       } else {
-        notification.success({
-          message: 'Environment Created',
-          description: `Environment created successfully with ${PRESET_CONFIGS[selectedPreset].label} configuration!`,
-          placement: 'topRight'
-        });
+        notifySuccess(
+          'Environment Created',
+          `Environment created successfully with ${PRESET_CONFIGS[selectedPreset].label} configuration!`
+        );
         
         // Show storage info
         if (selectedStorage?.selection_type === 'create_new') {
-          notification.info({
-            message: 'New Workspace Created',
-            description: '✨ New workspace storage created successfully!',
-            placement: 'topRight'
-          });
+          notifySuccess(
+            'New Workspace Created',
+            '✨ New workspace storage created successfully!'
+          );
         } else if (selectedStorage?.selection_type === 'existing') {
-          notification.info({
-            message: 'Workspace Connected',
-            description: `📁 Using ${selectedStorage.storage_name}`,
-            placement: 'topRight'
-          });
+          notifySuccess(
+            'Workspace Connected',
+            `📁 Using ${selectedStorage.storage_name}`
+          );
         }
       }
       
@@ -193,11 +190,10 @@ export default function EnvironmentManagement() {
     },
     onError: (error: any) => {
       setLaunchStep('Launch failed!');
-      notification.error({
-        message: 'Launch Failed',
-        description: error.message || 'Failed to launch environment',
-        placement: 'topRight'
-      });
+      notifyError(
+        'Launch Failed',
+        error.message || 'Failed to launch environment'
+      );
       setLaunchProgress(0);
     }
   });
@@ -208,21 +204,19 @@ export default function EnvironmentManagement() {
       return await apiClient.restartEnvironment(envId);
     },
     onSuccess: async () => {
-      notification.success({
-        message: 'Environment Restarting',
-        description: 'Environment is restarting. Please check the Monitoring tab for status updates.',
-        placement: 'topRight'
-      });
+      notifySuccess(
+        'Environment Restarting',
+        'Environment is restarting. Please check the Monitoring tab for status updates.'
+      );
       // Force immediate refresh
       await refetch();
       queryClient.invalidateQueries({ queryKey: ['environments'] });
     },
     onError: (error: any) => {
-      notification.error({
-        message: 'Restart Failed',
-        description: error.message || 'Failed to restart environment',
-        placement: 'topRight'
-      });
+      notifyError(
+        'Restart Failed',
+        error.message || 'Failed to restart environment'
+      );
     }
   });
 
@@ -232,21 +226,19 @@ export default function EnvironmentManagement() {
       return await apiClient.stopEnvironment(envId);
     },
     onSuccess: async () => {
-      notification.success({
-        message: 'Environment Stopping',
-        description: 'Environment is stopping. Please refresh to see updated status.',
-        placement: 'topRight'
-      });
+      notifySuccess(
+        'Environment Stopping',
+        'Environment is stopping. Please refresh to see updated status.'
+      );
       // Force immediate refresh
       await refetch();
       queryClient.invalidateQueries({ queryKey: ['environments'] });
     },
     onError: (error: any) => {
-      notification.error({
-        message: 'Stop Failed', 
-        description: error.message || 'Failed to stop environment',
-        placement: 'topRight'
-      });
+      notifyError(
+        'Stop Failed',
+        error.message || 'Failed to stop environment'
+      );
     }
   });
 
@@ -259,21 +251,19 @@ export default function EnvironmentManagement() {
       return result;
     },
     onSuccess: async () => {
-      notification.success({
-        message: 'Environment Deleted',
-        description: 'Environment has been deleted successfully.',
-        placement: 'topRight'
-      });
+      notifySuccess(
+        'Environment Deleted',
+        'Environment has been deleted successfully.'
+      );
       // Force immediate refresh
       await refetch();
       queryClient.invalidateQueries({ queryKey: ['environments'] });
     },
     onError: (error: any) => {
-      notification.error({
-        message: 'Delete Failed',
-        description: error.message || 'Failed to delete environment',
-        placement: 'topRight'
-      });
+      notifyError(
+        'Delete Failed',
+        error.message || 'Failed to delete environment'
+      );
     }
   });
 

@@ -266,35 +266,6 @@ export default function MonitoringDashboard() {
           </Row>
         )}
       </Card>
-
-      {/* Status Summary */}
-      <Card title="Environment Status Summary" size="small">
-        <div className="space-y-3">
-          {[
-            { label: 'Running', count: stats.running, color: '#52c41a', icon: <CheckCircleOutlined /> },
-            { label: 'Pending', count: stats.pending, color: '#faad14', icon: <ClockCircleOutlined /> },
-            { label: 'Failed', count: stats.failed, color: '#ff4d4f', icon: <ExclamationCircleOutlined /> },
-            { label: 'Stopped', count: stats.stopped, color: '#8c8c8c', icon: <StopOutlined /> },
-          ].map(({ label, count, color, icon }) => (
-            <div key={label} className="flex items-center justify-between p-3 bg-gray-50 rounded">
-              <div className="flex items-center space-x-3">
-                <div style={{ color }} className="text-lg">
-                  {icon}
-                </div>
-                <Text strong>{label} Environments</Text>
-              </div>
-              <div className="flex items-center space-x-3">
-                <Tag color={color} className="m-0">
-                  {count}
-                </Tag>
-                <Text type="secondary">
-                  {stats.total > 0 ? Math.round((count / stats.total) * 100) : 0}%
-                </Text>
-              </div>
-            </div>
-          ))}
-        </div>
-      </Card>
     </div>
   );
 }

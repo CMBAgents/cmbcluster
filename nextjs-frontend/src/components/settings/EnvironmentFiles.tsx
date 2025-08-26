@@ -18,7 +18,8 @@ import {
   Tooltip,
   Upload,
   Select,
-  Divider
+  Divider,
+  Alert
 } from 'antd';
 import { 
   PlusOutlined, 
@@ -51,6 +52,8 @@ export default function EnvironmentFiles() {
   const [editingRecord, setEditingRecord] = useState<UserFile | null>(null);
   const [searchText, setSearchText] = useState('');
   const [fileList, setFileList] = useState<UploadFile[]>([]);
+  const [filePreview, setFilePreview] = useState<string>('');
+  const [isGcpKey, setIsGcpKey] = useState(false);
 
   // Fetch user files
   const { data: filesData, isLoading, error } = useQuery({
@@ -72,6 +75,19 @@ export default function EnvironmentFiles() {
       environment_variable_name?: string;
       container_path?: string;
     }) => {
+      // Validate file size (1MB limit like Streamlit)
+      if (values.file.size > 1024 * 1024) {
+        throw new Error('File size exceeds 1MB limit');
+      }
+
+      // Validate JSON content
+      const fileContent = await values.file.text();
+      try {
+        JSON.parse(fileContent);
+      } catch (e) {
+        throw new Error('Invalid JSON file: ' + (e instanceof Error ? e.message : 'Unknown error'));
+      }
+
       const response = await apiClient.uploadUserFile(
         values.file,
         values.file_type,
@@ -181,6 +197,68 @@ export default function EnvironmentFiles() {
      file.environment_variable_name.toLowerCase().includes(searchText.toLowerCase()))
   );
 
+  // Handle file selection and validation
+  const handleFileChange = async (info: any) => {
+    let newFileList = [...info.fileList];
+    
+    // Limit to one file
+    newFileList = newFileList.slice(-1);
+    
+    if (newFileList.length > 0) {
+      const file = newFileList[0].originFileObj;
+      
+      // Validate file size
+      if (file.size > 1024 * 1024) {
+        message.error('File size exceeds 1MB limit');
+        newFileList = [];
+        setFilePreview('');
+        setIsGcpKey(false);
+      } else {
+        try {
+          // Read file content for preview and validation
+          const content = await file.text();
+          const jsonContent = JSON.parse(content);
+          
+          // Detect GCP service account
+          const isGcp = (
+            jsonContent.type === 'service_account' &&
+            jsonContent.project_id &&
+            jsonContent.private_key &&
+            jsonContent.client_email
+          );
+          
+          setIsGcpKey(isGcp);
+          setFilePreview(JSON.stringify(jsonContent, null, 2));
+          
+          // Auto-update form if GCP key is detected
+          if (isGcp) {
+            form.setFieldsValue({
+              file_type: 'gcp_service_account',
+              environment_variable_name: 'GOOGLE_APPLICATION_CREDENTIALS',
+              container_path: '/app/secrets/gcp_service_account.json'
+            });
+          } else {
+            form.setFieldsValue({
+              file_type: 'custom_json',
+              container_path: `/mnt/user-files/${file.name}`
+            });
+          }
+          
+        } catch (e) {
+          message.error('Invalid JSON file');
+          newFileList = [];
+          setFilePreview('');
+          setIsGcpKey(false);
+        }
+      }
+    } else {
+      setFilePreview('');
+      setIsGcpKey(false);
+    }
+    
+    setFileList(newFileList);
+  };
+
   const handleUpload = (values: {
     file_type: string;
     environment_variable_name?: string;
@@ -192,9 +270,26 @@ export default function EnvironmentFiles() {
     }
 
     const file = fileList[0].originFileObj as File;
+    
+    // Additional validation similar to Streamlit
+    if (!values.environment_variable_name?.trim()) {
+      message.error('Environment variable name is required');
+      return;
+    }
+
+    // Auto-detect GCP service account based on file_type
+    let autoContainerPath = values.container_path;
+    if (values.file_type === 'gcp_service_account' && !autoContainerPath) {
+      autoContainerPath = '/app/secrets/gcp_service_account.json';
+    } else if (values.file_type === 'custom_json' && !autoContainerPath) {
+      autoContainerPath = `/mnt/user-files/${file.name}`;
+    }
+
     uploadMutation.mutate({
       file,
-      ...values,
+      file_type: values.file_type,
+      environment_variable_name: values.environment_variable_name.trim(),
+      container_path: autoContainerPath || values.container_path,
     });
   };
 
@@ -499,15 +594,39 @@ export default function EnvironmentFiles() {
           >
             <Upload
               fileList={fileList}
-              onChange={({ fileList }) => setFileList(fileList)}
+              onChange={handleFileChange}
               beforeUpload={() => false}
               maxCount={1}
-              accept=".json,.yaml,.yml,.conf,.config,.txt"
+              accept=".json"
             >
               <Button icon={<UploadOutlined />} className="w-full">
-                Click to Upload File
+                Click to Upload JSON File (Max 1MB)
               </Button>
             </Upload>
+            
+            {/* File size warning */}
+            <Text type="secondary" className="text-xs block mt-1">
+              💡 File size limit: 1MB. Only JSON files are supported.
+            </Text>
+
+            {/* File preview */}
+            {filePreview && (
+              <div className="mt-3">
+                <Text strong className="text-white">File Preview:</Text>
+                {isGcpKey && (
+                  <Alert
+                    message="GCP Service Account Detected"
+                    description="This appears to be a Google Cloud Platform service account key. Form fields have been auto-populated."
+                    type="info"
+                    showIcon
+                    className="mb-2"
+                  />
+                )}
+                <pre className="bg-gray-800 p-2 rounded text-xs overflow-auto max-h-32 text-gray-300">
+                  {filePreview.substring(0, 500)}{filePreview.length > 500 ? '...' : ''}
+                </pre>
+              </div>
+            )}
           </Form.Item>
 
           <Form.Item

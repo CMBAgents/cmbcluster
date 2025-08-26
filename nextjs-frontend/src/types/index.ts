@@ -16,6 +16,10 @@ export interface Environment {
   updated_at?: string;
   last_activity?: string;
   url?: string;
+  pod_name?: string;
+  namespace?: string;
+  image?: string;
+  port?: number;
   resource_config?: {
     cpu_limit: number;
     memory_limit: string;

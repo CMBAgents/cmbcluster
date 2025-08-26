@@ -156,7 +156,7 @@ async def stop_environment(
         await pod_manager.stop_user_environment(user_id)
         await log_activity(user_id, "environment_stopped", f"Stopped environment {env_id}")
         
-        return {"message": "Environment stopped successfully"}
+        return {"status": "success", "message": "Environment stopped successfully"}
         
     except Exception as e:
         logger.error("Failed to stop environment", user_id=user_id, env_id=env_id, error=str(e))
@@ -182,7 +182,7 @@ async def delete_environment(
         await pod_manager.delete_user_environment(user_id)
         await log_activity(user_id, "environment_deleted", f"Deleted environment {env_id}")
         
-        return {"message": "Environment deleted successfully"}
+        return {"status": "deleted", "message": "Environment deleted successfully"}
         
     except Exception as e:
         logger.error("Failed to delete environment", user_id=user_id, env_id=env_id, error=str(e))
