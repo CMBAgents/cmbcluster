@@ -133,12 +133,25 @@ function SignInContent() {
           </div>
           
           {/* Sophisticated Branding */}
-          <div>
+          <div className="flex items-center justify-center gap-4 mb-6">
+            <Image
+              src="/logos/cmbagent-logo.png"
+              alt="CMBAgent"
+              width={48}
+              height={48}
+              preview={false}
+              style={{
+                transition: 'all 0.4s ease',
+                objectFit: 'contain',
+                filter: theme === 'dark' ? 'brightness(1.1)' : 'brightness(0.9)'
+              }}
+            />
             <h1 className="text-5xl font-light mb-4" style={{ 
               color: 'var(--text-primary)',
               fontWeight: '300',
               letterSpacing: '-0.02em',
-              lineHeight: 1.1
+              lineHeight: 1.1,
+              margin: 0
             }}>
               CMBAgent 
               <span style={{ 
@@ -151,19 +164,20 @@ function SignInContent() {
                 Cloud
               </span>
             </h1>
-            <div className="flex items-center justify-center gap-4 mb-6">
-              <div className="h-px w-12 opacity-30" style={{ background: 'var(--text-muted)' }}></div>
-              <Text style={{ 
-                color: 'var(--text-muted)', 
-                fontSize: 'var(--text-sm)',
-                fontWeight: 'var(--font-medium)',
-                textTransform: 'uppercase',
-                letterSpacing: '0.15em'
-              }}>
-                Autonomous Agentic Research Environment
-              </Text>
-              <div className="h-px w-12 opacity-30" style={{ background: 'var(--text-muted)' }}></div>
-            </div>
+          </div>
+          <div className="flex items-center justify-center gap-4 mb-6">
+            <div className="h-px w-12 opacity-30" style={{ background: 'var(--text-muted)' }}></div>
+            <Text style={{ 
+              color: 'var(--text-muted)', 
+              fontSize: 'var(--text-sm)',
+              fontWeight: 'var(--font-medium)',
+              textTransform: 'uppercase',
+              letterSpacing: '0.15em'
+            }}>
+              Autonomous Agentic Research Environment
+            </Text>
+            <div className="h-px w-12 opacity-30" style={{ background: 'var(--text-muted)' }}></div>
+          </div>
           </div>
         </div>
 

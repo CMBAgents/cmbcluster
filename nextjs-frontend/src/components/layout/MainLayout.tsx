@@ -128,70 +128,92 @@ export default function MainLayout({ children }: MainLayoutProps) {
         collapsed={collapsed}
         width={280}
         collapsedWidth={80}
-        className="bg-[#1f1f1f] border-r border-border-primary"
-        theme="dark"
+        style={{
+          background: 'var(--glass-bg-primary)',
+          backdropFilter: 'blur(var(--glass-blur))',
+          borderRight: '1px solid var(--glass-border)',
+          boxShadow: 'var(--glass-shadow)'
+        }}
       >
         <div className="p-4">
-          {/* Logo Section */}
+          {/* Professional Logo Section with CMBAgent branding */}
           <div className="flex items-center justify-center mb-8">
             {!collapsed ? (
               <div className="flex items-center space-x-3">
-                <div className="cambridge-logo-container">
+                <div className="icon-container primary p-2" style={{
+                  background: 'var(--glass-bg-secondary)',
+                  backdropFilter: 'blur(var(--glass-blur-light))',
+                  border: '1px solid var(--glass-border)',
+                  borderRadius: 'var(--radius-xl)'
+                }}>
                   <Image
-                    src="/logos/cambridge-logo.png"
-                    alt="Cambridge"
-                    width={40}
-                    height={20}
+                    src="/logos/cmbagent-logo.png"
+                    alt="CMBAgent"
+                    width={24}
+                    height={24}
                     preview={false}
+                    style={{ filter: 'brightness(1.1)' }}
                   />
                 </div>
-                <Image
-                  src="/logos/infosys-logo.png"
-                  alt="Infosys"
-                  width={40}
-                  height={20}
-                  preview={false}
-                />
+                <div>
+                  <Text style={{ 
+                    color: 'var(--text-primary)', 
+                    fontWeight: 'var(--font-semibold)',
+                    fontSize: 'var(--text-lg)'
+                  }}>
+                    CMBAgent
+                  </Text>
+                  <br />
+                  <Text style={{ 
+                    color: 'var(--text-muted)', 
+                    fontSize: 'var(--text-xs)'
+                  }}>
+                    Research Platform
+                  </Text>
+                </div>
               </div>
             ) : (
-              <div className="cambridge-logo-container">
+              <div className="icon-container primary p-2" style={{
+                background: 'var(--glass-bg-secondary)',
+                backdropFilter: 'blur(var(--glass-blur-light))',
+                border: '1px solid var(--glass-border)',
+                borderRadius: 'var(--radius-xl)'
+              }}>
                 <Image
-                  src="/logos/cambridge-logo.png"
-                  alt="Cambridge"
-                  width={32}
-                  height={16}
+                  src="/logos/cmbagent-logo.png"
+                  alt="CMBAgent"
+                  width={24}
+                  height={24}
                   preview={false}
+                  style={{ filter: 'brightness(1.1)' }}
                 />
               </div>
             )}
           </div>
 
-          {/* App Title */}
-          {!collapsed && (
-            <div className="text-center mb-6">
-              <Title level={4} className="text-white mb-1">
-                CMBAgent Cloud
-              </Title>
-              <Text type="secondary" className="text-xs">
-                Autonomous Research Platform
-              </Text>
-            </div>
-          )}
-
           {/* Navigation Menu */}
           <Menu
-            theme="dark"
             mode="inline"
             selectedKeys={[pathname]}
             items={menuItems}
             onClick={handleMenuClick}
-            className="bg-transparent border-r-0"
+            style={{
+              background: 'transparent',
+              border: 'none',
+              color: 'var(--text-primary)'
+            }}
+            className="professional-nav-menu"
           />
 
-          {/* User Info - Bottom of sidebar */}
+          {/* Professional User Info - Bottom of sidebar */}
           {!collapsed && session?.user && (
             <div className="absolute bottom-4 left-4 right-4">
-              <div className="bg-[#262626] rounded-lg p-3">
+              <div className="glass-card p-3" style={{
+                background: 'var(--glass-bg-secondary)',
+                backdropFilter: 'blur(var(--glass-blur-light))',
+                border: '1px solid var(--glass-border)',
+                borderRadius: 'var(--radius-xl)'
+              }}>
                 <div className="flex items-center space-x-3">
                   <Avatar
                     src={session.user.image}
@@ -199,10 +221,17 @@ export default function MainLayout({ children }: MainLayoutProps) {
                     size="small"
                   />
                   <div className="flex-1 min-w-0">
-                    <Text className="text-white text-sm block truncate">
+                    <Text style={{ 
+                      color: 'var(--text-primary)', 
+                      fontSize: 'var(--text-sm)',
+                      fontWeight: 'var(--font-medium)'
+                    }} className="block truncate">
                       {session.user.name}
                     </Text>
-                    <Text type="secondary" className="text-xs block truncate">
+                    <Text style={{ 
+                      color: 'var(--text-muted)', 
+                      fontSize: 'var(--text-xs)'
+                    }} className="block truncate">
                       {session.user.email}
                     </Text>
                   </div>
@@ -214,19 +243,42 @@ export default function MainLayout({ children }: MainLayoutProps) {
       </Sider>
 
       <Layout>
-        {/* Header */}
-        <Header className="bg-[#262730] border-b border-border-primary px-4 flex items-center justify-between">
+        {/* Professional Header */}
+        <Header style={{
+          background: 'var(--glass-bg-primary)',
+          backdropFilter: 'blur(var(--glass-blur))',
+          borderBottom: '1px solid var(--glass-border)',
+          boxShadow: 'var(--glass-shadow)',
+          padding: '0 24px',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between'
+        }}>
           <div className="flex items-center space-x-4">
-            {/* Collapse Toggle */}
+            {/* Professional Collapse Toggle */}
             <Button
               type="text"
               icon={collapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />}
               onClick={() => setCollapsed(!collapsed)}
-              className="text-text-primary hover:bg-background-tertiary"
+              style={{
+                width: '40px',
+                height: '40px',
+                borderRadius: 'var(--radius-xl)',
+                background: 'var(--glass-bg-secondary)',
+                backdropFilter: 'blur(var(--glass-blur-light))',
+                border: '1px solid var(--glass-border)',
+                color: 'var(--text-primary)',
+                transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)'
+              }}
+              className="hover:shadow-md"
             />
 
             {/* Page Title */}
-            <Title level={4} className="text-text-primary mb-0">
+            <Title level={4} style={{ 
+              color: 'var(--text-primary)', 
+              margin: 0,
+              fontWeight: 'var(--font-semibold)'
+            }}>
               {pathname === '/' ? 'Dashboard' :
                pathname === '/environments' ? 'Environments' :
                pathname === '/settings' ? 'Settings' :
@@ -235,7 +287,7 @@ export default function MainLayout({ children }: MainLayoutProps) {
           </div>
 
           <div className="flex items-center space-x-4">
-            {/* System Alerts Notification */}
+            {/* Professional System Alerts Notification */}
             <Popover
               content={
                 <div style={{ width: 300 }}>
@@ -244,7 +296,7 @@ export default function MainLayout({ children }: MainLayoutProps) {
                   </div>
                   {failedEnvironments.length > 0 ? (
                     <div className="space-y-2">
-                      {failedEnvironments.slice(0, 5).map((env) => (
+                      {failedEnvironments.slice(0, 5).map((env: Environment) => (
                         <Alert
                           key={env.id}
                           message={`Environment ${env.env_id?.substring(0, 8) || env.id?.substring(0, 8)} has failed`}
@@ -286,25 +338,44 @@ export default function MainLayout({ children }: MainLayoutProps) {
                 <Button
                   type="text"
                   icon={<BellOutlined />}
-                  className="text-text-primary hover:bg-background-tertiary"
+                  style={{
+                    width: '40px',
+                    height: '40px',
+                    borderRadius: 'var(--radius-xl)',
+                    background: 'var(--glass-bg-secondary)',
+                    backdropFilter: 'blur(var(--glass-blur-light))',
+                    border: '1px solid var(--glass-border)',
+                    color: 'var(--text-primary)',
+                    transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)'
+                  }}
+                  className="hover:shadow-md"
                 />
               </Badge>
             </Popover>
 
-            {/* Theme Toggle */}
-            <Space align="center">
-              <SunOutlined className="text-text-secondary" />
-              <Switch
-                checked={theme === 'dark'}
-                onChange={toggleTheme}
-                size="small"
-                checkedChildren={<MoonOutlined />}
-                unCheckedChildren={<SunOutlined />}
-              />
-              <MoonOutlined className="text-text-secondary" />
-            </Space>
+            {/* Professional Theme Toggle - matching sign-in page */}
+            <button 
+              onClick={toggleTheme}
+              className="icon-container primary"
+              style={{
+                width: '40px',
+                height: '40px',
+                borderRadius: 'var(--radius-xl)',
+                background: 'var(--glass-bg-secondary)',
+                backdropFilter: 'blur(var(--glass-blur-light))',
+                border: '1px solid var(--glass-border)',
+                transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+                cursor: 'pointer'
+              }}
+            >
+              {theme === 'dark' ? (
+                <SunOutlined style={{ fontSize: '16px', color: 'var(--interactive-primary)' }} />
+              ) : (
+                <MoonOutlined style={{ fontSize: '16px', color: 'var(--interactive-primary)' }} />
+              )}
+            </button>
 
-            {/* User Dropdown */}
+            {/* Professional User Dropdown */}
             {session?.user && (
               <Dropdown
                 menu={{ items: userMenuItems, onClick: handleUserMenuClick }}
@@ -314,14 +385,30 @@ export default function MainLayout({ children }: MainLayoutProps) {
               >
                 <Button
                   type="text"
-                  className="flex items-center space-x-2 text-text-primary hover:bg-background-tertiary px-3"
+                  style={{
+                    background: 'var(--glass-bg-secondary)',
+                    backdropFilter: 'blur(var(--glass-blur-light))',
+                    border: '1px solid var(--glass-border)',
+                    borderRadius: 'var(--radius-xl)',
+                    color: 'var(--text-primary)',
+                    padding: '8px 16px',
+                    height: '40px',
+                    transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)'
+                  }}
+                  className="flex items-center space-x-2 hover:shadow-md"
                 >
                   <Avatar
                     src={session.user.image}
                     icon={<UserOutlined />}
                     size="small"
                   />
-                  <span className="hidden md:inline">{session.user.name}</span>
+                  <span className="hidden md:inline" style={{ 
+                    color: 'var(--text-primary)',
+                    fontWeight: 'var(--font-medium)',
+                    fontSize: 'var(--text-sm)'
+                  }}>
+                    {session.user.name}
+                  </span>
                 </Button>
               </Dropdown>
             )}

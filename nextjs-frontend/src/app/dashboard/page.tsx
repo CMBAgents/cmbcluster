@@ -146,79 +146,160 @@ export default function DashboardPage() {
   return (
     <MainLayout>
       <div className="space-y-6">
-        {/* Welcome Section */}
+        {/* Professional Welcome Section */}
         <div className="mb-8">
-          <Title level={2} className="text-text-primary mb-2">
-            Welcome back, {session?.user?.name?.split(' ')[0] || 'User'}! 👋
-          </Title>
-          <Paragraph className="text-text-secondary text-lg">
-            Here's an overview of your CMBAgent Cloud platform. Monitor your environments, 
-            manage storage, and access powerful computational resources.
-          </Paragraph>
+          <div className="flex items-center gap-4 mb-4">
+            <div className="icon-container primary p-3" style={{
+              background: 'var(--glass-bg-secondary)',
+              backdropFilter: 'blur(var(--glass-blur-light))',
+              border: '1px solid var(--glass-border)',
+              borderRadius: 'var(--radius-xl)'
+            }}>
+              <RocketOutlined style={{ fontSize: '24px', color: 'var(--interactive-primary)' }} />
+            </div>
+            <div>
+              <Title level={2} style={{ 
+                color: 'var(--text-primary)', 
+                margin: 0,
+                fontWeight: 'var(--font-semibold)'
+              }}>
+                Welcome back, {session?.user?.name?.split(' ')[0] || 'User'}! 👋
+              </Title>
+              <Text style={{ 
+                color: 'var(--text-secondary)', 
+                fontSize: 'var(--text-lg)'
+              }}>
+                Here's your CMBAgent Cloud platform overview
+              </Text>
+            </div>
+          </div>
         </div>
 
-        {/* Platform Status Alert */}
+        {/* Professional Platform Status */}
         <Alert
           message="Platform Status: All Systems Operational"
-          description="All services are running normally. Last updated: Just now"
+          description="All services running normally • Last updated: Just now"
           type="success"
           showIcon
-          className="mb-6"
+          className="glass-card mb-6"
+          style={{
+            background: 'var(--glass-bg-primary)',
+            backdropFilter: 'blur(var(--glass-blur))',
+            border: '1px solid var(--success-200)',
+            borderRadius: 'var(--radius-2xl)'
+          }}
         />
 
-        {/* Statistics Cards */}
+        {/* Professional Statistics Cards */}
         <Row gutter={[24, 24]} className="mb-8">
           {stats.map((stat, index) => (
             <Col xs={24} sm={12} md={6} key={index}>
               <Card
-                className="bg-background-secondary border-border-primary hover:shadow-lg transition-shadow"
-                bodyStyle={{ padding: '24px' }}
+                className="glass-card hover:shadow-lg transition-all duration-300"
+                bodyStyle={{ padding: '32px' }}
+                style={{
+                  background: 'var(--glass-bg-primary)',
+                  backdropFilter: 'blur(var(--glass-blur))',
+                  border: '1px solid var(--glass-border)',
+                  borderRadius: 'var(--radius-2xl)',
+                  cursor: 'pointer'
+                }}
               >
-                <Statistic
-                  title={
-                    <Text className="text-text-secondary font-medium">
-                      {stat.title}
-                    </Text>
-                  }
-                  value={stat.value}
-                  prefix={stat.icon}
-                  valueStyle={{
-                    color: stat.color,
-                    fontSize: '28px',
-                    fontWeight: 'bold',
-                  }}
-                />
+                <div className="text-center">
+                  <div className="mb-4 mx-auto w-16 h-16 rounded-full flex items-center justify-center" 
+                       style={{ 
+                         background: `${stat.color}15`, 
+                         border: `1px solid ${stat.color}30` 
+                       }}>
+                    <span style={{ fontSize: '24px', color: stat.color }}>
+                      {stat.icon}
+                    </span>
+                  </div>
+                  <Statistic
+                    title={
+                      <Text style={{ 
+                        color: 'var(--text-muted)', 
+                        fontSize: 'var(--text-sm)',
+                        fontWeight: 'var(--font-medium)'
+                      }}>
+                        {stat.title}
+                      </Text>
+                    }
+                    value={stat.value}
+                    valueStyle={{
+                      color: 'var(--text-primary)',
+                      fontSize: '36px',
+                      fontWeight: 'var(--font-bold)',
+                      lineHeight: 1
+                    }}
+                  />
+                </div>
               </Card>
             </Col>
           ))}
         </Row>
 
-        {/* Quick Actions */}
-        <div>
-          <Title level={3} className="text-text-primary mb-4">
+        {/* Professional Quick Actions */}
+        <div className="mb-8">
+          <Title level={3} style={{ 
+            color: 'var(--text-primary)', 
+            marginBottom: 'var(--spacing-lg)',
+            fontWeight: 'var(--font-semibold)'
+          }}>
             Quick Actions
           </Title>
           <Row gutter={[24, 24]}>
             {quickActions.map((action, index) => (
               <Col xs={24} sm={12} md={8} key={index}>
                 <Card
-                  className="bg-background-secondary border-border-primary hover:shadow-lg transition-all hover:border-primary cursor-pointer h-full"
-                  bodyStyle={{ padding: '24px' }}
+                  className="glass-card hover:shadow-xl transition-all duration-300 cursor-pointer group"
+                  bodyStyle={{ padding: '32px' }}
                   onClick={() => router.push(action.action)}
+                  style={{
+                    background: 'var(--glass-bg-primary)',
+                    backdropFilter: 'blur(var(--glass-blur))',
+                    border: '1px solid var(--glass-border)',
+                    borderRadius: 'var(--radius-2xl)',
+                    height: '100%'
+                  }}
                 >
-                  <Space direction="vertical" size={16} className="w-full">
-                    <div className="text-primary text-3xl">
-                      {action.icon}
-                    </div>
-                    <div>
-                      <Title level={4} className="text-text-primary mb-2">
+                  <Space direction="vertical" size={20} style={{ width: '100%' }}>
+                    <div className="text-center">
+                      <div className="mb-4 mx-auto w-16 h-16 rounded-full flex items-center justify-center transition-all duration-300 group-hover:scale-110" 
+                           style={{ 
+                             background: 'var(--primary-50)', 
+                             border: '1px solid var(--primary-200)' 
+                           }}>
+                        <span style={{ fontSize: '24px', color: 'var(--interactive-primary)' }}>
+                          {action.icon}
+                        </span>
+                      </div>
+                      <Title level={4} style={{ 
+                        color: 'var(--text-primary)', 
+                        marginBottom: 'var(--spacing-sm)',
+                        fontWeight: 'var(--font-semibold)'
+                      }}>
                         {action.title}
                       </Title>
-                      <Text className="text-text-secondary">
+                      <Text style={{ 
+                        color: 'var(--text-secondary)',
+                        fontSize: 'var(--text-sm)',
+                        lineHeight: 1.5
+                      }}>
                         {action.description}
                       </Text>
                     </div>
-                    <Button type="primary" className="mt-auto">
+                    <Button 
+                      type="primary" 
+                      size="large"
+                      className="w-full"
+                      style={{
+                        background: 'var(--interactive-primary)',
+                        borderColor: 'var(--interactive-primary)',
+                        borderRadius: 'var(--radius-xl)',
+                        fontWeight: 'var(--font-medium)'
+                      }}
+                    >
                       Get Started
                     </Button>
                   </Space>
@@ -228,109 +309,238 @@ export default function DashboardPage() {
           </Row>
         </div>
 
-        {/* Professional Activity Feed */}
+        {/* Professional Activity & Stats Grid */}
         <Row gutter={[24, 24]}>
           <Col xs={24} lg={16}>
-            <Card className="glass-card" title={
-              <div className="flex items-center justify-between">
-                <h3 className="text-lg font-semibold" style={{ color: 'var(--text-primary)' }}>
-                  Recent Activity
-                </h3>
-                <Button type="link" size="small" style={{ color: 'var(--interactive-primary)' }}>
-                  View All
-                </Button>
-              </div>
-            }>
-              {recentActivity.length > 0 ? (
-                <Timeline className="mt-4">
-                  {recentActivity.map((activity, index) => (
-                    <Timeline.Item key={index} dot={activity.icon}>
-                      <div className="pb-4">
-                        <div className="flex items-start justify-between mb-1">
-                          <h4 className="font-medium" style={{ color: 'var(--text-primary)' }}>
-                            {activity.title}
-                          </h4>
-                          <span className="text-xs" style={{ color: 'var(--text-muted)' }}>
-                            {activity.time}
-                          </span>
-                        </div>
-                        <p className="text-sm mb-2" style={{ color: 'var(--text-secondary)' }}>
-                          {activity.description}
-                        </p>
-                        <code className="text-xs px-2 py-1 rounded" style={{ 
-                          background: 'var(--bg-tertiary)', 
-                          color: 'var(--text-muted)' 
-                        }}>
-                          {activity.id}
-                        </code>
-                      </div>
-                    </Timeline.Item>
-                  ))}
-                </Timeline>
-              ) : (
-                <div className="empty-state py-8">
-                  <div className="empty-state-icon">
-                    <ClockCircleOutlined />
+            <Card 
+              className="glass-card" 
+              style={{
+                background: 'var(--glass-bg-primary)',
+                backdropFilter: 'blur(var(--glass-blur))',
+                border: '1px solid var(--glass-border)',
+                borderRadius: 'var(--radius-2xl)'
+              }}
+              title={
+                <div className="flex items-center justify-between">
+                  <Title level={4} style={{ 
+                    color: 'var(--text-primary)', 
+                    margin: 0,
+                    fontWeight: 'var(--font-semibold)'
+                  }}>
+                    Recent Activity
+                  </Title>
+                  <Button 
+                    type="link" 
+                    size="small" 
+                    style={{ color: 'var(--interactive-primary)' }}
+                  >
+                    View All
+                  </Button>
+                </div>
+              }
+            >
+              <div className="empty-state py-8">
+                <div className="text-center">
+                  <div className="mb-4 mx-auto w-16 h-16 rounded-full flex items-center justify-center" 
+                       style={{ 
+                         background: 'var(--bg-tertiary)', 
+                         border: '1px solid var(--border-secondary)' 
+                       }}>
+                    <CloudOutlined style={{ fontSize: '24px', color: 'var(--text-muted)' }} />
                   </div>
-                  <h3>No Recent Activity</h3>
-                  <p>
+                  <Title level={4} style={{ 
+                    color: 'var(--text-primary)', 
+                    marginBottom: 'var(--spacing-sm)'
+                  }}>
+                    No Recent Activity
+                  </Title>
+                  <Text style={{ 
+                    color: 'var(--text-secondary)',
+                    marginBottom: 'var(--spacing-lg)',
+                    display: 'block'
+                  }}>
                     Your activity will appear here once you start using the platform.
-                    Try launching an environment or uploading some files to get started.
-                  </p>
-                  <Button type="primary" onClick={() => router.push('/environments')}>
+                  </Text>
+                  <Button 
+                    type="primary" 
+                    onClick={() => router.push('/environments')}
+                    style={{
+                      background: 'var(--interactive-primary)',
+                      borderColor: 'var(--interactive-primary)',
+                      borderRadius: 'var(--radius-xl)'
+                    }}
+                  >
                     Launch Your First Environment
                   </Button>
                 </div>
-              )}
+              </div>
             </Card>
           </Col>
           
           <Col xs={24} lg={8}>
-            <Card className="glass-card mb-6" title={
-              <h3 className="text-lg font-semibold" style={{ color: 'var(--text-primary)' }}>
-                Quick Stats
-              </h3>
-            }>
-              <div className="space-y-4">
-                <div className="flex justify-between items-center">
-                  <span className="text-sm" style={{ color: 'var(--text-secondary)' }}>CPU Usage</span>
-                  <span className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>23%</span>
+            <Space direction="vertical" size={24} style={{ width: '100%' }}>
+              <Card 
+                className="glass-card" 
+                style={{
+                  background: 'var(--glass-bg-primary)',
+                  backdropFilter: 'blur(var(--glass-blur))',
+                  border: '1px solid var(--glass-border)',
+                  borderRadius: 'var(--radius-2xl)'
+                }}
+                title={
+                  <Title level={4} style={{ 
+                    color: 'var(--text-primary)', 
+                    margin: 0,
+                    fontWeight: 'var(--font-semibold)'
+                  }}>
+                    System Resources
+                  </Title>
+                }
+              >
+                <Space direction="vertical" size={16} style={{ width: '100%' }}>
+                  <div>
+                    <div className="flex justify-between items-center mb-2">
+                      <Text style={{ color: 'var(--text-secondary)', fontSize: 'var(--text-sm)' }}>
+                        CPU Usage
+                      </Text>
+                      <Text style={{ color: 'var(--text-primary)', fontSize: 'var(--text-sm)', fontWeight: 'var(--font-medium)' }}>
+                        23%
+                      </Text>
+                    </div>
+                    <div style={{
+                      width: '100%',
+                      height: '8px',
+                      background: 'var(--bg-tertiary)',
+                      borderRadius: 'var(--radius-lg)',
+                      overflow: 'hidden'
+                    }}>
+                      <div style={{
+                        width: '23%',
+                        height: '100%',
+                        background: 'linear-gradient(90deg, var(--success-400), var(--success-500))',
+                        borderRadius: 'var(--radius-lg)'
+                      }} />
+                    </div>
+                  </div>
+                  
+                  <div>
+                    <div className="flex justify-between items-center mb-2">
+                      <Text style={{ color: 'var(--text-secondary)', fontSize: 'var(--text-sm)' }}>
+                        Memory
+                      </Text>
+                      <Text style={{ color: 'var(--text-primary)', fontSize: 'var(--text-sm)', fontWeight: 'var(--font-medium)' }}>
+                        67%
+                      </Text>
+                    </div>
+                    <div style={{
+                      width: '100%',
+                      height: '8px',
+                      background: 'var(--bg-tertiary)',
+                      borderRadius: 'var(--radius-lg)',
+                      overflow: 'hidden'
+                    }}>
+                      <div style={{
+                        width: '67%',
+                        height: '100%',
+                        background: 'linear-gradient(90deg, var(--warning-400), var(--warning-500))',
+                        borderRadius: 'var(--radius-lg)'
+                      }} />
+                    </div>
+                  </div>
+                  
+                  <div>
+                    <div className="flex justify-between items-center mb-2">
+                      <Text style={{ color: 'var(--text-secondary)', fontSize: 'var(--text-sm)' }}>
+                        Storage
+                      </Text>
+                      <Text style={{ color: 'var(--text-primary)', fontSize: 'var(--text-sm)', fontWeight: 'var(--font-medium)' }}>
+                        41%
+                      </Text>
+                    </div>
+                    <div style={{
+                      width: '100%',
+                      height: '8px',
+                      background: 'var(--bg-tertiary)',
+                      borderRadius: 'var(--radius-lg)',
+                      overflow: 'hidden'
+                    }}>
+                      <div style={{
+                        width: '41%',
+                        height: '100%',
+                        background: 'linear-gradient(90deg, var(--info-400), var(--info-500))',
+                        borderRadius: 'var(--radius-lg)'
+                      }} />
+                    </div>
+                  </div>
+                </Space>
+              </Card>
+              
+              <Card 
+                className="glass-card" 
+                style={{
+                  background: 'var(--glass-bg-primary)',
+                  backdropFilter: 'blur(var(--glass-blur))',
+                  border: '1px solid var(--glass-border)',
+                  borderRadius: 'var(--radius-2xl)'
+                }}
+                title={
+                  <Title level={4} style={{ 
+                    color: 'var(--text-primary)', 
+                    margin: 0,
+                    fontWeight: 'var(--font-semibold)'
+                  }}>
+                    Pro Tips
+                  </Title>
+                }
+              >
+                <div style={{
+                  padding: 'var(--spacing-lg)',
+                  borderRadius: 'var(--radius-xl)',
+                  background: 'var(--bg-tertiary)',
+                  border: '1px solid var(--border-secondary)'
+                }}>
+                  <div className="flex items-start gap-3">
+                    <div className="icon-container primary p-2" style={{
+                      background: 'var(--primary-50)',
+                      border: '1px solid var(--primary-200)',
+                      borderRadius: 'var(--radius-lg)',
+                      flexShrink: 0
+                    }}>
+                      <RocketOutlined style={{ fontSize: '14px', color: 'var(--interactive-primary)' }} />
+                    </div>
+                    <div>
+                      <Text style={{ 
+                        color: 'var(--text-primary)', 
+                        fontSize: 'var(--text-sm)',
+                        fontWeight: 'var(--font-medium)',
+                        display: 'block',
+                        marginBottom: 'var(--spacing-xs)'
+                      }}>
+                        Quick Start
+                      </Text>
+                      <Text style={{ 
+                        color: 'var(--text-secondary)', 
+                        fontSize: 'var(--text-xs)',
+                        lineHeight: 1.5
+                      }}>
+                        Use templates to quickly launch pre-configured environments for your research projects.
+                      </Text>
+                    </div>
+                  </div>
                 </div>
-                <Progress percent={23} strokeColor="var(--success-500)" showInfo={false} />
-                
-                <div className="flex justify-between items-center">
-                  <span className="text-sm" style={{ color: 'var(--text-secondary)' }}>Memory</span>
-                  <span className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>67%</span>
-                </div>
-                <Progress percent={67} strokeColor="var(--warning-500)" showInfo={false} />
-                
-                <div className="flex justify-between items-center">
-                  <span className="text-sm" style={{ color: 'var(--text-secondary)' }}>Storage</span>
-                  <span className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>41%</span>
-                </div>
-                <Progress percent={41} strokeColor="var(--info-500)" showInfo={false} />
-              </div>
-            </Card>
-            
-            <Card className="glass-card" title={
-              <h3 className="text-lg font-semibold" style={{ color: 'var(--text-primary)' }}>
-                Platform Tips
-              </h3>
-            }>
-              <div className="space-y-3">
-                <div className="p-3 rounded-lg" style={{ background: 'var(--bg-tertiary)' }}>
-                  <p className="text-sm font-medium mb-1" style={{ color: 'var(--text-primary)' }}>
-                    Pro Tip
-                  </p>
-                  <p className="text-xs" style={{ color: 'var(--text-secondary)' }}>
-                    Use templates to quickly launch pre-configured environments for your research projects.
-                  </p>
-                </div>
-                <Button type="link" size="small" style={{ color: 'var(--interactive-primary)', padding: 0 }}>
-                  Learn More
+                <Button 
+                  type="link" 
+                  size="small" 
+                  style={{ 
+                    color: 'var(--interactive-primary)', 
+                    padding: '8px 0',
+                    height: 'auto'
+                  }}
+                >
+                  Learn More →
                 </Button>
-              </div>
-            </Card>
+              </Card>
+            </Space>
           </Col>
         </Row>
       </div>
