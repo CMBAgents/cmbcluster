@@ -135,126 +135,250 @@ export default function MonitoringDashboard() {
   }
 
   return (
-    <div className="space-y-4">
-      {/* Critical Alerts */}
+    <div className="space-y-6">
+      {/* Professional Critical Alerts */}
       {criticalAlerts.length > 0 && (
         <Alert
-          banner
+          message="Critical System Alert"
+          description={`${criticalAlerts.length} environment${criticalAlerts.length > 1 ? 's have' : ' has'} failed and require immediate attention`}
           type="error"
-          icon={<ExclamationCircleOutlined />}
-          message={
-            <Space>
-              <Text strong>Environment Alert</Text>
-              <Badge count={criticalAlerts.length} />
-              <Text>{criticalAlerts.length} environment(s) have failed and require attention</Text>
-            </Space>
+          showIcon
+          action={
+            <Button size="small" danger onClick={() => refetch()}>
+              Investigate
+            </Button>
           }
-          closable
+          className="mb-6"
         />
       )}
 
-      {/* Header */}
-      <div className="flex justify-between items-center">
-        <Title level={4} className="mb-0 flex items-center">
-          <MonitorOutlined className="mr-2 text-blue-500" />
-          Environment Monitoring
-        </Title>
-        <Space>
-          <Switch 
-            size="small"
-            checked={autoRefresh}
-            onChange={setAutoRefresh}
-            checkedChildren="Live"
-            unCheckedChildren="Paused"
-          />
-          <Button
-            size="small"
-            icon={<ReloadOutlined />}
-            onClick={() => refetch()}
-            loading={isLoading}
-          >
-            Refresh
-          </Button>
-          <Button
-            size="small"
-            onClick={handleExportStatus}
-          >
-            Export Status
-          </Button>
-        </Space>
+      {/* Professional Header */}
+      <div className="page-header">
+        <div className="flex justify-between items-start">
+          <div>
+            <div className="flex items-center gap-3 mb-2">
+              <div className="icon-container primary p-2">
+                <MonitorOutlined style={{ fontSize: '18px' }} />
+              </div>
+              <h2 className="text-2xl font-semibold" style={{ color: 'var(--text-primary)' }}>
+                Environment Monitoring
+              </h2>
+            </div>
+            <p className="text-lg mb-4" style={{ color: 'var(--text-secondary)' }}>
+              Real-time monitoring and health status of your computing environments
+            </p>
+            <div className="flex items-center gap-4 text-sm" style={{ color: 'var(--text-tertiary)' }}>
+              <span className="flex items-center gap-1">
+                <div className={`status-indicator ${autoRefresh ? 'running' : 'stopped'}`}></div>
+                {autoRefresh ? 'Live monitoring active' : 'Monitoring paused'}
+              </span>
+              <span>•</span>
+              <span>Updates every {refreshInterval}s</span>
+            </div>
+          </div>
+          <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2 px-3 py-2 rounded-lg" style={{ background: 'var(--glass-bg-secondary)' }}>
+              <span className="text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>Live Updates</span>
+              <Switch 
+                checked={autoRefresh}
+                onChange={setAutoRefresh}
+                size="small"
+              />
+            </div>
+            <Button
+              icon={<ReloadOutlined />}
+              onClick={() => refetch()}
+              loading={isLoading}
+              className="btn-secondary"
+            >
+              Refresh
+            </Button>
+            <Button
+              onClick={handleExportStatus}
+              className="btn-primary"
+            >
+              Export Status
+            </Button>
+          </div>
+        </div>
       </div>
 
-      {/* Environment Statistics */}
-      <Row gutter={[16, 16]}>
-        <Col xs={24} sm={6}>
-          <Card size="small" className="text-center">
-            <Statistic
-              title="Total Environments"
-              value={stats.total}
-              prefix={<CloudServerOutlined />}
-              valueStyle={{ color: '#1890ff', fontSize: '24px' }}
-            />
+      {/* Professional Statistics Grid */}
+      <Row gutter={[24, 24]}>
+        <Col xs={24} sm={12} lg={6}>
+          <Card className="stats-card" bodyStyle={{ padding: 0 }}>
+            <div className="p-6">
+              <div className="flex items-start justify-between mb-4">
+                <div className="icon-container primary p-3">
+                  <CloudServerOutlined style={{ fontSize: '20px' }} />
+                </div>
+                <div className="text-right">
+                  <span className="text-xs font-semibold px-2 py-1 rounded-full text-primary-600 bg-primary-50">
+                    Total
+                  </span>
+                </div>
+              </div>
+              <div className="mb-2">
+                <h3 className="text-2xl font-bold mb-1" style={{ color: 'var(--text-primary)' }}>
+                  {stats.total}
+                </h3>
+                <p className="font-medium text-sm" style={{ color: 'var(--text-secondary)' }}>
+                  Total Environments
+                </p>
+              </div>
+              <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
+                Active monitoring targets
+              </p>
+            </div>
           </Card>
         </Col>
-        <Col xs={24} sm={6}>
-          <Card size="small" className="text-center">
-            <Statistic
-              title="Running"
-              value={stats.running}
-              prefix={<CheckCircleOutlined />}
-              valueStyle={{ color: '#52c41a', fontSize: '24px' }}
-            />
-            <Progress 
-              percent={stats.total > 0 ? (stats.running / stats.total) * 100 : 0} 
-              strokeColor="#52c41a"
-              size="small"
-              showInfo={false}
-            />
+        <Col xs={24} sm={12} lg={6}>
+          <Card className="stats-card" bodyStyle={{ padding: 0 }}>
+            <div className="p-6">
+              <div className="flex items-start justify-between mb-4">
+                <div className="icon-container success p-3">
+                  <CheckCircleOutlined style={{ fontSize: '20px' }} />
+                </div>
+                <div className="text-right">
+                  <span className="text-xs font-semibold px-2 py-1 rounded-full text-success-600 bg-success-50">
+                    Healthy
+                  </span>
+                </div>
+              </div>
+              <div className="mb-2">
+                <h3 className="text-2xl font-bold mb-1" style={{ color: 'var(--text-primary)' }}>
+                  {stats.running}
+                </h3>
+                <p className="font-medium text-sm" style={{ color: 'var(--text-secondary)' }}>
+                  Running Now
+                </p>
+              </div>
+              <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
+                {stats.total > 0 ? Math.round((stats.running / stats.total) * 100) : 0}% uptime
+              </p>
+              <div className="mt-3">
+                <Progress 
+                  percent={stats.total > 0 ? (stats.running / stats.total) * 100 : 0}
+                  showInfo={false}
+                  strokeColor="var(--success-500)"
+                  trailColor="var(--success-50)"
+                  strokeWidth={4}
+                />
+              </div>
+            </div>
           </Card>
         </Col>
-        <Col xs={24} sm={6}>
-          <Card size="small" className="text-center">
-            <Statistic
-              title="Pending"
-              value={stats.pending}
-              prefix={<ClockCircleOutlined />}
-              valueStyle={{ color: '#faad14', fontSize: '24px' }}
-            />
-            <Progress 
-              percent={stats.total > 0 ? (stats.pending / stats.total) * 100 : 0} 
-              strokeColor="#faad14"
-              size="small"
-              showInfo={false}
-            />
+        <Col xs={24} sm={12} lg={6}>
+          <Card className="stats-card" bodyStyle={{ padding: 0 }}>
+            <div className="p-6">
+              <div className="flex items-start justify-between mb-4">
+                <div className="icon-container warning p-3">
+                  <ClockCircleOutlined style={{ fontSize: '20px' }} />
+                </div>
+                <div className="text-right">
+                  {stats.pending > 0 && (
+                    <span className="text-xs font-semibold px-2 py-1 rounded-full text-warning-600 bg-warning-50">
+                      Starting
+                    </span>
+                  )}
+                </div>
+              </div>
+              <div className="mb-2">
+                <h3 className="text-2xl font-bold mb-1" style={{ color: 'var(--text-primary)' }}>
+                  {stats.pending}
+                </h3>
+                <p className="font-medium text-sm" style={{ color: 'var(--text-secondary)' }}>
+                  Pending Launch
+                </p>
+              </div>
+              <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
+                {stats.pending > 0 ? 'Environments starting up' : 'All ready'}
+              </p>
+              <div className="mt-3">
+                <Progress 
+                  percent={stats.pending > 0 ? 75 : 0}
+                  showInfo={false}
+                  strokeColor="var(--warning-500)"
+                  trailColor="var(--warning-50)"
+                  strokeWidth={4}
+                />
+              </div>
+            </div>
           </Card>
         </Col>
-        <Col xs={24} sm={6}>
-          <Card size="small" className="text-center">
-            <Statistic
-              title="Issues"
-              value={stats.failed + stats.stopped}
-              prefix={<ExclamationCircleOutlined />}
-              valueStyle={{ color: stats.failed > 0 ? '#ff4d4f' : '#8c8c8c', fontSize: '24px' }}
-            />
-            <Progress 
-              percent={stats.total > 0 ? ((stats.failed + stats.stopped) / stats.total) * 100 : 0} 
-              strokeColor={stats.failed > 0 ? "#ff4d4f" : "#8c8c8c"}
-              size="small"
-              showInfo={false}
-            />
+        <Col xs={24} sm={12} lg={6}>
+          <Card className="stats-card" bodyStyle={{ padding: 0 }}>
+            <div className="p-6">
+              <div className="flex items-start justify-between mb-4">
+                <div className={`icon-container ${stats.failed > 0 ? 'error' : 'primary'} p-3`}>
+                  <ExclamationCircleOutlined style={{ fontSize: '20px' }} />
+                </div>
+                <div className="text-right">
+                  {stats.failed > 0 && (
+                    <span className="text-xs font-semibold px-2 py-1 rounded-full text-error-600 bg-error-50">
+                      Alert
+                    </span>
+                  )}
+                </div>
+              </div>
+              <div className="mb-2">
+                <h3 className="text-2xl font-bold mb-1" style={{ 
+                  color: stats.failed > 0 ? 'var(--error-500)' : 'var(--text-primary)'
+                }}>
+                  {stats.failed + stats.stopped}
+                </h3>
+                <p className="font-medium text-sm" style={{ color: 'var(--text-secondary)' }}>
+                  Issues Found
+                </p>
+              </div>
+              <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
+                {stats.failed > 0 ? 'Requires attention' : 'All systems normal'}
+              </p>
+              <div className="mt-3">
+                <Progress 
+                  percent={stats.total > 0 ? ((stats.failed + stats.stopped) / stats.total) * 100 : 0}
+                  showInfo={false}
+                  strokeColor={stats.failed > 0 ? "var(--error-500)" : "var(--neutral-400)"}
+                  trailColor={stats.failed > 0 ? "var(--error-50)" : "var(--neutral-100)"}
+                  strokeWidth={4}
+                />
+              </div>
+            </div>
           </Card>
         </Col>
       </Row>
 
-      {/* Environment Status Cards */}
-      <Card title="Environment Status Overview" size="small" loading={isLoading}>
+      {/* Professional Environment Status Overview */}
+      <Card className="glass-card" loading={isLoading}>
+        <div className="flex items-center justify-between mb-6">
+          <div>
+            <h3 className="text-xl font-semibold mb-1" style={{ color: 'var(--text-primary)' }}>
+              Environment Status Overview
+            </h3>
+            <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>
+              Real-time health monitoring for all active environments
+            </p>
+          </div>
+          <div className="flex items-center gap-2 text-sm" style={{ color: 'var(--text-muted)' }}>
+            <div className="status-indicator running"></div>
+            <span>Live monitoring</span>
+            <span className="mx-2">•</span>
+            <span>Last update: Just now</span>
+          </div>
+        </div>
+        
         {environments.length === 0 ? (
-          <Empty
-            image={Empty.PRESENTED_IMAGE_SIMPLE}
-            description="No environments to monitor"
-          />
+          <div className="empty-state py-12">
+            <div className="empty-state-icon">
+              <MonitorOutlined />
+            </div>
+            <h3>No Environments to Monitor</h3>
+            <p>
+              Launch your first environment to start monitoring its health and performance metrics.
+            </p>
+          </div>
         ) : (
-          <Row gutter={[12, 12]}>
+          <Row gutter={[24, 24]}>
             {environments.map((environment) => (
               <Col key={environment.id} xs={24} sm={12} lg={8} xl={6}>
                 <EnvironmentMonitoringCard 

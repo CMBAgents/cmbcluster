@@ -1,0 +1,96 @@
+{
+  "timestamp": "2025-08-27T02:34:20.709605",
+  "backend_url": "http://localhost:8000",
+  "summary": {
+    "total_tests": 14,
+    "passed": 2,
+    "failed": 12,
+    "success_rate": 14.285714285714285
+  },
+  "results": [
+    {
+      "test": "Health Check",
+      "success": false,
+      "details": "HTTPConnectionPool(host='localhost', port=8000): Max retries exceeded with url: /health (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x79f3ac115c70>: Failed to establish a new connection: [Errno 111] Connection refused'))",
+      "timestamp": "2025-08-27T02:34:20.690625"
+    },
+    {
+      "test": "Authentication Required",
+      "success": false,
+      "details": "HTTPConnectionPool(host='localhost', port=8000): Max retries exceeded with url: /environments (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x79f3ac115c70>: Failed to establish a new connection: [Errno 111] Connection refused'))",
+      "timestamp": "2025-08-27T02:34:20.692841"
+    },
+    {
+      "test": "Authentication Working",
+      "success": false,
+      "details": "HTTPConnectionPool(host='localhost', port=8000): Max retries exceeded with url: /environments (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x79f3ac116b40>: Failed to establish a new connection: [Errno 111] Connection refused'))",
+      "timestamp": "2025-08-27T02:34:20.694386"
+    },
+    {
+      "test": "CORS Configuration",
+      "success": false,
+      "details": "HTTPConnectionPool(host='localhost', port=8000): Max retries exceeded with url: /environments (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x79f3ac116e40>: Failed to establish a new connection: [Errno 111] Connection refused'))",
+      "timestamp": "2025-08-27T02:34:20.695790"
+    },
+    {
+      "test": "List Environments",
+      "success": false,
+      "details": "HTTPConnectionPool(host='localhost', port=8000): Max retries exceeded with url: /environments/list (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x79f3ac117230>: Failed to establish a new connection: [Errno 111] Connection refused'))",
+      "timestamp": "2025-08-27T02:34:20.697265"
+    },
+    {
+      "test": "Environment Status",
+      "success": false,
+      "details": "HTTPConnectionPool(host='localhost', port=8000): Max retries exceeded with url: /environments (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x79f3ac1175c0>: Failed to establish a new connection: [Errno 111] Connection refused'))",
+      "timestamp": "2025-08-27T02:34:20.698826"
+    },
+    {
+      "test": "Create Environment",
+      "success": false,
+      "details": "HTTPConnectionPool(host='localhost', port=8000): Max retries exceeded with url: /environments (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x79f3ac1178f0>: Failed to establish a new connection: [Errno 111] Connection refused'))",
+      "timestamp": "2025-08-27T02:34:20.700375"
+    },
+    {
+      "test": "List Storage",
+      "success": false,
+      "details": "HTTPConnectionPool(host='localhost', port=8000): Max retries exceeded with url: /storage/list (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x79f3ac117d70>: Failed to establish a new connection: [Errno 111] Connection refused'))",
+      "timestamp": "2025-08-27T02:34:20.701957"
+    },
+    {
+      "test": "Get User Env Vars",
+      "success": false,
+      "details": "HTTPConnectionPool(host='localhost', port=8000): Max retries exceeded with url: /user-env-vars (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x79f3ac140200>: Failed to establish a new connection: [Errno 111] Connection refused'))",
+      "timestamp": "2025-08-27T02:34:20.703365"
+    },
+    {
+      "test": "Set User Env Var",
+      "success": false,
+      "details": "HTTPConnectionPool(host='localhost', port=8000): Max retries exceeded with url: /user-env-vars (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x79f3ac140590>: Failed to establish a new connection: [Errno 111] Connection refused'))",
+      "timestamp": "2025-08-27T02:34:20.705979"
+    },
+    {
+      "test": "List User Files",
+      "success": false,
+      "details": "HTTPConnectionPool(host='localhost', port=8000): Max retries exceeded with url: /user-files (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x79f3ac117920>: Failed to establish a new connection: [Errno 111] Connection refused'))",
+      "timestamp": "2025-08-27T02:34:20.707498"
+    },
+    {
+      "test": "Activity Log",
+      "success": false,
+      "details": "HTTPConnectionPool(host='localhost', port=8000): Max retries exceeded with url: /activity (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x79f3ac117860>: Failed to establish a new connection: [Errno 111] Connection refused'))",
+      "timestamp": "2025-08-27T02:34:20.708890"
+    },
+    {
+      "test": "Date Format Compatibility",
+      "success": true,
+      "details": "ISO format parsed correctly",
+      "timestamp": "2025-08-27T02:34:20.708983"
+    },
+    {
+      "test": "Status Format Compatibility",
+      "success": true,
+      "details": "Compatible statuses: {'pending', 'running', 'unknown', 'failed'}",
+      "timestamp": "2025-08-27T02:34:20.709016"
+    }
+  ]
+}

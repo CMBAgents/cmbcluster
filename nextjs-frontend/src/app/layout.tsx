@@ -21,8 +21,24 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" data-theme="dark">
+    <html lang="en" suppressHydrationWarning>
       <body className={inter.className}>
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `
+              (function() {
+                function getInitialTheme() {
+                  try {
+                    const storedTheme = window.localStorage.getItem('theme');
+                    if (storedTheme === 'dark' || storedTheme === 'light') return storedTheme;
+                  } catch (e) {}
+                  return 'light'; // Default to light theme
+                }
+                document.documentElement.setAttribute('data-theme', getInitialTheme());
+              })();
+            `,
+          }}
+        />
         <Providers>
           {children}
         </Providers>

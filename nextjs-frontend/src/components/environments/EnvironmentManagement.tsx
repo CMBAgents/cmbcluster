@@ -375,25 +375,47 @@ export default function EnvironmentManagement() {
       ],
       onFilter: (value: any, record: Environment) => record.status === value,
       render: (status: string) => {
-        const statusConfig = {
-          running: { color: 'success', icon: <CheckCircleOutlined /> },
-          pending: { color: 'processing', icon: <LoadingOutlined spin /> },
-          failed: { color: 'error', icon: <ExclamationCircleOutlined /> },
-          stopped: { color: 'default', icon: <StopOutlined /> },
+        const getStatusBadge = (status: string) => {
+          switch (status) {
+            case 'running':
+              return (
+                <span className="status-badge running flex items-center gap-2">
+                  <CheckCircleOutlined style={{ fontSize: '12px' }} />
+                  Running
+                </span>
+              );
+            case 'pending':
+              return (
+                <span className="status-badge pending flex items-center gap-2">
+                  <LoadingOutlined spin style={{ fontSize: '12px' }} />
+                  Starting
+                </span>
+              );
+            case 'failed':
+              return (
+                <span className="status-badge failed flex items-center gap-2">
+                  <ExclamationCircleOutlined style={{ fontSize: '12px' }} />
+                  Failed
+                </span>
+              );
+            case 'stopped':
+              return (
+                <span className="status-badge stopped flex items-center gap-2">
+                  <StopOutlined style={{ fontSize: '12px' }} />
+                  Stopped
+                </span>
+              );
+            default:
+              return (
+                <span className="status-badge stopped flex items-center gap-2">
+                  <StopOutlined style={{ fontSize: '12px' }} />
+                  {capitalize(status)}
+                </span>
+              );
+          }
         };
         
-        const config = statusConfig[status as keyof typeof statusConfig] || statusConfig.stopped;
-        
-        return (
-          <Badge 
-            status={config.color as any} 
-            text={
-              <span>
-                {config.icon} {capitalize(status)}
-              </span>
-            }
-          />
-        );
+        return getStatusBadge(status);
       },
     },
     {
@@ -998,12 +1020,34 @@ function LaunchEnvironmentModal({
 
   return (
     <Modal
-      title="Launch New Environment"
+      title={
+        <div className="flex items-center gap-3 py-2">
+          <div className="icon-container primary p-2">
+            <RocketOutlined style={{ fontSize: '18px' }} />
+          </div>
+          <div>
+            <h3 className="text-xl font-semibold mb-0" style={{ color: 'var(--text-primary)' }}>
+              Launch New Environment
+            </h3>
+            <p className="text-sm mb-0" style={{ color: 'var(--text-secondary)' }}>
+              Configure and deploy your research computing environment
+            </p>
+          </div>
+        </div>
+      }
       open={visible}
       onCancel={onCancel}
       footer={null}
-      width={800}
-      destroyOnClose
+      width={900}
+      centered
+      styles={{
+        content: {
+          background: 'var(--glass-bg-primary)',
+          backdropFilter: 'blur(var(--glass-blur))',
+          border: '1px solid var(--glass-border)',
+          borderRadius: 'var(--radius-3xl)'
+        }
+      }}
     >
       {loading && launchProgress > 0 && (
         <Card className="mb-4">
@@ -1025,29 +1069,46 @@ function LaunchEnvironmentModal({
           storage_size: preset.storage_size,
         }}
       >
-        {/* Environment Type Selection */}
-        <Form.Item label="Environment Type" required>
+        {/* Professional Environment Type Selection */}
+        <Form.Item label={<span className="font-semibold" style={{ color: 'var(--text-primary)' }}>Environment Type</span>} required>
           <div className="grid grid-cols-3 gap-4">
             {Object.entries(presetConfigs).map(([key, config]) => (
               <Card
                 key={key}
-                size="small"
-                className={`cursor-pointer border-2 transition-all ${
+                className={`cursor-pointer transition-all action-card ${
                   selectedPreset === key 
-                    ? 'border-blue-500 bg-blue-50' 
-                    : 'border-gray-200 hover:border-blue-300'
+                    ? 'border-2' 
+                    : 'border'
                 }`}
                 onClick={() => onPresetChange(key as keyof typeof presetConfigs)}
+                bodyStyle={{ padding: 'var(--spacing-lg)' }}
+                style={{
+                  borderColor: selectedPreset === key ? 'var(--interactive-primary)' : 'var(--border-primary)',
+                  background: selectedPreset === key ? 'var(--primary-50)' : 'var(--glass-bg-secondary)'
+                }}
               >
                 <div className="text-center">
-                  <div 
-                    className="w-4 h-4 rounded-full mx-auto mb-2"
-                    style={{ backgroundColor: config.color }}
-                  />
-                  <Title level={5} className="mb-1">{config.label}</Title>
-                  <Text type="secondary" className="text-xs">
+                  <div className="mb-3">
+                    <div 
+                      className="w-6 h-6 rounded-full mx-auto flex items-center justify-center"
+                      style={{ 
+                        backgroundColor: config.color,
+                        opacity: selectedPreset === key ? 1 : 0.6
+                      }}
+                    >
+                      {selectedPreset === key && (
+                        <CheckCircleOutlined style={{ color: 'white', fontSize: '14px' }} />
+                      )}
+                    </div>
+                  </div>
+                  <h4 className="font-semibold mb-2" style={{ 
+                    color: selectedPreset === key ? 'var(--interactive-primary)' : 'var(--text-primary)'
+                  }}>
+                    {config.label}
+                  </h4>
+                  <p className="text-xs leading-relaxed" style={{ color: 'var(--text-secondary)' }}>
                     {config.description}
-                  </Text>
+                  </p>
                 </div>
               </Card>
             ))}

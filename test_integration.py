@@ -24,7 +24,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 class CMBClusterAPITester:
-    def __init__(self, base_url: str = "http://localhost:8000", dev_mode: bool = True):
+    def __init__(self, base_url: str = "http://localhost:8000", dev_mode: bool = False):
         self.base_url = base_url
         self.session = requests.Session()
         
@@ -417,12 +417,12 @@ def main():
     parser = argparse.ArgumentParser(description='CMB Cluster Integration Tester')
     parser.add_argument('--url', default='http://localhost:8000', 
                        help='Backend URL (default: http://localhost:8000)')
-    parser.add_argument('--no-dev-mode', action='store_true',
-                       help='Disable dev mode (requires real authentication)')
+    parser.add_argument('--dev-mode', action='store_true',
+                       help='Enable dev mode to use the temporary "dev-token" for authentication.')
     
     args = parser.parse_args()
     
-    tester = CMBClusterAPITester(base_url=args.url, dev_mode=not args.no_dev_mode)
+    tester = CMBClusterAPITester(base_url=args.url, dev_mode=args.dev_mode)
     tester.run_all_tests()
 
 if __name__ == "__main__":

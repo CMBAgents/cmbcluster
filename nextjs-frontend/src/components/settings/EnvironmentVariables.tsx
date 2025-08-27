@@ -28,7 +28,9 @@ import {
   SearchOutlined,
   DownloadOutlined,
   UploadOutlined,
-  CodeOutlined
+  CodeOutlined,
+  BarChartOutlined,
+  RocketOutlined
 } from '@ant-design/icons';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '@/lib/api-client';
@@ -238,7 +240,7 @@ export default function EnvironmentVariables() {
       key: 'key',
       sorter: (a, b) => a.key.localeCompare(b.key),
       render: (text) => (
-        <Text code className="text-blue-400 font-mono">
+        <Text code style={{ color: 'var(--primary-400)', fontFamily: 'var(--font-mono)' }}>
           {text}
         </Text>
       ),
@@ -249,7 +251,7 @@ export default function EnvironmentVariables() {
       key: 'value',
       render: (value, record) => (
         <div className="flex items-center space-x-2">
-          <Text className="flex-1 font-mono text-sm">
+          <Text className="flex-1" style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 'var(--text-sm)' }}>
             {visibilityState[record.key] 
               ? value 
               : '•'.repeat(Math.min(value.length, 12))
@@ -260,7 +262,8 @@ export default function EnvironmentVariables() {
             size="small"
             icon={visibilityState[record.key] ? <EyeInvisibleOutlined /> : <EyeOutlined />}
             onClick={() => toggleVisibility(record.key)}
-            className="text-text-secondary hover:text-white"
+            style={{ color: 'var(--text-secondary)' }}
+            className="hover:text-primary"
           />
         </div>
       ),
@@ -292,7 +295,8 @@ export default function EnvironmentVariables() {
               size="small"
               icon={<EditOutlined />}
               onClick={() => handleEdit(record)}
-              className="text-blue-400 hover:text-blue-300"
+              style={{ color: 'var(--primary-400)' }}
+              className="hover:text-primary-hover"
             />
           </Tooltip>
           <Popconfirm
@@ -307,7 +311,8 @@ export default function EnvironmentVariables() {
               type="text"
               size="small"
               icon={<DeleteOutlined />}
-              className="text-red-400 hover:text-red-300"
+              style={{ color: 'var(--error-400)' }}
+              className="hover:text-error-hover"
             />
           </Popconfirm>
         </Space>
@@ -315,77 +320,82 @@ export default function EnvironmentVariables() {
     },
   ];
 
-  const sectionStyle: React.CSSProperties = {
-    background: 'rgba(26, 31, 46, 0.5)',
-    borderRadius: '12px',
-    padding: '24px',
-    margin: '16px 0',
-    borderLeft: '4px solid #4A9EFF',
-  };
-
-  const metricCardStyle: React.CSSProperties = {
-    background: 'rgba(26, 31, 46, 0.8)',
-    borderRadius: '12px',
-    padding: '20px',
-    textAlign: 'center',
-    border: '1px solid #2D3748',
-    transition: 'all 0.3s ease',
-  };
 
   const activeVars = records.filter(r => r.value.trim()).length;
 
   return (
     <div className="space-y-6">
-      <div style={sectionStyle}>
-        <Title level={3} className="text-white mb-4">
-          Environment Variables Management
-        </Title>
-        <Paragraph className="text-text-secondary mb-6">
-          Configure environment variables that will be automatically injected into your research environments.
-        </Paragraph>
+      {/* Page Header */}
+      <div className="page-header fade-in">
+        <h1>Environment Variables</h1>
+        <p>Configure environment variables that will be automatically injected into your research environments.</p>
+      </div>
+
+      <div className="env-card scale-in">
 
         {/* Statistics */}
         <Row gutter={[16, 16]} className="mb-6">
           <Col xs={24} sm={8}>
-            <div style={metricCardStyle}>
-              <Title level={4} className="text-white mb-2">Total Variables</Title>
-              <Title level={2} className="text-blue-400 mb-0">{records.length}</Title>
+            <div className="metric-card fade-in">
+              <div className="icon-container primary mb-3 mx-auto" style={{ width: '48px', height: '48px' }}>
+                <CodeOutlined style={{ fontSize: '20px' }} />
+              </div>
+              <Title level={4} style={{ color: 'var(--text-primary)', marginBottom: 'var(--spacing-sm)' }}>Total Variables</Title>
+              <Title level={2} style={{ color: 'var(--primary-400)', margin: 0 }}>{records.length}</Title>
             </div>
           </Col>
           
           <Col xs={24} sm={8}>
-            <div style={metricCardStyle}>
-              <Title level={4} className="text-white mb-2">Active Variables</Title>
-              <Title level={2} className="text-green-400 mb-0">{activeVars}</Title>
+            <div className="metric-card fade-in" style={{ animationDelay: '0.1s' }}>
+              <div className="icon-container success mb-3 mx-auto" style={{ width: '48px', height: '48px' }}>
+                <BarChartOutlined style={{ fontSize: '20px' }} />
+              </div>
+              <Title level={4} style={{ color: 'var(--text-primary)', marginBottom: 'var(--spacing-sm)' }}>Active Variables</Title>
+              <Title level={2} style={{ color: 'var(--success-400)', margin: 0 }}>{activeVars}</Title>
             </div>
           </Col>
           
           <Col xs={24} sm={8}>
-            <div style={metricCardStyle}>
-              <Title level={4} className="text-white mb-2">Last Updated</Title>
-              <Text className="text-text-secondary">
+            <div className="metric-card fade-in" style={{ animationDelay: '0.2s' }}>
+              <div className="icon-container warning mb-3 mx-auto" style={{ width: '48px', height: '48px' }}>
+                <RocketOutlined style={{ fontSize: '20px' }} />
+              </div>
+              <Title level={4} style={{ color: 'var(--text-primary)', marginBottom: 'var(--spacing-sm)' }}>Last Updated</Title>
+              <Text style={{ color: 'var(--text-secondary)', fontSize: 'var(--text-lg)', fontWeight: 'var(--font-medium)' }}>
                 {new Date().toLocaleDateString()}
               </Text>
             </div>
           </Col>
         </Row>
 
-        <Divider className="border-border-primary" />
+        <Divider style={{ borderColor: 'var(--border-primary)', margin: 'var(--spacing-2xl) 0' }} />
 
         {/* Actions Bar */}
-        <div className="flex flex-wrap gap-4 mb-6">
+        <div className="flex flex-wrap gap-4 mb-6 slide-up" style={{ animationDelay: '0.3s' }}>
           <Input
             placeholder="Search variables..."
             prefix={<SearchOutlined />}
             value={searchText}
             onChange={(e) => setSearchText(e.target.value)}
-            className="max-w-xs"
+            className="max-w-xs input-field"
+            style={{
+              background: 'var(--glass-bg-secondary)',
+              border: '1px solid var(--border-primary)',
+              borderRadius: 'var(--radius-lg)'
+            }}
           />
           
           <Button
             type="primary"
             icon={<PlusOutlined />}
             onClick={() => setIsModalVisible(true)}
+            className="btn-primary"
+            style={{
+              height: 'auto',
+              padding: 'var(--spacing-md) var(--spacing-xl)',
+              borderRadius: 'var(--radius-lg)',
+              fontWeight: 'var(--font-semibold)'
+            }}
           >
             Add Variable
           </Button>
@@ -394,6 +404,13 @@ export default function EnvironmentVariables() {
             icon={<DownloadOutlined />}
             onClick={handleExport}
             disabled={records.length === 0}
+            className="btn-secondary"
+            style={{
+              height: 'auto',
+              padding: 'var(--spacing-md) var(--spacing-xl)',
+              borderRadius: 'var(--radius-lg)',
+              fontWeight: 'var(--font-medium)'
+            }}
           >
             Export
           </Button>
@@ -403,14 +420,23 @@ export default function EnvironmentVariables() {
             beforeUpload={handleImport}
             showUploadList={false}
           >
-            <Button icon={<UploadOutlined />}>
+            <Button 
+              icon={<UploadOutlined />}
+              className="btn-secondary"
+              style={{
+                height: 'auto',
+                padding: 'var(--spacing-md) var(--spacing-xl)',
+                borderRadius: 'var(--radius-lg)',
+                fontWeight: 'var(--font-medium)'
+              }}
+            >
               Import
             </Button>
           </Upload>
         </div>
 
         {/* Variables Table */}
-        <Card className="bg-background-tertiary border-border-primary">
+        <Card className="glass-card slide-up" style={{ animationDelay: '0.4s' }}>
           <Table
             columns={columns}
             dataSource={filteredRecords}
@@ -446,7 +472,12 @@ export default function EnvironmentVariables() {
           form.resetFields();
         }}
         footer={null}
-        className="dark-modal"
+        className="glass-card"
+        style={{
+          background: 'var(--glass-bg-primary)',
+          backdropFilter: 'blur(var(--glass-blur))',
+          borderRadius: 'var(--radius-3xl)'
+        }}
       >
         <Form
           form={form}
@@ -456,7 +487,7 @@ export default function EnvironmentVariables() {
         >
           <Form.Item
             name="key"
-            label={<span className="text-white">Variable Name</span>}
+            label={<span className="font-medium" style={{ color: 'var(--text-primary)' }}>Variable Name</span>}
             rules={[
               { required: true, message: 'Please enter a variable name' },
               { 
@@ -473,7 +504,7 @@ export default function EnvironmentVariables() {
           
           <Form.Item
             name="value"
-            label={<span className="text-white">Variable Value</span>}
+            label={<span className="font-medium" style={{ color: 'var(--text-primary)' }}>Variable Value</span>}
             rules={[{ required: true, message: 'Please enter a value' }]}
           >
             <TextArea 
@@ -516,7 +547,12 @@ export default function EnvironmentVariables() {
           editForm.resetFields();
         }}
         footer={null}
-        className="dark-modal"
+        className="glass-card"
+        style={{
+          background: 'var(--glass-bg-primary)',
+          backdropFilter: 'blur(var(--glass-blur))',
+          borderRadius: 'var(--radius-3xl)'
+        }}
       >
         <Form
           form={editForm}
@@ -526,7 +562,7 @@ export default function EnvironmentVariables() {
         >
           <Form.Item
             name="key"
-            label={<span className="text-white">Variable Name</span>}
+            label={<span className="font-medium" style={{ color: 'var(--text-primary)' }}>Variable Name</span>}
             rules={[
               { required: true, message: 'Please enter a variable name' },
               { 
@@ -543,7 +579,7 @@ export default function EnvironmentVariables() {
           
           <Form.Item
             name="value"
-            label={<span className="text-white">Variable Value</span>}
+            label={<span className="font-medium" style={{ color: 'var(--text-primary)' }}>Variable Value</span>}
             rules={[{ required: true, message: 'Please enter a value' }]}
           >
             <TextArea 
@@ -574,22 +610,31 @@ export default function EnvironmentVariables() {
 
       {/* Help Section */}
       <Card 
-        title="Environment Variables Help"
-        className="bg-background-tertiary border-border-primary"
-        headStyle={{ color: '#FFFFFF', borderBottom: '1px solid #2D3748' }}
+        title={
+          <span style={{ 
+            color: 'var(--text-primary)', 
+            fontSize: 'var(--text-xl)', 
+            fontWeight: 'var(--font-semibold)' 
+          }}>
+            <CodeOutlined style={{ marginRight: 'var(--spacing-sm)' }} />
+            Environment Variables Help
+          </span>
+        }
+        className="env-card fade-in"
+        style={{ animationDelay: '0.5s' }}
       >
-        <div className="space-y-4 text-text-secondary">
+        <div className="space-y-4" style={{ color: 'var(--text-secondary)' }}>
           <div>
-            <Title level={5} className="text-white mb-2">What are Environment Variables?</Title>
-            <Text className="text-text-secondary">
+            <Title level={5} style={{ color: 'var(--text-primary)', marginBottom: 'var(--spacing-sm)' }}>What are Environment Variables?</Title>
+            <Text style={{ color: 'var(--text-secondary)', lineHeight: 1.6 }}>
               Environment variables are key-value pairs that are automatically injected into your research environments. 
               They're commonly used for API keys, database URLs, configuration settings, and secrets.
             </Text>
           </div>
           
           <div>
-            <Title level={5} className="text-white mb-2">Best Practices:</Title>
-            <ul className="list-disc list-inside space-y-1 text-text-secondary">
+            <Title level={5} style={{ color: 'var(--text-primary)', marginBottom: 'var(--spacing-sm)' }}>Best Practices:</Title>
+            <ul className="list-disc list-inside space-y-1" style={{ color: 'var(--text-secondary)', lineHeight: 1.6 }}>
               <li>Use UPPERCASE names with underscores (e.g., API_KEY, DATABASE_URL)</li>
               <li>Don't store sensitive data in variable names</li>
               <li>Use descriptive names that indicate the variable's purpose</li>
@@ -599,8 +644,8 @@ export default function EnvironmentVariables() {
           </div>
           
           <div>
-            <Title level={5} className="text-white mb-2">Security Notes:</Title>
-            <ul className="list-disc list-inside space-y-1 text-text-secondary">
+            <Title level={5} style={{ color: 'var(--text-primary)', marginBottom: 'var(--spacing-sm)' }}>Security Notes:</Title>
+            <ul className="list-disc list-inside space-y-1" style={{ color: 'var(--text-secondary)', lineHeight: 1.6 }}>
               <li>All values are hidden by default for security</li>
               <li>Click the eye icon to temporarily reveal values when needed</li>
               <li>All environment variables are encrypted at rest</li>

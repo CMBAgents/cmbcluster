@@ -228,19 +228,111 @@ export default function DashboardPage() {
           </Row>
         </div>
 
-        {/* Recent Activity Section */}
-        <div>
-          <Title level={3} className="text-text-primary mb-4">
-            Recent Activity
-          </Title>
-          <Card className="bg-background-secondary border-border-primary">
-            <div className="text-center py-8">
-              <Text className="text-text-secondary">
-                No recent activity to display. Start by launching an environment or uploading files.
-              </Text>
-            </div>
-          </Card>
-        </div>
+        {/* Professional Activity Feed */}
+        <Row gutter={[24, 24]}>
+          <Col xs={24} lg={16}>
+            <Card className="glass-card" title={
+              <div className="flex items-center justify-between">
+                <h3 className="text-lg font-semibold" style={{ color: 'var(--text-primary)' }}>
+                  Recent Activity
+                </h3>
+                <Button type="link" size="small" style={{ color: 'var(--interactive-primary)' }}>
+                  View All
+                </Button>
+              </div>
+            }>
+              {recentActivity.length > 0 ? (
+                <Timeline className="mt-4">
+                  {recentActivity.map((activity, index) => (
+                    <Timeline.Item key={index} dot={activity.icon}>
+                      <div className="pb-4">
+                        <div className="flex items-start justify-between mb-1">
+                          <h4 className="font-medium" style={{ color: 'var(--text-primary)' }}>
+                            {activity.title}
+                          </h4>
+                          <span className="text-xs" style={{ color: 'var(--text-muted)' }}>
+                            {activity.time}
+                          </span>
+                        </div>
+                        <p className="text-sm mb-2" style={{ color: 'var(--text-secondary)' }}>
+                          {activity.description}
+                        </p>
+                        <code className="text-xs px-2 py-1 rounded" style={{ 
+                          background: 'var(--bg-tertiary)', 
+                          color: 'var(--text-muted)' 
+                        }}>
+                          {activity.id}
+                        </code>
+                      </div>
+                    </Timeline.Item>
+                  ))}
+                </Timeline>
+              ) : (
+                <div className="empty-state py-8">
+                  <div className="empty-state-icon">
+                    <ClockCircleOutlined />
+                  </div>
+                  <h3>No Recent Activity</h3>
+                  <p>
+                    Your activity will appear here once you start using the platform.
+                    Try launching an environment or uploading some files to get started.
+                  </p>
+                  <Button type="primary" onClick={() => router.push('/environments')}>
+                    Launch Your First Environment
+                  </Button>
+                </div>
+              )}
+            </Card>
+          </Col>
+          
+          <Col xs={24} lg={8}>
+            <Card className="glass-card mb-6" title={
+              <h3 className="text-lg font-semibold" style={{ color: 'var(--text-primary)' }}>
+                Quick Stats
+              </h3>
+            }>
+              <div className="space-y-4">
+                <div className="flex justify-between items-center">
+                  <span className="text-sm" style={{ color: 'var(--text-secondary)' }}>CPU Usage</span>
+                  <span className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>23%</span>
+                </div>
+                <Progress percent={23} strokeColor="var(--success-500)" showInfo={false} />
+                
+                <div className="flex justify-between items-center">
+                  <span className="text-sm" style={{ color: 'var(--text-secondary)' }}>Memory</span>
+                  <span className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>67%</span>
+                </div>
+                <Progress percent={67} strokeColor="var(--warning-500)" showInfo={false} />
+                
+                <div className="flex justify-between items-center">
+                  <span className="text-sm" style={{ color: 'var(--text-secondary)' }}>Storage</span>
+                  <span className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>41%</span>
+                </div>
+                <Progress percent={41} strokeColor="var(--info-500)" showInfo={false} />
+              </div>
+            </Card>
+            
+            <Card className="glass-card" title={
+              <h3 className="text-lg font-semibold" style={{ color: 'var(--text-primary)' }}>
+                Platform Tips
+              </h3>
+            }>
+              <div className="space-y-3">
+                <div className="p-3 rounded-lg" style={{ background: 'var(--bg-tertiary)' }}>
+                  <p className="text-sm font-medium mb-1" style={{ color: 'var(--text-primary)' }}>
+                    Pro Tip
+                  </p>
+                  <p className="text-xs" style={{ color: 'var(--text-secondary)' }}>
+                    Use templates to quickly launch pre-configured environments for your research projects.
+                  </p>
+                </div>
+                <Button type="link" size="small" style={{ color: 'var(--interactive-primary)', padding: 0 }}>
+                  Learn More
+                </Button>
+              </div>
+            </Card>
+          </Col>
+        </Row>
       </div>
     </MainLayout>
   );

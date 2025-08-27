@@ -16,7 +16,6 @@ import {
   Space,
   Image,
   Switch,
-  theme,
   Badge,
   Popover,
   Alert,
@@ -36,6 +35,7 @@ import {
   ExclamationCircleOutlined,
 } from '@ant-design/icons';
 import type { MenuProps } from 'antd';
+import { useTheme } from '@/contexts/ThemeContext';
 
 const { Sider, Header, Content } = Layout;
 const { Text, Title } = Typography;
@@ -46,10 +46,10 @@ interface MainLayoutProps {
 
 export default function MainLayout({ children }: MainLayoutProps) {
   const [collapsed, setCollapsed] = useState(false);
-  const [darkMode, setDarkMode] = useState(true);
   const { data: session } = useSession();
   const router = useRouter();
   const pathname = usePathname();
+  const { theme, toggleTheme } = useTheme();
 
   // Fetch environments for system alerts
   const { data: environmentsResponse } = useQuery({
@@ -119,12 +119,6 @@ export default function MainLayout({ children }: MainLayoutProps) {
     }
   };
 
-  const handleThemeToggle = (checked: boolean) => {
-    setDarkMode(checked);
-    // Here you would implement theme switching logic
-    // For now, we'll keep it as a placeholder
-  };
-
   return (
     <Layout className="min-h-screen">
       {/* Sidebar */}
@@ -148,7 +142,6 @@ export default function MainLayout({ children }: MainLayoutProps) {
                     alt="Cambridge"
                     width={40}
                     height={20}
-                    className="filter invert brightness-150 contrast-200 saturate-0 hue-rotate-180"
                     preview={false}
                   />
                 </div>
@@ -167,7 +160,6 @@ export default function MainLayout({ children }: MainLayoutProps) {
                   alt="Cambridge"
                   width={32}
                   height={16}
-                  className="filter invert brightness-150 contrast-200 saturate-0 hue-rotate-180"
                   preview={false}
                 />
               </div>
@@ -303,12 +295,13 @@ export default function MainLayout({ children }: MainLayoutProps) {
             <Space align="center">
               <SunOutlined className="text-text-secondary" />
               <Switch
-                checked={darkMode}
-                onChange={handleThemeToggle}
+                checked={theme === 'dark'}
+                onChange={toggleTheme}
                 size="small"
                 checkedChildren={<MoonOutlined />}
                 unCheckedChildren={<SunOutlined />}
               />
+              <MoonOutlined className="text-text-secondary" />
             </Space>
 
             {/* User Dropdown */}
