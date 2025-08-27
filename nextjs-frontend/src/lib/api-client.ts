@@ -653,11 +653,26 @@ class CMBClusterAPIClient {
 
   async downloadFileFromStorage(storageId: string, fileName: string): Promise<any> {
     try {
-      const response = await this.api.get(`/storage/${storageId}/download/${fileName}`, {
+      console.log('API Client downloading:', { storageId, fileName });
+      
+      // For path parameters, we need to encode each segment separately
+      // to preserve slashes between folders but encode special characters
+      const pathSegments = fileName.split('/').map(segment => encodeURIComponent(segment));
+      const encodedPath = pathSegments.join('/');
+      const url = `/storage/${storageId}/download/${encodedPath}`;
+      console.log('Download URL:', url);
+      
+      const response = await this.api.get(url, {
         responseType: 'blob',
+        timeout: 30000, // 30 second timeout for downloads
       });
+      
+      console.log('API download response status:', response.status);
+      console.log('API download response headers:', response.headers);
+      
       return response;
     } catch (error) {
+      console.error('API download error:', error);
       throw error;
     }
   }

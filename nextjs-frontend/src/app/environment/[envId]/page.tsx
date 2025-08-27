@@ -269,47 +269,53 @@ export default function EnvironmentAccessPage() {
         </Card>
 
         {/* iframe Container */}
-        <Card className="p-0 overflow-hidden" style={{ height: fullscreen ? 'calc(100vh - 200px)' : '2000px' }}>
-          {iframeError ? (
-            <div className="flex flex-col items-center justify-center h-full space-y-4">
-              <Alert
-                message="Application Loading Error"
-                description="The application could not be loaded in the iframe. This might be due to security policies."
-                type="warning"
-                showIcon
-                action={
-                  <Space>
-                    <Button size="small" onClick={handleIframeReload}>
-                      Retry
-                    </Button>
-                    <Button size="small" type="primary" onClick={handleExternalLink}>
-                      Open External
-                    </Button>
-                  </Space>
-                }
+        <div className="w-full" style={{ height: '850px' }}>
+          <Card 
+            className="p-0 overflow-hidden h-full" 
+            bodyStyle={{ padding: 0, height: '100%' }}
+          >
+            {iframeError ? (
+              <div className="flex flex-col items-center justify-center h-full space-y-4">
+                <Alert
+                  message="Application Loading Error"
+                  description="The application could not be loaded in the iframe. This might be due to security policies."
+                  type="warning"
+                  showIcon
+                  action={
+                    <Space>
+                      <Button size="small" onClick={handleIframeReload}>
+                        Retry
+                      </Button>
+                      <Button size="small" type="primary" onClick={handleExternalLink}>
+                        Open External
+                      </Button>
+                    </Space>
+                  }
+                />
+              </div>
+            ) : (
+              <iframe
+                key={iframeKey}
+                src={environment.url}
+                style={{
+                  width: '100%',
+                  height: '100%',
+                  border: 'none',
+                  minHeight: '800px'
+                }}
+                title={`Environment ${environment.env_id || environment.id}`}
+                onError={handleIframeError}
+                onLoad={() => {
+                  console.log('Iframe loaded successfully');
+                  setIframeError(false);
+                }}
+                // Security attributes
+                sandbox="allow-same-origin allow-scripts allow-popups allow-forms allow-downloads"
+                allow="fullscreen; clipboard-read; clipboard-write"
               />
-            </div>
-          ) : (
-            <iframe
-              key={iframeKey}
-              src={environment.url}
-              style={{
-                width: '100%',
-                height: '100%',
-                border: 'none'
-              }}
-              title={`Environment ${environment.env_id || environment.id}`}
-              onError={handleIframeError}
-              onLoad={() => {
-                console.log('Iframe loaded successfully');
-                setIframeError(false);
-              }}
-              // Security attributes
-              sandbox="allow-same-origin allow-scripts allow-popups allow-forms allow-downloads"
-              allow="fullscreen; clipboard-read; clipboard-write"
-            />
-          )}
-        </Card>
+            )}
+          </Card>
+        </div>
 
         {/* Help Text */}
         <Alert

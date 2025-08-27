@@ -157,25 +157,43 @@ export default function StorageFileManager({ storageId, storageName }: StorageFi
 
   const handleDownload = async (fileName: string) => {
     try {
-      const response = await apiClient.downloadFileFromStorage(storageId, fileName);
+      console.log('Downloading file:', fileName);
+      console.log('Storage ID:', storageId);
+      console.log('Current path:', currentPath);
       
-      if (!response.ok) {
-        throw new Error('Download failed');
+      // Construct full file path including current folder path
+      const fullPath = currentPath ? `${currentPath}/${fileName}` : fileName;
+      console.log('Full file path:', fullPath);
+      
+      const response = await apiClient.downloadFileFromStorage(storageId, fullPath);
+      console.log('Download response:', response);
+      
+      // Check if response is successful (axios response)
+      if (response.status !== 200) {
+        throw new Error(`Download failed with status: ${response.status}`);
       }
       
-      const blob = await response.blob();
+      // response.data is the blob for axios with responseType: 'blob'
+      const blob = response.data;
+      
+      // Verify blob has content
+      if (!blob || blob.size === 0) {
+        throw new Error('Downloaded file is empty');
+      }
+      
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
-      link.setAttribute('download', fileName.split('/').pop() || fileName);
+      link.setAttribute('download', fileName);
       document.body.appendChild(link);
       link.click();
       link.remove();
       window.URL.revokeObjectURL(url);
       
-      message.success('Download started');
+      message.success(`Download started: ${fileName}`);
     } catch (error) {
-      message.error('Download failed');
+      console.error('Download error:', error);
+      message.error('Download failed: ' + (error instanceof Error ? error.message : 'Unknown error'));
     }
   };
 
