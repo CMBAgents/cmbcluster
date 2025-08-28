@@ -39,7 +39,11 @@ export default function RootLayout({
                   } catch (e) {}
                   return 'light'; // Default to light theme
                 }
-                document.documentElement.setAttribute('data-theme', getInitialTheme());
+                const theme = getInitialTheme();
+                document.documentElement.setAttribute('data-theme', theme);
+                document.documentElement.className = theme;
+                // Also set a CSS custom property for immediate access
+                document.documentElement.style.setProperty('--initial-theme', theme);
               })();
             `,
           }}

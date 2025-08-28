@@ -146,36 +146,50 @@ export default function DashboardPage() {
   return (
     <MainLayout>
       <div className="space-y-6">
-        {/* Professional Welcome Section */}
+        {/* Enhanced Professional Welcome Section */}
         <div className="mb-8">
-          <div className="flex items-center gap-4 mb-4">
-            <div className="icon-container primary p-3" style={{
-              background: 'var(--glass-bg-secondary)',
-              backdropFilter: 'blur(var(--glass-blur-light))',
-              border: '1px solid var(--glass-border)',
-              borderRadius: 'var(--radius-xl)'
-            }}>
-              <RocketOutlined style={{ fontSize: '24px', color: 'var(--interactive-primary)' }} />
-            </div>
-            <div>
-              <Title level={2} style={{ 
-                color: 'var(--text-primary)', 
-                margin: 0,
-                fontWeight: 'var(--font-semibold)'
+          <div className="glass-card p-6" style={{
+            background: 'var(--glass-bg-primary)',
+            backdropFilter: 'blur(var(--glass-blur-medium))',
+            WebkitBackdropFilter: 'blur(var(--glass-blur-medium))',
+            border: '1px solid var(--glass-border)',
+            borderRadius: 'var(--radius-2xl)',
+            boxShadow: 'var(--glass-shadow)'
+          }}>
+            <div className="flex items-center gap-4 mb-4">
+              <div className="glass-button p-3" style={{
+                background: 'var(--glass-bg-secondary)',
+                backdropFilter: 'blur(var(--glass-blur-light))',
+                WebkitBackdropFilter: 'blur(var(--glass-blur-light))',
+                border: '1px solid var(--glass-border)',
+                borderRadius: 'var(--radius-xl)',
+                position: 'relative',
+                overflow: 'hidden'
               }}>
-                Welcome back, {session?.user?.name?.split(' ')[0] || 'User'}! 👋
-              </Title>
-              <Text style={{ 
-                color: 'var(--text-secondary)', 
-                fontSize: 'var(--text-lg)'
-              }}>
-                Here's your CMBAgent Cloud platform overview
-              </Text>
+                <RocketOutlined style={{ fontSize: '24px', color: 'var(--interactive-primary)' }} />
+              </div>
+              <div>
+                <Title level={2} style={{ 
+                  color: 'var(--text-primary)', 
+                  margin: 0,
+                  fontWeight: 'var(--font-semibold)',
+                  textShadow: 'var(--text-shadow)'
+                }}>
+                  Welcome back, {session?.user?.name?.split(' ')[0] || 'User'}! 👋
+                </Title>
+                <Text style={{ 
+                  color: 'var(--text-secondary)', 
+                  fontSize: 'var(--text-lg)',
+                  textShadow: 'var(--text-shadow-light)'
+                }}>
+                  Here's your CMBAgent Cloud platform overview
+                </Text>
+              </div>
             </div>
           </div>
         </div>
 
-        {/* Professional Platform Status */}
+        {/* Enhanced Professional Platform Status */}
         <Alert
           message="Platform Status: All Systems Operational"
           description="All services running normally • Last updated: Just now"
@@ -183,10 +197,12 @@ export default function DashboardPage() {
           showIcon
           className="glass-card mb-6"
           style={{
-            background: 'var(--glass-bg-primary)',
-            backdropFilter: 'blur(var(--glass-blur))',
+            background: 'var(--glass-bg-secondary)',
+            backdropFilter: 'blur(var(--glass-blur-light))',
+            WebkitBackdropFilter: 'blur(var(--glass-blur-light))',
             border: '1px solid var(--success-200)',
-            borderRadius: 'var(--radius-2xl)'
+            borderRadius: 'var(--radius-2xl)',
+            boxShadow: 'var(--glass-shadow)'
           }}
         />
 
@@ -199,10 +215,14 @@ export default function DashboardPage() {
                 bodyStyle={{ padding: '32px' }}
                 style={{
                   background: 'var(--glass-bg-primary)',
-                  backdropFilter: 'blur(var(--glass-blur))',
+                  backdropFilter: 'blur(var(--glass-blur-medium))',
+                  WebkitBackdropFilter: 'blur(var(--glass-blur-medium))',
                   border: '1px solid var(--glass-border)',
                   borderRadius: 'var(--radius-2xl)',
-                  cursor: 'pointer'
+                  cursor: 'pointer',
+                  boxShadow: 'var(--glass-shadow)',
+                  position: 'relative',
+                  overflow: 'hidden'
                 }}
               >
                 <div className="text-center">
@@ -257,10 +277,14 @@ export default function DashboardPage() {
                   onClick={() => router.push(action.action)}
                   style={{
                     background: 'var(--glass-bg-primary)',
-                    backdropFilter: 'blur(var(--glass-blur))',
+                    backdropFilter: 'blur(var(--glass-blur-medium))',
+                    WebkitBackdropFilter: 'blur(var(--glass-blur-medium))',
                     border: '1px solid var(--glass-border)',
                     borderRadius: 'var(--radius-2xl)',
-                    height: '100%'
+                    height: '100%',
+                    boxShadow: 'var(--glass-shadow)',
+                    position: 'relative',
+                    overflow: 'hidden'
                   }}
                 >
                   <Space direction="vertical" size={20} style={{ width: '100%' }}>
@@ -316,9 +340,13 @@ export default function DashboardPage() {
               className="glass-card" 
               style={{
                 background: 'var(--glass-bg-primary)',
-                backdropFilter: 'blur(var(--glass-blur))',
+                backdropFilter: 'blur(var(--glass-blur-medium))',
+                WebkitBackdropFilter: 'blur(var(--glass-blur-medium))',
                 border: '1px solid var(--glass-border)',
-                borderRadius: 'var(--radius-2xl)'
+                borderRadius: 'var(--radius-2xl)',
+                boxShadow: 'var(--glass-shadow)',
+                position: 'relative',
+                overflow: 'hidden'
               }}
               title={
                 <div className="flex items-center justify-between">
@@ -383,9 +411,13 @@ export default function DashboardPage() {
                 className="glass-card" 
                 style={{
                   background: 'var(--glass-bg-primary)',
-                  backdropFilter: 'blur(var(--glass-blur))',
+                  backdropFilter: 'blur(var(--glass-blur-medium))',
+                  WebkitBackdropFilter: 'blur(var(--glass-blur-medium))',
                   border: '1px solid var(--glass-border)',
-                  borderRadius: 'var(--radius-2xl)'
+                  borderRadius: 'var(--radius-2xl)',
+                  boxShadow: 'var(--glass-shadow)',
+                  position: 'relative',
+                  overflow: 'hidden'
                 }}
                 title={
                   <Title level={4} style={{ 
@@ -479,9 +511,13 @@ export default function DashboardPage() {
                 className="glass-card" 
                 style={{
                   background: 'var(--glass-bg-primary)',
-                  backdropFilter: 'blur(var(--glass-blur))',
+                  backdropFilter: 'blur(var(--glass-blur-medium))',
+                  WebkitBackdropFilter: 'blur(var(--glass-blur-medium))',
                   border: '1px solid var(--glass-border)',
-                  borderRadius: 'var(--radius-2xl)'
+                  borderRadius: 'var(--radius-2xl)',
+                  boxShadow: 'var(--glass-shadow)',
+                  position: 'relative',
+                  overflow: 'hidden'
                 }}
                 title={
                   <Title level={4} style={{ 

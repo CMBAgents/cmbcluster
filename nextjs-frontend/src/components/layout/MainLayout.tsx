@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useSession, signOut } from 'next-auth/react';
 import { useRouter, usePathname } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
@@ -33,6 +33,11 @@ import {
   MoonOutlined,
   BellOutlined,
   ExclamationCircleOutlined,
+  DatabaseOutlined,
+  MonitorOutlined,
+  CloudServerOutlined,
+  FolderOutlined,
+  BarChartOutlined,
 } from '@ant-design/icons';
 import type { MenuProps } from 'antd';
 import { useTheme } from '@/contexts/ThemeContext';
@@ -50,6 +55,44 @@ export default function MainLayout({ children }: MainLayoutProps) {
   const router = useRouter();
   const pathname = usePathname();
   const { theme, toggleTheme } = useTheme();
+
+  // Memoize logo to prevent re-rendering
+  const logoElement = useMemo(() => (
+    <img
+      src="/logos/cmbagent-logo.png"
+      alt="CMBAgent"
+      width={24}
+      height={24}
+      style={{ 
+        filter: 'brightness(1.1)',
+        display: 'block',
+        objectFit: 'contain',
+        pointerEvents: 'none',
+        userSelect: 'none'
+      }}
+      loading="eager"
+      decoding="sync"
+    />
+  ), []);
+
+  // Static menu items to prevent icon reloading
+  const menuItems: MenuProps['items'] = [
+    {
+      key: '/',
+      icon: <DashboardOutlined />,
+      label: 'Dashboard',
+    },
+    {
+      key: '/environments',
+      icon: <RocketOutlined />,
+      label: 'Environments',
+    },
+    {
+      key: '/settings',
+      icon: <SettingOutlined />,
+      label: 'Settings',
+    },
+  ];
 
   // Fetch environments for system alerts
   const { data: environmentsResponse } = useQuery({
@@ -72,25 +115,6 @@ export default function MainLayout({ children }: MainLayoutProps) {
   const handleMenuClick: MenuProps['onClick'] = (e) => {
     navigateTo(e.key);
   };
-
-  // Menu items - removed monitoring and storage from sidebar
-  const menuItems: MenuProps['items'] = [
-    {
-      key: '/',
-      icon: <DashboardOutlined />,
-      label: 'Dashboard',
-    },
-    {
-      key: '/environments',
-      icon: <RocketOutlined />,
-      label: 'Environments',
-    },
-    {
-      key: '/settings',
-      icon: <SettingOutlined />,
-      label: 'Settings',
-    },
-  ];
 
   // User dropdown menu - without onClick functions
   const userMenuItems: MenuProps['items'] = [
@@ -115,80 +139,82 @@ export default function MainLayout({ children }: MainLayoutProps) {
     if (e.key === 'logout') {
       signOut({ callbackUrl: '/auth/signin' });
     } else if (e.key === 'profile') {
-      navigateTo('/profile');
+      navigateTo('/settings');
     }
   };
 
   return (
     <Layout className="min-h-screen">
-      {/* Sidebar */}
+      {/* Enhanced Glassmorphism Sidebar */}
       <Sider
         trigger={null}
         collapsible
         collapsed={collapsed}
         width={280}
         collapsedWidth={80}
+        className="glass-sidebar"
         style={{
           background: 'var(--glass-bg-primary)',
-          backdropFilter: 'blur(var(--glass-blur))',
+          backdropFilter: 'blur(var(--glass-blur-heavy))',
+          WebkitBackdropFilter: 'blur(var(--glass-blur-heavy))',
           borderRight: '1px solid var(--glass-border)',
-          boxShadow: 'var(--glass-shadow)'
+          boxShadow: 'var(--glass-shadow)',
+          position: 'relative',
+          zIndex: 10
         }}
       >
         <div className="p-4">
-          {/* Professional Logo Section with CMBAgent branding */}
+          {/* Optimized Professional Logo Section - No Image Reloading */}
           <div className="flex items-center justify-center mb-8">
-            {!collapsed ? (
-              <div className="flex items-center space-x-3">
-                <div className="icon-container primary p-2" style={{
-                  background: 'var(--glass-bg-secondary)',
-                  backdropFilter: 'blur(var(--glass-blur-light))',
-                  border: '1px solid var(--glass-border)',
-                  borderRadius: 'var(--radius-xl)'
-                }}>
-                  <Image
-                    src="/logos/cmbagent-logo.png"
-                    alt="CMBAgent"
-                    width={24}
-                    height={24}
-                    preview={false}
-                    style={{ filter: 'brightness(1.1)' }}
-                  />
-                </div>
-                <div>
-                  <Text style={{ 
-                    color: 'var(--text-primary)', 
-                    fontWeight: 'var(--font-semibold)',
-                    fontSize: 'var(--text-lg)'
-                  }}>
-                    CMBAgent
-                  </Text>
-                  <br />
-                  <Text style={{ 
-                    color: 'var(--text-muted)', 
-                    fontSize: 'var(--text-xs)'
-                  }}>
-                    Research Platform
-                  </Text>
-                </div>
-              </div>
-            ) : (
+            <div className="flex items-center space-x-3" style={{
+              transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+              justifyContent: collapsed ? 'center' : 'flex-start'
+            }}>
               <div className="icon-container primary p-2" style={{
                 background: 'var(--glass-bg-secondary)',
                 backdropFilter: 'blur(var(--glass-blur-light))',
                 border: '1px solid var(--glass-border)',
-                borderRadius: 'var(--radius-xl)'
+                borderRadius: 'var(--radius-xl)',
+                flexShrink: 0
               }}>
-                <Image
-                  src="/logos/cmbagent-logo.png"
-                  alt="CMBAgent"
-                  width={24}
-                  height={24}
-                  preview={false}
-                  style={{ filter: 'brightness(1.1)' }}
-                />
+                {logoElement}
               </div>
-            )}
+              <div style={{
+                opacity: collapsed ? 0 : 1,
+                transform: collapsed ? 'translateX(-10px)' : 'translateX(0)',
+                transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+                overflow: 'hidden',
+                width: collapsed ? 0 : 'auto',
+                whiteSpace: 'nowrap'
+              }}>
+                <Text style={{ 
+                  color: 'var(--text-primary)', 
+                  fontWeight: 'var(--font-semibold)',
+                  fontSize: 'var(--text-lg)',
+                  display: 'block',
+                  lineHeight: 1.2
+                }}>
+                  CMBAgent 
+                  <span style={{ 
+                    fontWeight: 'var(--font-normal)',
+                    background: `linear-gradient(135deg, var(--interactive-primary), var(--primary-300))`,
+                    backgroundClip: 'text',
+                    WebkitBackgroundClip: 'text',
+                    WebkitTextFillColor: 'transparent'
+                  }}>
+                    Cloud
+                  </span>
+                </Text>
+                <Text style={{ 
+                  color: 'var(--text-muted)', 
+                  fontSize: 'var(--text-xs)',
+                  display: 'block',
+                  lineHeight: 1.2
+                }}>
+                  Autonomous Research
+                </Text>
+              </div>
+            </div>
           </div>
 
           {/* Navigation Menu */}
@@ -243,34 +269,37 @@ export default function MainLayout({ children }: MainLayoutProps) {
       </Sider>
 
       <Layout>
-        {/* Professional Header */}
-        <Header style={{
+        {/* Enhanced Glassmorphism Header */}
+        <Header className="glass-header" style={{
           background: 'var(--glass-bg-primary)',
-          backdropFilter: 'blur(var(--glass-blur))',
+          backdropFilter: 'blur(var(--glass-blur-medium))',
+          WebkitBackdropFilter: 'blur(var(--glass-blur-medium))',
           borderBottom: '1px solid var(--glass-border)',
           boxShadow: 'var(--glass-shadow)',
           padding: '0 24px',
           display: 'flex',
           alignItems: 'center',
-          justifyContent: 'space-between'
+          justifyContent: 'space-between',
+          position: 'relative',
+          zIndex: 20,
+          height: '64px'
         }}>
           <div className="flex items-center space-x-4">
-            {/* Professional Collapse Toggle */}
+            {/* Enhanced Glass Collapse Toggle */}
             <Button
               type="text"
               icon={collapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />}
               onClick={() => setCollapsed(!collapsed)}
+              className="glass-button"
               style={{
                 width: '40px',
                 height: '40px',
                 borderRadius: 'var(--radius-xl)',
-                background: 'var(--glass-bg-secondary)',
-                backdropFilter: 'blur(var(--glass-blur-light))',
-                border: '1px solid var(--glass-border)',
                 color: 'var(--text-primary)',
-                transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)'
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center'
               }}
-              className="hover:shadow-md"
             />
 
             {/* Page Title */}
@@ -338,34 +367,33 @@ export default function MainLayout({ children }: MainLayoutProps) {
                 <Button
                   type="text"
                   icon={<BellOutlined />}
+                  className="glass-button"
                   style={{
                     width: '40px',
                     height: '40px',
                     borderRadius: 'var(--radius-xl)',
-                    background: 'var(--glass-bg-secondary)',
-                    backdropFilter: 'blur(var(--glass-blur-light))',
-                    border: '1px solid var(--glass-border)',
                     color: 'var(--text-primary)',
-                    transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)'
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center'
                   }}
-                  className="hover:shadow-md"
                 />
               </Badge>
             </Popover>
 
-            {/* Professional Theme Toggle - matching sign-in page */}
+            {/* Enhanced Glass Theme Toggle */}
             <button 
               onClick={toggleTheme}
-              className="icon-container primary"
+              className="glass-button"
               style={{
                 width: '40px',
                 height: '40px',
                 borderRadius: 'var(--radius-xl)',
-                background: 'var(--glass-bg-secondary)',
-                backdropFilter: 'blur(var(--glass-blur-light))',
-                border: '1px solid var(--glass-border)',
-                transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-                cursor: 'pointer'
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                color: 'var(--text-primary)'
               }}
             >
               {theme === 'dark' ? (
@@ -385,30 +413,27 @@ export default function MainLayout({ children }: MainLayoutProps) {
               >
                 <Button
                   type="text"
+                  className="glass-button"
                   style={{
-                    background: 'var(--glass-bg-secondary)',
-                    backdropFilter: 'blur(var(--glass-blur-light))',
-                    border: '1px solid var(--glass-border)',
-                    borderRadius: 'var(--radius-xl)',
                     color: 'var(--text-primary)',
-                    padding: '8px 16px',
+                    padding: '8px',
                     height: '40px',
-                    transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)'
+                    width: '40px',
+                    borderRadius: 'var(--radius-xl)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center'
                   }}
-                  className="flex items-center space-x-2 hover:shadow-md"
                 >
                   <Avatar
                     src={session.user.image}
                     icon={<UserOutlined />}
                     size="small"
+                    style={{
+                      border: '1px solid var(--glass-border)',
+                      background: 'var(--glass-bg-secondary)'
+                    }}
                   />
-                  <span className="hidden md:inline" style={{ 
-                    color: 'var(--text-primary)',
-                    fontWeight: 'var(--font-medium)',
-                    fontSize: 'var(--text-sm)'
-                  }}>
-                    {session.user.name}
-                  </span>
                 </Button>
               </Dropdown>
             )}

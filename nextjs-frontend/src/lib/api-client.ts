@@ -213,24 +213,38 @@ class CMBClusterAPIClient {
 
   private handleError(error: any): ApiResponse {
     console.error('API Error:', error);
+    console.error('Error details:', {
+      message: error.message,
+      code: error.code,
+      response: error.response?.data,
+      status: error.response?.status,
+      statusText: error.response?.statusText
+    });
     
     const errorResponse: ApiResponse = {
+      success: false,
       status: 'error',
       environments: [],
       storages: [],
-      data: null
+      data: null,
+      error: 'An error occurred'
     };
 
     if (error.response?.data) {
-      errorResponse.message = error.response.data.detail || error.response.data.message || 'An error occurred';
+      errorResponse.error = error.response.data.detail || error.response.data.message || error.response.data.error || 'An error occurred';
+      errorResponse.message = errorResponse.error;
     } else if (error.code === 'ECONNABORTED') {
-      errorResponse.message = 'Request timeout - please try again';
+      errorResponse.error = 'Request timeout - please try again';
+      errorResponse.message = errorResponse.error;
     } else if (error.code === 'ERR_NETWORK') {
-      errorResponse.message = 'Network error - please check your connection';
+      errorResponse.error = 'Network error - please check your connection';
+      errorResponse.message = errorResponse.error;
     } else if (error.message) {
+      errorResponse.error = error.message;
       errorResponse.message = error.message;
     } else {
-      errorResponse.message = 'An unexpected error occurred';
+      errorResponse.error = 'An unexpected error occurred';
+      errorResponse.message = errorResponse.error;
     }
     
     return errorResponse;
@@ -558,29 +572,87 @@ class CMBClusterAPIClient {
   async uploadUserFile(
     file: File, 
     fileType: string, 
-    envVarName?: string, 
+    envVarName: string, 
     containerPath?: string
-  ): Promise<ApiResponse<UserFile>> {
+  ): Promise<any> {
     try {
-      const formData = new FormData();
-      formData.append('file', file);
-      formData.append('file_type', fileType);
-      
-      if (envVarName) {
-        formData.append('environment_variable_name', envVarName);
-      }
-      if (containerPath) {
-        formData.append('container_path', containerPath);
+      console.log('=== ENVIRONMENT FILE UPLOAD DEBUG ===');
+      console.log('uploadUserFile called:', { 
+        fileName: file.name, 
+        fileSize: file.size, 
+        fileType, 
+        envVarName, 
+        containerPath,
+        fileLastModified: file.lastModified,
+        fileWebkitRelativePath: (file as any).webkitRelativePath
+      });
+
+      // Validate file is JSON
+      if (!file.name.toLowerCase().endsWith('.json')) {
+        throw new Error('Only JSON files are allowed');
       }
 
+      // Validate file size (1MB limit)
+      if (file.size > 1024 * 1024) {
+        throw new Error('File size must be less than 1MB');
+      }
+
+      // Validate required fields
+      if (!fileType) {
+        throw new Error('File type is required');
+      }
+      if (!envVarName?.trim()) {
+        throw new Error('Environment variable name is required');
+      }
+
+      console.log('Validations passed. Creating FormData...');
+      
+      const formData = new FormData();
+      formData.append('file', file, file.name);
+      formData.append('file_type', fileType);
+      formData.append('environment_variable_name', envVarName.trim());
+      
+      if (containerPath?.trim()) {
+        formData.append('container_path', containerPath.trim());
+      }
+
+      console.log('FormData created. Contents:');
+      for (let [key, value] of formData.entries()) {
+        if (value instanceof File) {
+          console.log(`  ${key}: [File] ${value.name} (${value.size} bytes, type: ${value.type})`);
+        } else {
+          console.log(`  ${key}: "${value}"`);
+        }
+      }
+
+      console.log('Making POST request to /user-files/upload...');
+      
       const response = await this.api.post('/user-files/upload', formData, {
         headers: {
-          'Content-Type': 'multipart/form-data',
+          'Content-Type': undefined, // Let axios set multipart/form-data with boundary
         },
       });
-      return await this.handleResponse(response);
+      
+      console.log('Upload successful! Response:', response.status, response.statusText);
+      console.log('Response data:', response.data);
+      const result = await this.handleResponse(response);
+      console.log('Final processed result:', result);
+      console.log('=== ENVIRONMENT FILE UPLOAD SUCCESS ===');
+      
+      return result;
     } catch (error) {
-      return this.handleError(error);
+      console.error('=== ENVIRONMENT FILE UPLOAD ERROR ===');
+      console.error('Error caught:', error);
+      if ((error as any)?.response) {
+        console.error('Response status:', (error as any).response.status);
+        console.error('Response data:', (error as any).response.data);
+        console.error('Response headers:', (error as any).response.headers);
+      }
+      if ((error as any)?.request) {
+        console.error('Request details:', (error as any).request);
+      }
+      console.error('=== END ENVIRONMENT FILE UPLOAD ERROR ===');
+      throw error;
     }
   }
 
@@ -632,22 +704,74 @@ class CMBClusterAPIClient {
     }
   }
 
-  async uploadFileToStorage(storageId: string, file: File, path?: string): Promise<ApiResponse> {
+  async uploadFileToStorage(storageId: string, file: File, path?: string): Promise<any> {
     try {
-      const formData = new FormData();
-      formData.append('file', file);
-      if (path) {
-        formData.append('path', path);
+      console.log('=== STORAGE FILE UPLOAD DEBUG ===');
+      console.log('uploadFileToStorage called:', { 
+        storageId, 
+        fileName: file.name, 
+        fileSize: file.size, 
+        filePath: path,
+        fileType: file.type,
+        fileLastModified: file.lastModified
+      });
+
+      // Validate inputs
+      if (!storageId) {
+        throw new Error('Storage ID is required');
+      }
+      if (!file) {
+        throw new Error('File is required');
       }
 
+      console.log('Creating FormData for storage upload...');
+      
+      const formData = new FormData();
+      formData.append('file', file, file.name);
+      
+      const params: any = {};
+      if (path) {
+        params.path = path;
+      }
+
+      console.log('FormData contents:');
+      for (let [key, value] of formData.entries()) {
+        if (value instanceof File) {
+          console.log(`  ${key}: [File] ${value.name} (${value.size} bytes, type: ${value.type})`);
+        } else {
+          console.log(`  ${key}: "${value}"`);
+        }
+      }
+      console.log('URL params:', params);
+      console.log('Making POST request to:', `/storage/${storageId}/upload`);
+      
       const response = await this.api.post(`/storage/${storageId}/upload`, formData, {
+        params: params,
         headers: {
-          'Content-Type': 'multipart/form-data',
+          'Content-Type': undefined, // Let axios set multipart/form-data with boundary
         },
       });
-      return await this.handleResponse(response);
+      
+      console.log('Storage upload successful! Response:', response.status, response.statusText);
+      console.log('Response data:', response.data);
+      const result = await this.handleResponse(response);
+      console.log('Final processed result:', result);
+      console.log('=== STORAGE FILE UPLOAD SUCCESS ===');
+      
+      return result;
     } catch (error) {
-      return this.handleError(error);
+      console.error('=== STORAGE FILE UPLOAD ERROR ===');
+      console.error('Storage upload error caught:', error);
+      if ((error as any)?.response) {
+        console.error('Response status:', (error as any).response.status);
+        console.error('Response data:', (error as any).response.data);
+        console.error('Response headers:', (error as any).response.headers);
+      }
+      if ((error as any)?.request) {
+        console.error('Request details:', (error as any).request);
+      }
+      console.error('=== END STORAGE FILE UPLOAD ERROR ===');
+      throw error;
     }
   }
 

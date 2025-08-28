@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { 
   Card, 
@@ -21,7 +21,6 @@ import {
   Tabs,
   Input,
   Switch,
-  Slider,
   Divider,
   Progress,
   Empty,
@@ -42,7 +41,8 @@ import {
   ExclamationCircleOutlined,
   LoadingOutlined,
   PlusCircleOutlined,
- 
+  DatabaseOutlined,
+  MonitorOutlined,
 } from '@ant-design/icons';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import type { Environment, StorageSelection, StorageItem } from '@/types';
@@ -451,6 +451,8 @@ export default function EnvironmentManagement() {
     {
       title: 'Actions',
       key: 'actions',
+      width: 120,
+      fixed: 'right' as const,
       render: (_: any, record: Environment) => (
         <Space size="small">
           {record.url && (
@@ -460,22 +462,10 @@ export default function EnvironmentManagement() {
                 icon={<LinkOutlined />}
                 onClick={() => router.push(`/environment/${record.env_id || record.id}`)}
                 size="small"
+                style={{ padding: '4px 8px' }}
               />
              </Tooltip>
           )}
-          
-          {/* {record.url && (
-            <Tooltip title="Open External Link">
-              <Button
-                type="link"
-                icon={<LinkOutlined />}
-                href={record.url}
-                target="_blank"
-                size="small"
-              />
-            </Tooltip>
-          )} */}
-          
           
           <Tooltip title="Restart">
             <Button
@@ -483,6 +473,7 @@ export default function EnvironmentManagement() {
               size="small"
               onClick={() => handleRestart(record.env_id || record.id)}
               loading={restartMutation.isPending}
+              style={{ padding: '4px 8px' }}
             />
           </Tooltip>
           
@@ -493,6 +484,7 @@ export default function EnvironmentManagement() {
               danger
               onClick={() => handleStop(record.env_id || record.id)}
               loading={stopMutation.isPending}
+              style={{ padding: '4px 8px' }}
             />
           </Tooltip>
           
@@ -527,116 +519,157 @@ export default function EnvironmentManagement() {
   }
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
+    <div className="space-y-4">
+      {/* Compact Header */}
       <div className="flex justify-between items-center">
         <div>
-          <Title level={2} className="mb-1">Research Computing Environments</Title>
-          <Text type="secondary">
-            Manage your research computing environments with real-time monitoring
+          <Title level={2} style={{ margin: '0 0 4px 0', fontSize: '24px' }}>Computing Environments</Title>
+          <Text style={{ color: 'var(--text-secondary)', fontSize: '14px' }}>
+            Manage and monitor your research environments
           </Text>
         </div>
         <Space>
-          <Button
-            icon={<ReloadOutlined />}
-            onClick={() => refetch()}
-            loading={isLoading}
-          >
-            Refresh
-          </Button>
-          <Button
-            type="primary"
-            icon={<RocketOutlined />}
-            onClick={() => setLaunchModalVisible(true)}
-            size="large"
-          >
-            Launch Environment
-          </Button>
+          <Tooltip title="Refresh">
+            <Button
+              icon={<ReloadOutlined />}
+              onClick={() => refetch()}
+              loading={isLoading}
+              className="glass-button"
+            />
+          </Tooltip>
+          <Tooltip title="Launch Environment">
+            <Button
+              type="primary"
+              icon={<RocketOutlined />}
+              onClick={() => setLaunchModalVisible(true)}
+              className="glass-button"
+            />
+          </Tooltip>
         </Space>
       </div>
 
-      {/* Tabs for different views */}
-      <Tabs activeKey={activeTab} onChange={setActiveTab}>
-        <Tabs.TabPane tab="Environments" key="environments">
-          {/* Statistics */}
-          <Row gutter={16} className="mb-6">
-            <Col span={6}>
-              <Card>
-                <Statistic
-                  title="Total Environments"
-                  value={totalCount}
-                  prefix={<RocketOutlined />}
-                />
-              </Card>
-            </Col>
-            <Col span={6}>
-              <Card>
-                <Statistic
-                  title="Running"
-                  value={runningCount}
-                  valueStyle={{ color: '#52c41a' }}
-                  prefix={<PlayCircleOutlined />}
-                  suffix={`/ ${totalCount}`}
-                />
-              </Card>
-            </Col>
-            <Col span={6}>
-              <Card>
-                <Statistic
-                  title="Pending"
-                  value={pendingCount}
-                  valueStyle={{ color: pendingCount > 0 ? '#faad14' : '#d9d9d9' }}
-                  prefix={pendingCount > 0 ? <LoadingOutlined spin /> : <LoadingOutlined />}
-                />
-              </Card>
-            </Col>
-            <Col span={6}>
-              <Card>
-                <Statistic
-                  title="Available"
-                  value={availableSlots}
-                  valueStyle={{ color: '#52c41a' }}
-                  prefix={<PlusCircleOutlined />}
-                />
-              </Card>
-            </Col>
-          </Row>
-
-          {/* Search and Filters */}
-          <Card className="mb-4">
-            <Row gutter={16} align="middle">
-              <Col span={8}>
-                <Search
-                  placeholder="Search environments..."
-                  value={searchText}
-                  onChange={(e) => setSearchText(e.target.value)}
-                  allowClear
-                />
+      {/* Environment Tabs */}
+      <Card className="glass-card" bodyStyle={{ padding: '16px' }}>
+        <Tabs 
+          activeKey={activeTab} 
+          onChange={setActiveTab}
+          size="large"
+          className="professional-tabs"
+        >
+          <Tabs.TabPane 
+            tab={
+              <span className="flex items-center space-x-2">
+                <RocketOutlined />
+                <span>Environments</span>
+              </span>
+            } 
+            key="environments"
+          >
+          {/* Compact Statistics Row */}
+          <div className="mb-4">
+            <Row gutter={[12, 12]}>
+              <Col xs={12} sm={6} lg={6}>
+                <Card className="glass-card" bodyStyle={{ padding: '16px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                    <div className="icon-container primary" style={{ width: '36px', height: '36px', minWidth: '36px' }}>
+                      <RocketOutlined style={{ fontSize: '18px' }} />
+                    </div>
+                    <div>
+                      <div style={{ fontSize: '20px', fontWeight: 'bold', color: 'var(--interactive-primary)', lineHeight: 1 }}>
+                        {totalCount}
+                      </div>
+                      <div style={{ fontSize: '12px', color: 'var(--text-secondary)', lineHeight: 1.2 }}>
+                        Total
+                      </div>
+                    </div>
+                  </div>
+                </Card>
               </Col>
-              <Col span={6}>
-                <Select
-                  value={statusFilter}
-                  onChange={setStatusFilter}
-                  style={{ width: '100%' }}
-                  placeholder="Filter by status"
-                >
-                  <Option value="all">All Status</Option>
-                  <Option value="running">Running</Option>
-                  <Option value="pending">Pending</Option>
-                  <Option value="stopped">Stopped</Option>
-                  <Option value="failed">Failed</Option>
-                </Select>
+              <Col xs={12} sm={6} lg={6}>
+                <Card className="glass-card" bodyStyle={{ padding: '16px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                    <div className="icon-container success" style={{ width: '36px', height: '36px', minWidth: '36px' }}>
+                      <PlayCircleOutlined style={{ fontSize: '18px' }} />
+                    </div>
+                    <div>
+                      <div style={{ fontSize: '20px', fontWeight: 'bold', color: 'var(--success-500)', lineHeight: 1 }}>
+                        {runningCount}
+                      </div>
+                      <div style={{ fontSize: '12px', color: 'var(--text-secondary)', lineHeight: 1.2 }}>
+                        Running
+                      </div>
+                    </div>
+                  </div>
+                </Card>
               </Col>
-              <Col span={10}>
-                <Text type="secondary">
-                  {filteredEnvironments.length} of {environments?.length || 0} environments
-                </Text>
+              <Col xs={12} sm={6} lg={6}>
+                <Card className="glass-card" bodyStyle={{ padding: '16px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                    <div className="icon-container warning" style={{ width: '36px', height: '36px', minWidth: '36px' }}>
+                      {pendingCount > 0 ? <LoadingOutlined spin style={{ fontSize: '18px' }} /> : <LoadingOutlined style={{ fontSize: '18px' }} />}
+                    </div>
+                    <div>
+                      <div style={{ fontSize: '20px', fontWeight: 'bold', color: pendingCount > 0 ? 'var(--warning-500)' : 'var(--text-disabled)', lineHeight: 1 }}>
+                        {pendingCount}
+                      </div>
+                      <div style={{ fontSize: '12px', color: 'var(--text-secondary)', lineHeight: 1.2 }}>
+                        Pending
+                      </div>
+                    </div>
+                  </div>
+                </Card>
+              </Col>
+              <Col xs={12} sm={6} lg={6}>
+                <Card className="glass-card" bodyStyle={{ padding: '16px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                    <div className="icon-container error" style={{ width: '36px', height: '36px', minWidth: '36px' }}>
+                      <StopOutlined style={{ fontSize: '18px' }} />
+                    </div>
+                    <div>
+                      <div style={{ fontSize: '20px', fontWeight: 'bold', color: 'var(--error-500)', lineHeight: 1 }}>
+                        {stoppedCount}
+                      </div>
+                      <div style={{ fontSize: '12px', color: 'var(--text-secondary)', lineHeight: 1.2 }}>
+                        Stopped
+                      </div>
+                    </div>
+                  </div>
+                </Card>
               </Col>
             </Row>
-          </Card>
+          </div>
+
+          {/* Compact Search and Filters */}
+          <div className="mb-4" style={{ display: 'flex', alignItems: 'center', gap: '16px', padding: '12px 0' }}>
+            <Search
+              placeholder="Search environments..."
+              value={searchText}
+              onChange={(e) => setSearchText(e.target.value)}
+              allowClear
+              style={{ maxWidth: '300px' }}
+              size="middle"
+            />
+            <Select
+              value={statusFilter}
+              onChange={setStatusFilter}
+              style={{ width: '140px' }}
+              placeholder="Filter status"
+              size="middle"
+            >
+              <Option value="all">All Status</Option>
+              <Option value="running">Running</Option>
+              <Option value="pending">Pending</Option>
+              <Option value="stopped">Stopped</Option>
+              <Option value="failed">Failed</Option>
+            </Select>
+            <div style={{ flex: 1 }} />
+            <Text style={{ color: 'var(--text-secondary)', fontSize: '14px' }}>
+              {filteredEnvironments.length} of {environments?.length || 0} environments
+            </Text>
+          </div>
 
           {/* Environments Table */}
-          <Card>
+          <Card className="glass-card" bodyStyle={{ padding: '0' }}>
             <Table
               columns={columns}
               dataSource={filteredEnvironments.map(env => ({ 
@@ -647,12 +680,15 @@ export default function EnvironmentManagement() {
                 id: env.id || env.env_id
               }))}
               loading={isLoading}
+              size="middle"
+              scroll={{ x: 800 }}
               pagination={{
-                pageSize: 10,
-                showSizeChanger: true,
-                showQuickJumper: true,
+                pageSize: 15,
+                size: 'small',
+                showSizeChanger: false,
+                showQuickJumper: false,
                 showTotal: (total, range) => 
-                  `${range[0]}-${range[1]} of ${total} environments`,
+                  `${range[0]}-${range[1]} of ${total}`,
               }}
               rowSelection={{
                 selectedRowKeys,
@@ -665,84 +701,107 @@ export default function EnvironmentManagement() {
               }}
               locale={{
                 emptyText: (
-                  <Empty
-                    image={Empty.PRESENTED_IMAGE_SIMPLE}
-                    description={
-                      <span>
-                        <Title level={4} type="secondary">No Environments Found</Title>
-                        <Text type="secondary">
-                          {searchText || statusFilter !== 'all' 
-                            ? 'No environments match your search criteria'
-                            : "You don't have any environments yet. Launch your first environment to get started!"
-                          }
-                        </Text>
-                      </span>
-                    }
-                  >
+                  <div style={{ padding: '32px', textAlign: 'center' }}>
+                    <div className="icon-container primary mb-4" style={{ width: '48px', height: '48px', margin: '0 auto 16px' }}>
+                      <RocketOutlined style={{ fontSize: '24px' }} />
+                    </div>
+                    <Title level={4} style={{ color: 'var(--text-secondary)', margin: '0 0 8px 0' }}>
+                      {searchText || statusFilter !== 'all' ? 'No Results Found' : 'No Environments'}
+                    </Title>
+                    <Text style={{ color: 'var(--text-tertiary)', fontSize: '14px', display: 'block', marginBottom: '16px' }}>
+                      {searchText || statusFilter !== 'all' 
+                        ? 'Try adjusting your search or filters'
+                        : "Launch your first environment to get started"
+                      }
+                    </Text>
                     {!searchText && statusFilter === 'all' && (
-                      <Button 
-                        type="primary" 
-                        icon={<RocketOutlined />}
-                        onClick={() => setLaunchModalVisible(true)}
-                      >
-                        Launch Environment
-                      </Button>
+                      <Tooltip title="Launch Environment">
+                        <Button 
+                          type="primary" 
+                          icon={<RocketOutlined />}
+                          onClick={() => setLaunchModalVisible(true)}
+                          className="glass-button"
+                        />
+                      </Tooltip>
                     )}
-                  </Empty>
+                  </div>
                 ),
               }}
             />
             
-            {/* Bulk Actions */}
+            {/* Compact Bulk Actions */}
             {selectedRowKeys.length > 0 && (
-              <div className="mt-4 p-4 bg-blue-50 rounded-lg">
-                <Space>
-                  <Text strong>{selectedRowKeys.length} environments selected</Text>
-                  <Button 
-                    size="small" 
-                    onClick={() => {
-                      // Find the selected environments and use their env_id
-                      const selectedEnvs = filteredEnvironments.filter(env => 
-                        selectedRowKeys.includes(env.env_id || env.id)
-                      );
-                      selectedEnvs.forEach(env => handleStop(env.env_id || env.id));
-                      setSelectedRowKeys([]);
-                    }}
-                    loading={stopMutation.isPending}
-                  >
-                    Stop All
-                  </Button>
-                  <Button 
-                    size="small" 
-                    onClick={() => {
-                      // Find the selected environments and use their env_id
-                      const selectedEnvs = filteredEnvironments.filter(env => 
-                        selectedRowKeys.includes(env.env_id || env.id)
-                      );
-                      selectedEnvs.forEach(env => handleRestart(env.env_id || env.id));
-                      setSelectedRowKeys([]);
-                    }}
-                    loading={restartMutation.isPending}
-                  >
-                    Restart All
-                  </Button>
-                  <Button size="small" onClick={() => setSelectedRowKeys([])}>
-                    Clear Selection
-                  </Button>
-                </Space>
+              <div className="mt-3 px-4 py-3 glass-card" style={{ background: 'var(--primary-50)', border: '1px solid var(--primary-200)', borderRadius: '8px' }}>
+                <div className="flex items-center justify-between">
+                  <Text style={{ color: 'var(--primary-700)', fontSize: '14px', fontWeight: '500' }}>
+                    {selectedRowKeys.length} selected
+                  </Text>
+                  <Space size="small">
+                    <Tooltip title="Stop Selected">
+                      <Button 
+                        size="small"
+                        icon={<StopOutlined />}
+                        onClick={() => {
+                          const selectedEnvs = filteredEnvironments.filter(env => 
+                            selectedRowKeys.includes(env.env_id || env.id)
+                          );
+                          selectedEnvs.forEach(env => handleStop(env.env_id || env.id));
+                          setSelectedRowKeys([]);
+                        }}
+                        loading={stopMutation.isPending}
+                        danger
+                      />
+                    </Tooltip>
+                    <Tooltip title="Restart Selected">
+                      <Button 
+                        size="small"
+                        icon={<RedoOutlined />}
+                        onClick={() => {
+                          const selectedEnvs = filteredEnvironments.filter(env => 
+                            selectedRowKeys.includes(env.env_id || env.id)
+                          );
+                          selectedEnvs.forEach(env => handleRestart(env.env_id || env.id));
+                          setSelectedRowKeys([]);
+                        }}
+                        loading={restartMutation.isPending}
+                        type="primary"
+                      />
+                    </Tooltip>
+                    <Tooltip title="Clear Selection">
+                      <Button size="small" icon={<DeleteOutlined />} onClick={() => setSelectedRowKeys([])} />
+                    </Tooltip>
+                  </Space>
+                </div>
               </div>
             )}
           </Card>
         </Tabs.TabPane>
 
-        <Tabs.TabPane tab="Storage" key="storage">
-          <StorageManagement hideCreateButton={true} />
-        </Tabs.TabPane>
+          <Tabs.TabPane 
+            tab={
+              <span className="flex items-center space-x-2">
+                <DatabaseOutlined />
+                <span>Storage</span>
+              </span>
+            } 
+            key="storage"
+          >
+            <StorageManagement hideCreateButton={true} />
+          </Tabs.TabPane>
 
-        <Tabs.TabPane tab="Monitoring" key="monitoring">
-          <MonitoringDashboard />
-        </Tabs.TabPane>
-      </Tabs>
+          <Tabs.TabPane 
+            tab={
+              <span className="flex items-center space-x-2">
+                <MonitorOutlined />
+                <span>Monitoring</span>
+              </span>
+            } 
+            key="monitoring"
+          >
+            <MonitoringDashboard />
+          </Tabs.TabPane>
+        </Tabs>
+      </Card>
 
       {/* Launch Environment Modal */}
       <LaunchEnvironmentModal
@@ -815,13 +874,13 @@ function EnvironmentDetailsModal({ visible, environment, onClose, onRefresh }: E
       open={visible}
       onCancel={onClose}
       footer={[
-        <Button key="refresh" icon={<ReloadOutlined />} onClick={onRefresh}>
-          Refresh
-        </Button>,
+        <Tooltip key="refresh" title="Refresh">
+          <Button icon={<ReloadOutlined />} onClick={onRefresh} />
+        </Tooltip>,
         environment.url && (
-          <Button key="access" type="primary" icon={<LinkOutlined />} href={environment.url} target="_blank">
-            Access Environment
-          </Button>
+          <Tooltip key="access" title="Access Environment">
+            <Button type="primary" icon={<LinkOutlined />} href={environment.url} target="_blank" />
+          </Tooltip>
         ),
         <Button key="close" onClick={onClose}>
           Close
@@ -867,21 +926,21 @@ function EnvironmentDetailsModal({ visible, environment, onClose, onRefresh }: E
                 <div>
                   <Text type="secondary">Last Updated</Text>
                   <br />
-                  <Text>{formatDateTime(environment.updated_at)}</Text>
+                  <Text>{formatDateTime(environment.updated_at || environment.created_at)}</Text>
                 </div>
                 {environment.url && (
                   <div>
                     <Text type="secondary">Access URL</Text>
                     <br />
-                    <Button 
-                      type="link" 
-                      icon={<LinkOutlined />} 
-                      href={environment.url} 
-                      target="_blank"
-                      className="p-0"
-                    >
-                      Access Environment
-                    </Button>
+                    <Tooltip title="Access Environment">
+                      <Button 
+                        type="link" 
+                        icon={<LinkOutlined />} 
+                        href={environment.url} 
+                        target="_blank"
+                        className="p-0"
+                      />
+                    </Tooltip>
                   </div>
                 )}
               </div>
@@ -1021,41 +1080,30 @@ function LaunchEnvironmentModal({
   return (
     <Modal
       title={
-        <div className="flex items-center gap-3 py-2">
-          <div className="icon-container primary p-2">
-            <RocketOutlined style={{ fontSize: '18px' }} />
-          </div>
-          <div>
-            <h3 className="text-xl font-semibold mb-0" style={{ color: 'var(--text-primary)' }}>
-              Launch New Environment
-            </h3>
-            <p className="text-sm mb-0" style={{ color: 'var(--text-secondary)' }}>
-              Configure and deploy your research computing environment
-            </p>
-          </div>
-        </div>
+        <Space>
+          <RocketOutlined style={{ color: 'var(--interactive-primary)' }} />
+          <span>Launch Environment</span>
+        </Space>
       }
       open={visible}
       onCancel={onCancel}
       footer={null}
-      width={900}
+      width={480}
       centered
       styles={{
         content: {
           background: 'var(--glass-bg-primary)',
           backdropFilter: 'blur(var(--glass-blur))',
           border: '1px solid var(--glass-border)',
-          borderRadius: 'var(--radius-3xl)'
+          borderRadius: '12px'
         }
       }}
     >
       {loading && launchProgress > 0 && (
-        <Card className="mb-4">
-          <div className="text-center">
-            <Title level={4}>{launchStep}</Title>
-            <Progress percent={launchProgress} status="active" />
-          </div>
-        </Card>
+        <div className="mb-3 text-center">
+          <Text style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>{launchStep}</Text>
+          <Progress percent={launchProgress} status="active" size="small" />
+        </div>
       )}
 
       <Form
@@ -1069,155 +1117,107 @@ function LaunchEnvironmentModal({
           storage_size: preset.storage_size,
         }}
       >
-        {/* Professional Environment Type Selection */}
-        <Form.Item label={<span className="font-semibold" style={{ color: 'var(--text-primary)' }}>Environment Type</span>} required>
-          <div className="grid grid-cols-3 gap-4">
+        {/* Compact Environment Type Selection */}
+        <Form.Item label="Configuration" style={{ marginBottom: '12px' }}>
+          <Select 
+            value={selectedPreset} 
+            onChange={onPresetChange}
+            style={{ width: '100%' }}
+            size="middle"
+          >
             {Object.entries(presetConfigs).map(([key, config]) => (
-              <Card
-                key={key}
-                className={`cursor-pointer transition-all action-card ${
-                  selectedPreset === key 
-                    ? 'border-2' 
-                    : 'border'
-                }`}
-                onClick={() => onPresetChange(key as keyof typeof presetConfigs)}
-                bodyStyle={{ padding: 'var(--spacing-lg)' }}
-                style={{
-                  borderColor: selectedPreset === key ? 'var(--interactive-primary)' : 'var(--border-primary)',
-                  background: selectedPreset === key ? 'var(--primary-50)' : 'var(--glass-bg-secondary)'
-                }}
-              >
-                <div className="text-center">
-                  <div className="mb-3">
-                    <div 
-                      className="w-6 h-6 rounded-full mx-auto flex items-center justify-center"
-                      style={{ 
-                        backgroundColor: config.color,
-                        opacity: selectedPreset === key ? 1 : 0.6
-                      }}
-                    >
-                      {selectedPreset === key && (
-                        <CheckCircleOutlined style={{ color: 'white', fontSize: '14px' }} />
-                      )}
-                    </div>
-                  </div>
-                  <h4 className="font-semibold mb-2" style={{ 
-                    color: selectedPreset === key ? 'var(--interactive-primary)' : 'var(--text-primary)'
-                  }}>
-                    {config.label}
-                  </h4>
-                  <p className="text-xs leading-relaxed" style={{ color: 'var(--text-secondary)' }}>
-                    {config.description}
-                  </p>
+              <Option key={key} value={key}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <div 
+                    style={{ 
+                      width: '8px', 
+                      height: '8px', 
+                      borderRadius: '50%',
+                      backgroundColor: config.color,
+                      flexShrink: 0
+                    }}
+                  />
+                  <span style={{ fontWeight: '500' }}>{config.label}</span>
+                  <span style={{ fontSize: '12px', color: 'var(--text-secondary)', marginLeft: 'auto' }}>
+                    {config.cpu_limit}CPU • {config.memory_limit.replace('Gi', 'GB')}
+                  </span>
                 </div>
-              </Card>
+              </Option>
             ))}
-          </div>
+          </Select>
         </Form.Item>
 
-        {/* Custom Configuration Toggle */}
-        <Form.Item>
-          <div className="flex items-center justify-between">
-            <Text strong>Resource Configuration</Text>
-            <Space>
-              <Text type="secondary">Custom:</Text>
-              <Switch checked={customMode} onChange={onCustomModeChange} />
-            </Space>
-          </div>
-        </Form.Item>
-
-        {/* Resource Configuration */}
-        <Card size="small" className="mb-4">
-          <Row gutter={16}>
-            <Col span={8}>
-              <Form.Item 
-                label="CPU Cores" 
-                name="cpu_limit"
-                rules={[{ required: customMode }]}
-              >
-                {customMode ? (
-                  <Slider
+        {/* Compact Custom Configuration Toggle */}
+        {customMode && (
+          <div style={{ marginBottom: '16px' }}>
+            <Row gutter={8}>
+              <Col span={8}>
+                <Form.Item label="CPU" name="cpu_limit" style={{ marginBottom: '8px' }}>
+                  <InputNumber
                     min={0.5}
                     max={8}
                     step={0.5}
-                    marks={{
-                      0.5: '0.5',
-                      2: '2',
-                      4: '4', 
-                      8: '8'
-                    }}
+                    style={{ width: '100%' }}
+                    size="small"
+                    suffix="cores"
                   />
-                ) : (
-                  <Text strong>{preset.cpu_limit} cores</Text>
-                )}
-              </Form.Item>
-            </Col>
-            <Col span={8}>
-              <Form.Item 
-                label="Memory" 
-                name="memory_limit"
-                rules={[{ required: customMode }]}
-              >
-                {customMode ? (
-                  <Select>
+                </Form.Item>
+              </Col>
+              <Col span={8}>
+                <Form.Item label="Memory" name="memory_limit" style={{ marginBottom: '8px' }}>
+                  <Select size="small" style={{ width: '100%' }}>
                     <Option value="1Gi">1GB</Option>
                     <Option value="2Gi">2GB</Option>
                     <Option value="4Gi">4GB</Option>
                     <Option value="8Gi">8GB</Option>
-                    <Option value="16Gi">16GB</Option>
-                    <Option value="32Gi">32GB</Option>
                   </Select>
-                ) : (
-                  <Text strong>{preset.memory_limit.replace('Gi', 'GB')}</Text>
-                )}
-              </Form.Item>
-            </Col>
-            <Col span={8}>
-              <Form.Item 
-                label="Storage" 
-                name="storage_size"
-                rules={[{ required: customMode }]}
-              >
-                {customMode ? (
-                  <Select>
-                    <Option value="10Gi">10GB</Option>
+                </Form.Item>
+              </Col>
+              <Col span={8}>
+                <Form.Item label="Storage" name="storage_size" style={{ marginBottom: '8px' }}>
+                  <Select size="small" style={{ width: '100%' }}>
                     <Option value="25Gi">25GB</Option>
                     <Option value="50Gi">50GB</Option>
                     <Option value="100Gi">100GB</Option>
-                    <Option value="200Gi">200GB</Option>
-                    <Option value="500Gi">500GB</Option>
                   </Select>
-                ) : (
-                  <Text strong>{preset.storage_size.replace('Gi', 'GB')}</Text>
-                )}
-              </Form.Item>
-            </Col>
-          </Row>
-        </Card>
+                </Form.Item>
+              </Col>
+            </Row>
+          </div>
+        )}
+        
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
+          <Text style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>
+            {preset.cpu_limit} CPU • {preset.memory_limit.replace('Gi', 'GB')} RAM • {preset.storage_size.replace('Gi', 'GB')} Storage
+          </Text>
+          <Space>
+            <Text style={{ fontSize: '12px' }}>Custom</Text>
+            <Switch size="small" checked={customMode} onChange={onCustomModeChange} />
+          </Space>
+        </div>
 
-        {/* Workspace Storage Selection */}
-        <Form.Item label="Workspace Storage" required>
-          <StorageSelector
+        {/* Compact Storage Selection */}
+        <Form.Item label="Workspace" style={{ marginBottom: '16px' }}>
+          <CompactStorageSelector
             storageOptions={storageOptions}
             selectedStorage={selectedStorage}
             onStorageChange={onStorageChange}
           />
         </Form.Item>
 
-        {/* Launch Warning */}
+        {/* Compact Warning */}
         {!selectedStorage || selectedStorage.selection_type === 'pending' ? (
           <Alert
-            message="Storage Required"
-            description="Please select a workspace before launching"
+            message="Select a workspace to continue"
             type="warning"
-            showIcon
-            className="mb-4"
+            showIcon={false}
+            style={{ marginBottom: '16px', padding: '8px 12px', fontSize: '12px' }}
           />
         ) : null}
 
-        {/* Actions */}
-        <div className="flex justify-end space-x-2 mt-6">
-          <Button onClick={onCancel} disabled={loading}>
+        {/* Compact Actions */}
+        <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end', marginTop: '8px' }}>
+          <Button onClick={onCancel} disabled={loading} size="middle">
             Cancel
           </Button>
           <Button 
@@ -1226,8 +1226,9 @@ function LaunchEnvironmentModal({
             loading={loading}
             icon={<RocketOutlined />}
             disabled={!selectedStorage || selectedStorage.selection_type === 'pending'}
+            size="middle"
           >
-            {loading ? 'Launching...' : 'Launch Environment'}
+            {loading ? 'Launching...' : 'Launch'}
           </Button>
         </div>
       </Form>
@@ -1235,19 +1236,39 @@ function LaunchEnvironmentModal({
   );
 }
 
-// Simple Storage Selector Component
-function StorageSelector({ storageOptions, selectedStorage, onStorageChange }: {
+// Compact Storage Selector Component
+function CompactStorageSelector({ storageOptions, selectedStorage, onStorageChange }: {
   storageOptions: StorageItem[];
   selectedStorage: StorageSelection | null;
   onStorageChange: (storage: StorageSelection | null) => void;
 }) {
+  // Auto-select default option when component loads
+  React.useEffect(() => {
+    if (!selectedStorage || selectedStorage.selection_type === 'pending') {
+      if (storageOptions.length > 0) {
+        // Auto-select first existing workspace
+        onStorageChange({
+          selection_type: 'existing',
+          storage_id: storageOptions[0].id,
+          storage_name: storageOptions[0].display_name
+        });
+      } else {
+        // Auto-select create new with default storage class
+        onStorageChange({
+          selection_type: 'create_new',
+          storage_class: 'standard'
+        });
+      }
+    }
+  }, [storageOptions, selectedStorage, onStorageChange]);
+
   return (
-    <div className="space-y-4">
+    <Space direction="vertical" style={{ width: '100%' }} size="small">
       <Radio.Group
-        value={selectedStorage?.selection_type || 'pending'}
+        value={selectedStorage?.selection_type || (storageOptions.length > 0 ? 'existing' : 'create_new')}
         onChange={(e) => {
           const type = e.target.value;
-          if (type === 'existing') {
+          if (type === 'existing' && storageOptions.length > 0) {
             onStorageChange({
               selection_type: 'existing',
               storage_id: storageOptions[0]?.id,
@@ -1260,21 +1281,24 @@ function StorageSelector({ storageOptions, selectedStorage, onStorageChange }: {
             });
           }
         }}
+        style={{ width: '100%' }}
       >
-        <Space direction="vertical">
-          <Radio value="existing" disabled={!storageOptions.length}>
-            Use Existing Workspace ({storageOptions.length} available)
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+          {storageOptions.length > 0 && (
+            <Radio value="existing" style={{ fontSize: '14px' }}>
+              📁 Use Existing Workspace ({storageOptions.length} available)
+            </Radio>
+          )}
+          <Radio value="create_new" style={{ fontSize: '14px' }}>
+            ✨ Create New Workspace
           </Radio>
-          <Radio value="create_new">
-            Create New Workspace
-          </Radio>
-        </Space>
+        </div>
       </Radio.Group>
 
       {selectedStorage?.selection_type === 'existing' && storageOptions.length > 0 && (
         <Select
-          style={{ width: '100%' }}
-          placeholder="Select workspace"
+          style={{ width: '100%', marginTop: '8px' }}
+          placeholder="Choose workspace"
           value={selectedStorage.storage_id}
           onChange={(value) => {
             const storage = storageOptions.find(s => s.id === value);
@@ -1286,32 +1310,28 @@ function StorageSelector({ storageOptions, selectedStorage, onStorageChange }: {
               });
             }
           }}
+          size="middle"
         >
           {storageOptions.map((storage) => (
             <Option key={storage.id} value={storage.id}>
-              {storage.display_name} ({storage.storage_class})
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <span style={{ fontWeight: '500' }}>{storage.display_name}</span>
+                <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
+                  {storage.storage_class || 'standard'}
+                </span>
+              </div>
             </Option>
           ))}
         </Select>
       )}
 
       {selectedStorage?.selection_type === 'create_new' && (
-        <Select
-          style={{ width: '100%' }}
-          placeholder="Select storage class"
-          value={selectedStorage.storage_class}
-          onChange={(value) => {
-            onStorageChange({
-              ...selectedStorage,
-              storage_class: value
-            });
-          }}
-        >
-          <Option value="standard">Standard (Best for frequently accessed data)</Option>
-          <Option value="nearline">Nearline (Best for data accessed monthly)</Option>
-          <Option value="coldline">Coldline (Best for archival data)</Option>
-        </Select>
+        <div style={{ marginTop: '8px', padding: '12px', background: 'var(--glass-bg-secondary)', borderRadius: '6px', border: '1px solid var(--glass-border)' }}>
+          <Text style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>
+            ✨ A new workspace will be created with standard storage configuration
+          </Text>
+        </div>
       )}
-    </div>
+    </Space>
   );
 }

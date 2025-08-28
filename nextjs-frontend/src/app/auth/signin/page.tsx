@@ -59,7 +59,7 @@ function SignInContent() {
           background: `radial-gradient(circle, ${theme === 'dark' ? 'rgba(14, 125, 184, 0.1)' : 'rgba(14, 125, 184, 0.05)'} 0%, transparent 70%)` 
         }}></div>
         <div className="absolute bottom-20 right-20 w-80 h-80 rounded-full" style={{ 
-          background: `radial-gradient(circle, ${theme === 'dark' ? 'rgba(16, 185, 129, 0.1)' : 'rgba(16, 185, 129, 0.05)'} 0%, transparent 70%)` 
+          background: `radial-gradient(circle, ${theme === 'dark' ? 'rgba(59, 130, 246, 0.1)' : 'rgba(59, 130, 246, 0.05)'} 0%, transparent 70%)` 
         }}></div>
         <div className="absolute top-1/2 left-1/3 w-48 h-48 rounded-full" style={{ 
           background: `radial-gradient(circle, ${theme === 'dark' ? 'rgba(245, 158, 11, 0.1)' : 'rgba(245, 158, 11, 0.05)'} 0%, transparent 70%)` 
@@ -90,9 +90,9 @@ function SignInContent() {
       {/* Main Content Container */}
       <div className="relative z-10 min-h-screen flex flex-col items-center justify-center p-6">
         {/* Elegant Header */}
-        <div className="w-full max-w-6xl text-center mb-16 fade-in">
+        <div className="w-full max-w-6xl text-center mb-8 fade-in">
           {/* Clean Logo Partnership */}
-          <div className="flex items-center justify-center gap-20 mb-8">
+          <div className="flex items-center justify-center gap-20 mb-6">
             <div className="cambridge-logo-container">
               <Image
                 src="/logos/cambridge-logo.png"
@@ -133,51 +133,52 @@ function SignInContent() {
           </div>
           
           {/* Sophisticated Branding */}
-          <div className="flex items-center justify-center gap-4 mb-6">
-            <Image
-              src="/logos/cmbagent-logo.png"
-              alt="CMBAgent"
-              width={48}
-              height={48}
-              preview={false}
-              style={{
-                transition: 'all 0.4s ease',
-                objectFit: 'contain',
-                filter: theme === 'dark' ? 'brightness(1.1)' : 'brightness(0.9)'
-              }}
-            />
-            <h1 className="text-5xl font-light mb-4" style={{ 
-              color: 'var(--text-primary)',
-              fontWeight: '300',
-              letterSpacing: '-0.02em',
-              lineHeight: 1.1,
-              margin: 0
-            }}>
-              CMBAgent 
-              <span style={{ 
-                fontWeight: '600',
-                background: `linear-gradient(135deg, var(--interactive-primary), var(--primary-300))`,
-                backgroundClip: 'text',
-                WebkitBackgroundClip: 'text',
-                WebkitTextFillColor: 'transparent'
+          <div>
+            <div className="flex items-center justify-center gap-4 mb-4">
+              <Image
+                src="/logos/cmbagent-logo.png"
+                alt="CMBAgent"
+                width={48}
+                height={48}
+                preview={false}
+                style={{
+                  transition: 'all 0.4s ease',
+                  objectFit: 'contain',
+                  filter: theme === 'dark' ? 'brightness(1.1)' : 'brightness(0.9)'
+                }}
+              />
+              <h1 className="text-5xl font-light" style={{ 
+                color: 'var(--text-primary)',
+                fontWeight: '300',
+                letterSpacing: '-0.02em',
+                lineHeight: 1.1,
+                margin: 0
               }}>
-                Cloud
-              </span>
-            </h1>
-          </div>
-          <div className="flex items-center justify-center gap-4 mb-6">
-            <div className="h-px w-12 opacity-30" style={{ background: 'var(--text-muted)' }}></div>
-            <Text style={{ 
-              color: 'var(--text-muted)', 
-              fontSize: 'var(--text-sm)',
-              fontWeight: 'var(--font-medium)',
-              textTransform: 'uppercase',
-              letterSpacing: '0.15em'
-            }}>
-              Autonomous Agentic Research Environment
-            </Text>
-            <div className="h-px w-12 opacity-30" style={{ background: 'var(--text-muted)' }}></div>
-          </div>
+                CMBAgent 
+                <span style={{ 
+                  fontWeight: '600',
+                  background: `linear-gradient(135deg, var(--interactive-primary), var(--primary-300))`,
+                  backgroundClip: 'text',
+                  WebkitBackgroundClip: 'text',
+                  WebkitTextFillColor: 'transparent'
+                }}>
+                  Cloud
+                </span>
+              </h1>
+            </div>
+            <div className="flex items-center justify-center gap-4 mb-4">
+              <div className="h-px w-12 opacity-30" style={{ background: 'var(--text-muted)' }}></div>
+              <Text style={{ 
+                color: 'var(--text-muted)', 
+                fontSize: 'var(--text-sm)',
+                fontWeight: 'var(--font-medium)',
+                textTransform: 'uppercase',
+                letterSpacing: '0.15em'
+              }}>
+                Autonomous Agentic Research Environment
+              </Text>
+              <div className="h-px w-12 opacity-30" style={{ background: 'var(--text-muted)' }}></div>
+            </div>
           </div>
         </div>
 
@@ -261,7 +262,7 @@ function SignInContent() {
         </div>
 
         {/* Subtle Feature Highlights */}
-        <div className="w-full max-w-4xl mt-16 fade-in" style={{ animationDelay: '0.6s' }}>
+        <div className="w-full max-w-4xl mt-8 fade-in" style={{ animationDelay: '0.6s' }}>
           <div className="grid grid-cols-3 gap-12 text-center">
             <div className="group">
               <div className="mb-4 mx-auto w-12 h-12 rounded-full flex items-center justify-center transition-all duration-300 group-hover:scale-110" 
@@ -284,10 +285,10 @@ function SignInContent() {
             <div className="group">
               <div className="mb-4 mx-auto w-12 h-12 rounded-full flex items-center justify-center transition-all duration-300 group-hover:scale-110" 
                    style={{ 
-                     background: 'rgba(16, 185, 129, 0.1)', 
-                     border: '1px solid rgba(16, 185, 129, 0.2)' 
+                     background: 'rgba(59, 130, 246, 0.1)', 
+                     border: '1px solid rgba(59, 130, 246, 0.2)' 
                    }}>
-                <SafetyCertificateOutlined style={{ fontSize: '20px', color: 'var(--success-400)' }} />
+                <SafetyCertificateOutlined style={{ fontSize: '20px', color: 'var(--info-400)' }} />
               </div>
               <Text style={{ 
                 color: 'var(--text-secondary)', 
@@ -319,7 +320,7 @@ function SignInContent() {
           </div>
         </div>
         {/* Clean Footer */}
-        <div className="text-center mt-12 fade-in" style={{ animationDelay: '0.8s' }}>
+        <div className="text-center mt-6 fade-in" style={{ animationDelay: '0.8s' }}>
           <Text style={{ 
             color: 'var(--text-muted)', 
             fontSize: 'var(--text-xs)',
@@ -353,17 +354,37 @@ function SignInContent() {
 export default function SignIn() {
   return (
     <Suspense fallback={
-      <div className="min-h-screen flex items-center justify-center" style={{ background: 'var(--bg-primary)' }}>
-        <div className="text-center">
-          <div className="glass-card p-8 mb-6">
-            <div className="spinner mx-auto mb-4" style={{ width: '32px', height: '32px' }}></div>
-            <h3 className="text-lg font-semibold mb-2" style={{ color: 'var(--text-primary)' }}>
-              Initializing Platform
-            </h3>
-            <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>
-              Setting up your secure environment...
-            </p>
+      <div 
+        className="min-h-screen flex items-center justify-center loading-page" 
+        style={{ 
+          background: 'var(--background-primary)',
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          width: '100vw',
+          height: '100vh',
+          zIndex: 9999
+        }}
+      >
+        <div className="text-center loading-container">
+          <div className="loading-logo mb-4">
+            <img
+              src="/logos/cambridge-logo.png"
+              alt="Cambridge Logo"
+              className="w-16 h-16"
+              style={{
+                filter: 'var(--logo-filter)',
+                transition: 'all 0.3s ease'
+              }}
+            />
           </div>
+          <div className="spinner mx-auto mb-4" style={{ width: '32px', height: '32px' }}></div>
+          <h3 className="text-lg font-semibold mb-2 loading-text">
+            Initializing Platform
+          </h3>
+          <p className="text-sm loading-text" style={{ opacity: 0.7 }}>
+            Setting up your secure environment...
+          </p>
         </div>
       </div>
     }>

@@ -13,24 +13,55 @@ interface ThemeContextType {
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
-  const [currentTheme, setCurrentTheme] = useState<Theme>('light');
+  const [currentTheme, setCurrentTheme] = useState<Theme>(() => {
+    // Try to get theme from document attribute set by the script
+    if (typeof window !== 'undefined') {
+      const documentTheme = document.documentElement.getAttribute('data-theme') as Theme;
+      if (documentTheme === 'dark' || documentTheme === 'light') {
+        return documentTheme;
+      }
+      // Fallback to localStorage
+      try {
+        const savedTheme = localStorage.getItem('theme') as Theme;
+        if (savedTheme === 'dark' || savedTheme === 'light') {
+          return savedTheme;
+        }
+      } catch (e) {
+        // localStorage might not be available
+      }
+    }
+    return 'light';
+  });
 
   useEffect(() => {
-    // Check for saved theme or default to light
-    const savedTheme = localStorage.getItem('theme') as Theme;
-    if (savedTheme) {
-      setCurrentTheme(savedTheme);
+    // Sync with localStorage if not already set
+    if (typeof window !== 'undefined') {
+      try {
+        const savedTheme = localStorage.getItem('theme') as Theme;
+        if (savedTheme && savedTheme !== currentTheme) {
+          setCurrentTheme(savedTheme);
+        }
+      } catch (e) {
+        // localStorage might not be available
+      }
     }
   }, []);
 
   useEffect(() => {
     // Apply theme to document
-    document.documentElement.setAttribute('data-theme', currentTheme);
-    localStorage.setItem('theme', currentTheme);
+    if (typeof window !== 'undefined') {
+      document.documentElement.setAttribute('data-theme', currentTheme);
+      document.documentElement.className = currentTheme;
+      try {
+        localStorage.setItem('theme', currentTheme);
+      } catch (e) {
+        // localStorage might not be available
+      }
+    }
   }, [currentTheme]);
 
   const toggleTheme = () => {
-    setCurrentTheme(prev => prev === 'dark' ? 'light' : 'dark');
+    setCurrentTheme((prev: Theme) => prev === 'dark' ? 'light' : 'dark');
   };
 
   const antdTheme = {

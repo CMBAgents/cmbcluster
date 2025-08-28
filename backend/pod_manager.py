@@ -583,7 +583,7 @@ class PodManager:
                 "driver": "gcsfuse.csi.storage.gke.io",
                 "volumeAttributes": {
                     "bucketName": storage.bucket_name,
-                    "mountOptions": "implicit-dirs,uid=1000,gid=1000,file-mode=644,dir-mode=755,stat-cache-ttl=1h,type-cache-ttl=1h"
+                    "mountOptions": "implicit-dirs,uid=1000,gid=1000,file-mode=644,dir-mode=755,metadata-cache-ttl-secs=3600"
                 }
             }
         }]
@@ -633,7 +633,7 @@ class PodManager:
                 "containers": [{
                     "name": "cmbagent",
                     "image": image,
-                    "ports": [{"containerPort": 8501, "name": "streamlit"}],
+                    "ports": [{"containerPort": 3000, "name": "ui"}],
                     "env": env_list,
                     "envFrom": env_from,
                     "resources": {
@@ -661,22 +661,6 @@ class PodManager:
                         "runAsUser": 1000,
                         "runAsGroup": 1000,
                         "allowPrivilegeEscalation": False
-                    },
-                    "livenessProbe": {
-                        "httpGet": {
-                            "path": "/_stcore/health",
-                            "port": 8501
-                        },
-                        "initialDelaySeconds": 30,
-                        "periodSeconds": 10
-                    },
-                    "readinessProbe": {
-                        "httpGet": {
-                            "path": "/_stcore/health",
-                            "port": 8501
-                        },
-                        "initialDelaySeconds": 5,
-                        "periodSeconds": 5
                     }
                 }],
                 "volumes": volumes,
@@ -718,7 +702,7 @@ class PodManager:
                 "selector": {"user-id": safe_user_id, "env-id": env_id},
                 "ports": [{
                     "port": 80,
-                    "targetPort": 8501,
+                    "targetPort": 3000,
                     "protocol": "TCP"
                 }],
                 "type": "ClusterIP"
@@ -1150,4 +1134,3 @@ class PodManager:
                 logger.warning("Failed to cleanup ingress", error=str(e))
 
         # Note: Keep PVC for potential retry/data recovery
-

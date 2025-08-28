@@ -13,7 +13,8 @@ import {
   Tag,
   Divider,
   Modal,
-  message
+  message,
+  Progress
 } from 'antd';
 import {
   ReloadOutlined,
@@ -21,7 +22,9 @@ import {
   FullscreenOutlined,
   InfoCircleOutlined,
   LinkOutlined,
-  PlayCircleOutlined
+  PlayCircleOutlined,
+  RocketOutlined,
+  CheckCircleOutlined
 } from '@ant-design/icons';
 import { useQuery } from '@tanstack/react-query';
 import { apiClient } from '@/lib/api-client';
@@ -38,6 +41,9 @@ export default function EnvironmentAccessPage() {
   const [iframeKey, setIframeKey] = useState(0);
   const [iframeError, setIframeError] = useState(false);
   const [fullscreen, setFullscreen] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const [loadingProgress, setLoadingProgress] = useState(0);
+  const [loadingMessage, setLoadingMessage] = useState('Initializing environment...');
 
   // Extract envId after hooks are initialized
   const envId = params?.envId as string;
@@ -49,7 +55,7 @@ export default function EnvironmentAccessPage() {
   // Fetch environment details
   const {
     data: environment,
-    isLoading,
+    isLoading: isQueryLoading,
     error,
     refetch
   } = useQuery({
@@ -83,10 +89,48 @@ export default function EnvironmentAccessPage() {
 
   });
 
+  // Enhanced loading simulation with progress
+  useEffect(() => {
+    if (!environment?.url) return;
+    
+    setIsLoading(true);
+    setLoadingProgress(0);
+    setLoadingMessage('Connecting to environment...');
+
+    const loadingSteps = [
+      { progress: 20, message: 'Establishing connection...' },
+      { progress: 40, message: 'Loading application...' },
+      { progress: 60, message: 'Initializing interface...' },
+      { progress: 80, message: 'Preparing workspace...' },
+      { progress: 95, message: 'Almost ready...' },
+      { progress: 100, message: 'Environment ready!' }
+    ];
+
+    let currentStep = 0;
+    const stepInterval = setInterval(() => {
+      if (currentStep < loadingSteps.length) {
+        const step = loadingSteps[currentStep];
+        setLoadingProgress(step.progress);
+        setLoadingMessage(step.message);
+        currentStep++;
+        
+        if (currentStep === loadingSteps.length) {
+          setTimeout(() => setIsLoading(false), 500);
+        }
+      } else {
+        clearInterval(stepInterval);
+      }
+    }, 800);
+
+    return () => clearInterval(stepInterval);
+  }, [environment?.url, iframeKey]);
+
   // Handle iframe reload
   const handleIframeReload = () => {
     setIframeKey(prev => prev + 1);
     setIframeError(false);
+    setIsLoading(true);
+    setLoadingProgress(0);
   };
 
   // Handle external link
@@ -112,14 +156,24 @@ export default function EnvironmentAccessPage() {
 
   // Handle different states after all hooks are called
   // Show loading if envId is not available yet or if query is loading
-  if (!envId || isLoading) {
+  if (!envId || isQueryLoading) {
     return (
       <MainLayout>
-        <div className="flex items-center justify-center h-64">
-          <Spin size="large" />
-          <div className="ml-4">
-            {!envId ? 'Loading environment...' : 'Fetching environment details...'}
-          </div>
+        <div className="flex items-center justify-center" style={{ height: '60vh' }}>
+          <Card className="glass-card" style={{ width: '400px', textAlign: 'center' }}>
+            <div style={{ padding: '40px 20px' }}>
+              <div className="icon-container primary mb-4" style={{ width: '64px', height: '64px', margin: '0 auto 24px' }}>
+                <RocketOutlined style={{ fontSize: '32px' }} />
+              </div>
+              <Title level={3} style={{ color: 'var(--text-primary)', marginBottom: '16px' }}>
+                Loading Environment
+              </Title>
+              <Text style={{ color: 'var(--text-secondary)', display: 'block', marginBottom: '24px' }}>
+                {!envId ? 'Initializing environment access...' : 'Fetching environment details...'}
+              </Text>
+              <Spin size="large" />
+            </div>
+          </Card>
         </div>
       </MainLayout>
     );
@@ -174,47 +228,62 @@ export default function EnvironmentAccessPage() {
   return (
     <MainLayout>
       <div className="space-y-4">
-        {/* Header */}
-        <Card>
+        {/* Professional Header */}
+        <Card className="glass-card">
           <div className="flex justify-between items-center">
             <div className="flex items-center space-x-4">
               <Button
                 icon={<ArrowLeftOutlined />}
                 onClick={() => router.push('/environments')}
+                className="glass-button"
               >
-                Back
+                Back to Environments
               </Button>
               <div>
-                <Title level={3} className="mb-1">
-                  Environment Access
-                </Title>
-                <Space size="small">
-                  <Tag color={getStatusColor(environment.status)}>
+                <div className="flex items-center gap-3 mb-2">
+                  <div className="icon-container success p-2">
+                    <RocketOutlined style={{ fontSize: '18px' }} />
+                  </div>
+                  <Title level={2} style={{ margin: 0, color: 'var(--text-primary)' }}>
+                    {getAppType(environment.url || '')} Environment
+                  </Title>
+                </div>
+                <Space size="medium">
+                  <Tag 
+                    color={getStatusColor(environment.status)}
+                    style={{ fontSize: '12px', padding: '4px 8px', fontWeight: '500' }}
+                  >
                     {environment.status.toUpperCase()}
                   </Tag>
-                  <Text type="secondary">
-                    {getAppType(environment.url || '')}
-                  </Text>
-                  <Text type="secondary">•</Text>
-                  <Text type="secondary">
+                  <Text style={{ color: 'var(--text-secondary)', fontFamily: 'mono' }}>
                     {environment.env_id || environment.id}
                   </Text>
+                  {environment.resource_config && (
+                    <Text style={{ color: 'var(--text-secondary)' }}>
+                      {environment.resource_config.cpu_limit} CPU • {environment.resource_config.memory_limit}
+                    </Text>
+                  )}
                 </Space>
               </div>
             </div>
 
-            <Space>
+            <Space size="middle">
               <Tooltip title="Refresh application">
                 <Button
                   icon={<ReloadOutlined />}
                   onClick={handleIframeReload}
-                />
+                  className="glass-button"
+                  loading={isLoading}
+                >
+                  Refresh
+                </Button>
               </Tooltip>
               <Tooltip title="Open in new tab">
                 <Button
                   icon={<LinkOutlined />}
                   onClick={handleExternalLink}
                   type="primary"
+                  className="glass-button"
                 >
                   Open External
                 </Button>
@@ -223,74 +292,105 @@ export default function EnvironmentAccessPage() {
                 <Button
                   icon={<FullscreenOutlined />}
                   onClick={() => setFullscreen(!fullscreen)}
+                  className="glass-button"
                 />
               </Tooltip>
             </Space>
           </div>
-
-          <Divider />
-
-          {/* Environment Info */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-            <div>
-              <Text type="secondary">Created:</Text>
-              <div>{formatDateTime(environment.created_at)}</div>
-            </div>
-            <div>
-              <Text type="secondary">URL:</Text>
-              <div className="truncate">
-                <a
-                  href={environment.url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-blue-500 hover:text-blue-600"
-                >
-                  {environment.url}
-                </a>
-              </div>
-            </div>
-            <div>
-              <Text type="secondary">Resources:</Text>
-              <div>
-                {environment.resource_config && (
-                  <span>
-                    {environment.resource_config.cpu_limit} CPU, {environment.resource_config.memory_limit}
-                  </span>
-                )}
-              </div>
-            </div>
-            <div>
-              <Text type="secondary">Storage:</Text>
-              <div>
-                {environment.resource_config?.storage_size || 'Default'}
-              </div>
-            </div>
-          </div>
         </Card>
 
-        {/* iframe Container */}
-        <div className="w-full" style={{ height: '850px' }}>
+        {/* Application Container with Loading */}
+        <div className="w-full" style={{ height: '85vh', minHeight: '700px' }}>
           <Card 
-            className="p-0 overflow-hidden h-full" 
-            bodyStyle={{ padding: 0, height: '100%' }}
+            className="glass-card overflow-hidden h-full" 
+            bodyStyle={{ padding: 0, height: '100%', position: 'relative' }}
           >
+            {/* Loading Overlay */}
+            {isLoading && (
+              <div 
+                style={{
+                  position: 'absolute',
+                  top: 0,
+                  left: 0,
+                  right: 0,
+                  bottom: 0,
+                  background: 'var(--glass-bg-primary)',
+                  backdropFilter: 'blur(8px)',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  zIndex: 10
+                }}
+              >
+                <div style={{ textAlign: 'center', maxWidth: '400px' }}>
+                  <div className="icon-container primary mb-6" style={{ width: '80px', height: '80px', margin: '0 auto 32px' }}>
+                    <RocketOutlined style={{ fontSize: '40px' }} />
+                  </div>
+                  
+                  <Title level={2} style={{ color: 'var(--text-primary)', marginBottom: '16px' }}>
+                    {loadingProgress === 100 ? 'Ready!' : 'Loading Environment'}
+                  </Title>
+                  
+                  <Text style={{ 
+                    color: 'var(--text-secondary)', 
+                    display: 'block', 
+                    marginBottom: '32px',
+                    fontSize: '16px'
+                  }}>
+                    {loadingMessage}
+                  </Text>
+                  
+                  <div style={{ marginBottom: '24px' }}>
+                    <Progress
+                      percent={loadingProgress}
+                      strokeColor={{
+                        '0%': 'var(--primary-400)',
+                        '50%': 'var(--primary-500)',
+                        '100%': 'var(--success-500)',
+                      }}
+                      trailColor="var(--glass-border)"
+                      size="default"
+                      showInfo={false}
+                      style={{ marginBottom: '16px' }}
+                    />
+                    <Text style={{ color: 'var(--text-tertiary)', fontSize: '14px' }}>
+                      {loadingProgress}% Complete
+                    </Text>
+                  </div>
+                  
+                  {loadingProgress === 100 && (
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
+                      <CheckCircleOutlined style={{ color: 'var(--success-500)', fontSize: '16px' }} />
+                      <Text style={{ color: 'var(--success-600)', fontWeight: '500' }}>
+                        Environment is ready!
+                      </Text>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Error State */}
             {iframeError ? (
-              <div className="flex flex-col items-center justify-center h-full space-y-4">
+              <div className="flex flex-col items-center justify-center h-full" style={{ padding: '48px' }}>
                 <Alert
                   message="Application Loading Error"
-                  description="The application could not be loaded in the iframe. This might be due to security policies."
+                  description="The application could not be loaded. This might be due to network issues or security policies."
                   type="warning"
                   showIcon
                   action={
                     <Space>
-                      <Button size="small" onClick={handleIframeReload}>
-                        Retry
+                      <Button onClick={handleIframeReload} icon={<ReloadOutlined />}>
+                        Retry Loading
                       </Button>
-                      <Button size="small" type="primary" onClick={handleExternalLink}>
+                      <Button type="primary" onClick={handleExternalLink} icon={<LinkOutlined />}>
                         Open External
                       </Button>
                     </Space>
                   }
+                  className="glass-alert"
+                  style={{ maxWidth: '500px' }}
                 />
               </div>
             ) : (
@@ -301,7 +401,8 @@ export default function EnvironmentAccessPage() {
                   width: '100%',
                   height: '100%',
                   border: 'none',
-                  minHeight: '800px'
+                  opacity: isLoading ? 0 : 1,
+                  transition: 'opacity 0.3s ease-in-out'
                 }}
                 title={`Environment ${environment.env_id || environment.id}`}
                 onError={handleIframeError}
@@ -309,7 +410,6 @@ export default function EnvironmentAccessPage() {
                   console.log('Iframe loaded successfully');
                   setIframeError(false);
                 }}
-                // Security attributes
                 sandbox="allow-same-origin allow-scripts allow-popups allow-forms allow-downloads"
                 allow="fullscreen; clipboard-read; clipboard-write"
               />
@@ -317,26 +417,19 @@ export default function EnvironmentAccessPage() {
           </Card>
         </div>
 
-        {/* Help Text */}
-        <Alert
-          message="Having trouble with the embedded view?"
-          description={
-            <div>
-              <Paragraph className="mb-2">
-                Some applications may not display correctly in the embedded iframe due to security policies.
-                If you're experiencing issues, try:
-              </Paragraph>
-              <ul className="list-disc list-inside space-y-1 text-sm">
-                <li>Clicking the "Open External" button to access the application in a new tab</li>
-                <li>Refreshing the application using the reload button</li>
-                <li>Checking if the application is fully started (may take a few minutes)</li>
-              </ul>
-            </div>
-          }
-          type="info"
-          showIcon
-          icon={<InfoCircleOutlined />}
-        />
+        {/* Quick Help */}
+        {iframeError && (
+          <Card className="glass-card">
+            <Alert
+              message="Need help accessing your environment?"
+              description="If the embedded view isn't working, try opening the application in a new tab using the 'Open External' button above."
+              type="info"
+              showIcon
+              icon={<InfoCircleOutlined />}
+              className="glass-alert"
+            />
+          </Card>
+        )}
       </div>
 
       {/* Fullscreen Modal */}
@@ -345,22 +438,40 @@ export default function EnvironmentAccessPage() {
         onCancel={() => setFullscreen(false)}
         footer={null}
         width="100vw"
-        style={{ top: 0, padding: 0 }}
+        style={{ top: 0, padding: 0, background: 'var(--bg-primary)' }}
         bodyStyle={{ height: '100vh', padding: 0 }}
+        styles={{
+          content: {
+            background: 'var(--bg-primary)',
+            borderRadius: 0
+          }
+        }}
       >
-        <div className="h-full flex flex-col">
-          <div className="flex justify-between items-center p-4 border-b">
-            <div>
-              <Text strong>{getAppType(environment.url || '')} - {environment.env_id}</Text>
+        <div className="h-full flex flex-col" style={{ background: 'var(--bg-primary)' }}>
+          <div 
+            className="flex justify-between items-center px-6 py-4"
+            style={{ 
+              background: 'var(--glass-bg-primary)', 
+              borderBottom: '1px solid var(--border-primary)',
+              backdropFilter: 'blur(8px)'
+            }}
+          >
+            <div className="flex items-center gap-3">
+              <div className="icon-container primary p-2">
+                <RocketOutlined style={{ fontSize: '16px' }} />
+              </div>
+              <Text strong style={{ color: 'var(--text-primary)' }}>
+                {getAppType(environment.url || '')} - {environment.env_id}
+              </Text>
             </div>
             <Space>
-              <Button onClick={handleIframeReload} icon={<ReloadOutlined />}>
+              <Button onClick={handleIframeReload} icon={<ReloadOutlined />} className="glass-button">
                 Refresh
               </Button>
-              <Button onClick={handleExternalLink} icon={<LinkOutlined />}>
+              <Button onClick={handleExternalLink} icon={<LinkOutlined />} className="glass-button">
                 External
               </Button>
-              <Button onClick={() => setFullscreen(false)}>
+              <Button onClick={() => setFullscreen(false)} type="primary">
                 Exit Fullscreen
               </Button>
             </Space>
@@ -371,7 +482,8 @@ export default function EnvironmentAccessPage() {
               style={{
                 width: '100%',
                 height: '100%',
-                border: 'none'
+                border: 'none',
+                background: 'var(--bg-primary)'
               }}
               title={`Environment ${environment.env_id || environment.id} - Fullscreen`}
               sandbox="allow-same-origin allow-scripts allow-popups allow-forms allow-downloads"

@@ -15,6 +15,15 @@ import {
   Tag,
   Modal,
   Tabs,
+  Table,
+  Tooltip,
+  Dropdown,
+  Input,
+  Select,
+  Progress,
+  Avatar,
+  Badge,
+  Statistic,
 } from 'antd';
 import {
   ReloadOutlined,
@@ -25,6 +34,16 @@ import {
   DeleteOutlined,
   SettingOutlined,
   InfoCircleOutlined,
+  MoreOutlined,
+  SearchOutlined,
+  FilterOutlined,
+  SortAscendingOutlined,
+  CopyOutlined,
+  DownloadOutlined,
+  FolderOutlined,
+  SafetyOutlined,
+  ThunderboltOutlined,
+  SnowflakeOutlined,
 } from '@ant-design/icons';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '@/lib/api-client';
@@ -36,16 +55,26 @@ import StorageAnalytics from './StorageAnalytics';
 
 const { Title, Text, Paragraph } = Typography;
 const { TabPane } = Tabs;
+const { Search } = Input;
+const { Option } = Select;
 
 interface StorageManagementProps {
   hideCreateButton?: boolean;
 }
+
+type SortField = 'name' | 'size' | 'created' | 'status';
+type FilterStatus = 'all' | 'active' | 'inactive';
 
 export default function StorageManagement({ hideCreateButton = false }: StorageManagementProps) {
   const [selectedStorage, setSelectedStorage] = useState<StorageItem | null>(null);
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [showDetails, setShowDetails] = useState<Record<string, boolean>>({});
   const [deleteConfirm, setDeleteConfirm] = useState<Record<string, boolean>>({});
+  const [searchText, setSearchText] = useState('');
+  const [sortField, setSortField] = useState<SortField>('created');
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
+  const [filterStatus, setFilterStatus] = useState<FilterStatus>('all');
+  const [selectedRowKeys, setSelectedRowKeys] = useState<string[]>([]);
   const queryClient = useQueryClient();
 
   // Fetch user storages
@@ -56,6 +85,58 @@ export default function StorageManagement({ hideCreateButton = false }: StorageM
   });
 
   const storages = storagesResponse?.storages || [];
+
+  // Filter and sort storages
+  const filteredStorages = storages
+    .filter(storage => {
+      const matchesSearch = !searchText || 
+        storage.display_name?.toLowerCase().includes(searchText.toLowerCase()) ||
+        storage.bucket_name?.toLowerCase().includes(searchText.toLowerCase()) ||
+        storage.storage_class?.toLowerCase().includes(searchText.toLowerCase());
+      
+      const matchesFilter = filterStatus === 'all' || 
+        (filterStatus === 'active' && storage.status === 'active') ||
+        (filterStatus === 'inactive' && storage.status !== 'active');
+      
+      return matchesSearch && matchesFilter;
+    })
+    .sort((a, b) => {
+      let aVal, bVal;
+      switch (sortField) {
+        case 'name':
+          aVal = a.display_name || a.bucket_name || '';
+          bVal = b.display_name || b.bucket_name || '';
+          break;
+        case 'size':
+          aVal = a.size_bytes || 0;
+          bVal = b.size_bytes || 0;
+          break;
+        case 'created':
+          aVal = new Date(a.created_at).getTime();
+          bVal = new Date(b.created_at).getTime();
+          break;
+        case 'status':
+          aVal = a.status === 'active' ? 1 : 0;
+          bVal = b.status === 'active' ? 1 : 0;
+          break;
+        default:
+          return 0;
+      }
+      
+      if (sortOrder === 'asc') {
+        return aVal > bVal ? 1 : -1;
+      } else {
+        return aVal < bVal ? 1 : -1;
+      }
+    });
+
+  // Analytics calculations
+  const analytics = {
+    total: storages.length,
+    active: storages.filter(s => s.status === 'active').length,
+    totalSize: storages.reduce((acc, s) => acc + (s.size_bytes || 0), 0),
+    totalObjects: storages.reduce((acc, s) => acc + (s.object_count || 0), 0),
+  };
 
   // Delete storage mutation
   const deleteMutation = useMutation({
@@ -115,6 +196,46 @@ export default function StorageManagement({ hideCreateButton = false }: StorageM
     }));
   };
 
+  const getStorageIcon = (storage: StorageItem) => {
+    switch (storage.storage_class?.toLowerCase()) {
+      case 'standard':
+        return <ThunderboltOutlined style={{ color: '#1890ff' }} />;
+      case 'nearline':
+        return <SafetyOutlined style={{ color: '#52c41a' }} />;
+      case 'coldline':
+        return <SnowflakeOutlined style={{ color: '#722ed1' }} />;
+      default:
+        return <CloudOutlined style={{ color: '#8c8c8c' }} />;
+    }
+  };
+
+  const handleBulkAction = (action: string) => {
+    const selectedStorages = filteredStorages.filter(s => selectedRowKeys.includes(s.id));
+    switch (action) {
+      case 'delete':
+        Modal.confirm({
+          title: `Delete ${selectedStorages.length} workspace${selectedStorages.length > 1 ? 's' : ''}?`,
+          content: 'This action cannot be undone. All data will be permanently deleted.',
+          okText: 'Delete All',
+          okType: 'danger',
+          onOk: () => {
+            selectedStorages.forEach(storage => {
+              deleteMutation.mutate({ storageId: storage.id, force: true });
+            });
+            setSelectedRowKeys([]);
+          }
+        });
+        break;
+      default:
+        break;
+    }
+  };
+
+  const copyToClipboard = (text: string) => {
+    navigator.clipboard.writeText(text);
+    message.success('Copied to clipboard');
+  };
+
   if (error) {
     return (
       <Card>
@@ -140,348 +261,222 @@ export default function StorageManagement({ hideCreateButton = false }: StorageM
   }
 
   return (
-    <div className="space-y-6">
-      {/* Professional Header - Only show full header when not embedded */}
+    <div className="space-y-4">
+      {/* Modern Header with Analytics */}
       {!hideCreateButton ? (
-        <div className="page-header">
+        <div className="space-y-4">
           <div className="flex justify-between items-start">
             <div>
               <div className="flex items-center gap-3 mb-2">
-                <div className="icon-container primary p-2">
-                  <DatabaseOutlined style={{ fontSize: '18px' }} />
+                <div className="icon-container primary p-3">
+                  <DatabaseOutlined style={{ fontSize: '20px' }} />
                 </div>
-                <h2 className="text-2xl font-semibold" style={{ color: 'var(--text-primary)' }}>
-                  Workspace Storage
-                </h2>
-              </div>
-              <p className="text-lg mb-4" style={{ color: 'var(--text-secondary)' }}>
-                Manage your research workspace storage and data files
-              </p>
-              <div className="flex items-center gap-4 text-sm" style={{ color: 'var(--text-tertiary)' }}>
-                <span className="flex items-center gap-1">
-                  <div className="status-indicator running"></div>
-                  {storages.length} active workspaces
-                </span>
-                <span>•</span>
-                <span>Auto-synced and backed up</span>
+                <div>
+                  <h1 className="text-2xl font-bold" style={{ color: 'var(--text-primary)', margin: 0 }}>
+                    Workspace Storage
+                  </h1>
+                  <p className="text-sm" style={{ color: 'var(--text-secondary)', margin: 0 }}>
+                    Manage your research data and workspace storage
+                  </p>
+                </div>
               </div>
             </div>
-            <div className="flex items-center gap-3">
-              <Button
-                icon={<ReloadOutlined />}
-                onClick={() => refetch()}
-                loading={isLoading}
-                className="btn-secondary"
-              >
-                Refresh
-              </Button>
-              <Button
-                type="primary"
-                icon={<PlusOutlined />}
-                onClick={() => setShowCreateForm(true)}
-                size="large"
-                className="btn-primary"
-                style={{
-                  height: '48px',
-                  fontSize: 'var(--text-lg)',
-                  fontWeight: 'var(--font-semibold)'
-                }}
-              >
-                Create Workspace
-              </Button>
-            </div>
+            <Space>
+              <Tooltip title="Refresh">
+                <Button icon={<ReloadOutlined />} onClick={() => refetch()} loading={isLoading} />
+              </Tooltip>
+              <Tooltip title="Create New Workspace">
+                <Button
+                  type="primary"
+                  icon={<PlusOutlined />}
+                  onClick={() => setShowCreateForm(true)}
+                />
+              </Tooltip>
+            </Space>
           </div>
+
+          {/* Compact Analytics Cards */}
+          <Row gutter={[16, 16]}>
+            <Col xs={24} sm={6}>
+              <Card size="small" className="glass-card">
+                <Statistic
+                  title="Total Workspaces"
+                  value={analytics.total}
+                  prefix={<DatabaseOutlined />}
+                  valueStyle={{ fontSize: '20px', color: 'var(--primary-600)' }}
+                />
+              </Card>
+            </Col>
+            <Col xs={24} sm={6}>
+              <Card size="small" className="glass-card">
+                <Statistic
+                  title="Active"
+                  value={analytics.active}
+                  prefix={<CloudOutlined />}
+                  valueStyle={{ fontSize: '20px', color: 'var(--success-600)' }}
+                />
+              </Card>
+            </Col>
+            <Col xs={24} sm={6}>
+              <Card size="small" className="glass-card">
+                <Statistic
+                  title="Total Storage"
+                  value={formatStorageSize(analytics.totalSize)}
+                  prefix={<FileOutlined />}
+                  valueStyle={{ fontSize: '20px', color: 'var(--purple-600)' }}
+                />
+              </Card>
+            </Col>
+            <Col xs={24} sm={6}>
+              <Card size="small" className="glass-card">
+                <Statistic
+                  title="Objects"
+                  value={analytics.totalObjects}
+                  prefix={<FolderOutlined />}
+                  valueStyle={{ fontSize: '20px', color: 'var(--orange-600)' }}
+                />
+              </Card>
+            </Col>
+          </Row>
         </div>
       ) : (
-        <div className="flex justify-between items-center mb-6">
+        <div className="flex justify-between items-center">
           <div className="flex items-center gap-3">
-            <div className="icon-container primary p-2">
-              <DatabaseOutlined style={{ fontSize: '16px' }} />
-            </div>
+            <Badge count={analytics.active} showZero>
+              <Avatar icon={<DatabaseOutlined />} />
+            </Badge>
             <div>
-              <h3 className="text-lg font-semibold" style={{ color: 'var(--text-primary)' }}>
+              <h3 className="text-lg font-semibold m-0" style={{ color: 'var(--text-primary)' }}>
                 Storage Management
               </h3>
-              <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>
-                {storages.length} workspace{storages.length !== 1 ? 's' : ''} available
+              <p className="text-sm m-0" style={{ color: 'var(--text-secondary)' }}>
+                {analytics.active}/{analytics.total} active • {formatStorageSize(analytics.totalSize)}
               </p>
             </div>
           </div>
-          <Button
-            icon={<ReloadOutlined />}
-            onClick={() => refetch()}
-            loading={isLoading}
-            className="btn-secondary"
-          >
-            Refresh
-          </Button>
+          <Tooltip title="Refresh">
+            <Button icon={<ReloadOutlined />} onClick={() => refetch()} loading={isLoading} />
+          </Tooltip>
         </div>
       )}
 
-      {/* Storage Analytics Overview - only show when not embedded in environments */}
-      {!hideCreateButton && <StorageAnalytics storages={storages} />}
-
-      {/* Professional Storage List */}
-      <Card 
-        className="glass-card"
-        loading={isLoading}
-        title={!hideCreateButton ? (
-          <div className="flex items-center justify-between">
-            <h3 className="text-lg font-semibold" style={{ color: 'var(--text-primary)' }}>
-              Your Workspaces
-            </h3>
-            <span className="text-sm" style={{ color: 'var(--text-secondary)' }}>
-              {storages.length} workspace{storages.length !== 1 ? 's' : ''} total
-            </span>
-          </div>
-        ) : null}
-      >
-        {storages.length === 0 ? (
-          <div className="empty-state py-12">
-            <div className="empty-state-icon">
-              <DatabaseOutlined />
+      {/* Advanced Controls */}
+      <Card className="glass-card" size="small">
+        <Row gutter={[16, 16]} align="middle">
+          <Col xs={24} md={8}>
+            <Search
+              placeholder="Search workspaces..."
+              value={searchText}
+              onChange={(e) => setSearchText(e.target.value)}
+              allowClear
+              prefix={<SearchOutlined />}
+            />
+          </Col>
+          <Col xs={12} md={4}>
+            <Select
+              placeholder="Filter status"
+              value={filterStatus}
+              onChange={setFilterStatus}
+              style={{ width: '100%' }}
+            >
+              <Option value="all">All Status</Option>
+              <Option value="active">Active Only</Option>
+              <Option value="inactive">Inactive Only</Option>
+            </Select>
+          </Col>
+          <Col xs={12} md={4}>
+            <Select
+              placeholder="Sort by"
+              value={`${sortField}-${sortOrder}`}
+              onChange={(value) => {
+                const [field, order] = value.split('-') as [SortField, 'asc' | 'desc'];
+                setSortField(field);
+                setSortOrder(order);
+              }}
+              style={{ width: '100%' }}
+            >
+              <Option value="created-desc">Newest First</Option>
+              <Option value="created-asc">Oldest First</Option>
+              <Option value="name-asc">Name A-Z</Option>
+              <Option value="name-desc">Name Z-A</Option>
+              <Option value="size-desc">Largest First</Option>
+              <Option value="size-asc">Smallest First</Option>
+            </Select>
+          </Col>
+          <Col xs={24} md={8}>
+            <div className="flex justify-between items-center">
+              <Text style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
+                {filteredStorages.length} of {storages.length} workspaces
+              </Text>
+              <Space>
+                {selectedRowKeys.length > 0 && (
+                  <Dropdown
+                    menu={{
+                      items: [
+                        { key: 'delete', label: 'Delete Selected', icon: <DeleteOutlined />, danger: true },
+                      ],
+                      onClick: ({ key }) => handleBulkAction(key)
+                    }}
+                  >
+                    <Button size="small" type="primary" danger>
+                      Actions ({selectedRowKeys.length})
+                    </Button>
+                  </Dropdown>
+                )}
+              </Space>
             </div>
-            <h3>No Workspaces Found</h3>
-            <p>
-              You don't have any workspace storage yet. Create your first workspace to store and manage your research data and files.
-            </p>
-            {!hideCreateButton && (
+          </Col>
+        </Row>
+      </Card>
+
+      {filteredStorages.length === 0 ? (
+        <Card className="glass-card">
+          <Empty
+            image={<DatabaseOutlined style={{ fontSize: '48px', color: 'var(--text-tertiary)' }} />}
+            description={
+              <div>
+                <Title level={4} style={{ color: 'var(--text-secondary)' }}>
+                  {storages.length === 0 ? 'No Workspaces Yet' : 'No Results Found'}
+                </Title>
+                <Text style={{ color: 'var(--text-tertiary)' }}>
+                  {storages.length === 0 
+                    ? 'Create your first workspace to store and manage your research data.'
+                    : 'Try adjusting your search or filter criteria.'
+                  }
+                </Text>
+              </div>
+            }
+          >
+            {storages.length === 0 && !hideCreateButton && (
               <Button 
                 type="primary" 
                 icon={<PlusOutlined />} 
                 onClick={() => setShowCreateForm(true)}
                 size="large"
               >
-                Create Your First Workspace
+                Create First Workspace
               </Button>
             )}
-          </div>
-        ) : (
-          <div className={hideCreateButton ? "space-y-3" : "space-y-4"}>
-            {storages.map((storage) => (
-              <Card
-                key={storage.id}
-                className={`action-card transition-all hover:shadow-md ${
-                  hideCreateButton ? 'p-4' : 'p-6'
-                }`}
-                bodyStyle={{ padding: hideCreateButton ? 'var(--spacing-md)' : 'var(--spacing-lg)' }}
-              >
-                <div className="flex items-center justify-between">
-                  {/* Storage Info */}
-                  <div className="flex items-center gap-4 flex-1">
-                    <div className={`icon-container ${storage.status === 'active' ? 'success' : 'primary'} ${hideCreateButton ? 'p-2' : 'p-3'}`}>
-                      <CloudOutlined style={{ fontSize: hideCreateButton ? '16px' : '20px' }} />
-                    </div>
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2 mb-1">
-                        <h4 className={`font-semibold ${hideCreateButton ? 'text-sm' : 'text-base'}`} style={{ color: 'var(--text-primary)' }}>
-                          {storage.display_name || 'Unknown Workspace'}
-                        </h4>
-                        <span className={`status-badge ${storage.status === 'active' ? 'running' : 'stopped'} text-xs`}>
-                          {storage.status === 'active' ? 'Active' : 'Inactive'}
-                        </span>
-                      </div>
-                      <p className="text-xs mb-1" style={{ color: 'var(--text-muted)' }}>
-                        {storage.bucket_name || 'unknown'}
-                      </p>
-                      {!hideCreateButton && (
-                        <div className="flex items-center gap-4 text-xs" style={{ color: 'var(--text-tertiary)' }}>
-                          <span>{formatStorageSize(storage.size_bytes || 0)}</span>
-                          <span>•</span>
-                          <span>{storage.storage_class?.toUpperCase() || 'STANDARD'}</span>
-                          <span>•</span>
-                          <span>Created {new Date(storage.created_at).toLocaleDateString()}</span>
-                        </div>
-                      )}
-                      {hideCreateButton && (
-                        <p className="text-xs" style={{ color: 'var(--text-secondary)' }}>
-                          {formatStorageSize(storage.size_bytes || 0)}
-                        </p>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Status & Details Combined for Compact View */}
-                  {hideCreateButton ? (
-                    <Col>
-                      <div className="text-right">
-                        <Tag 
-                          color={storage.status === 'active' ? 'green' : 'default'}
-                          size="small"
-                        >
-                          {storage.status === 'active' ? 'Active' : 'Inactive'}
-                        </Tag>
-                        <br />
-                        <Text type="secondary" className="text-xs">
-                          {formatStorageSize(storage.size_bytes || 0)}
-                        </Text>
-                      </div>
-                    </Col>
-                  ) : (
-                    <>
-                      {/* Status */}
-                      <Col>
-                        <Tag 
-                          color={storage.status === 'active' ? 'green' : 'default'}
-                          className="mb-0"
-                        >
-                          {storage.status === 'active' ? 'Active' : 'Inactive'}
-                        </Tag>
-                      </Col>
-
-                      {/* Storage Details */}
-                      <Col>
-                        <div className="text-right">
-                          <Text strong>{storage.storage_class?.toUpperCase() || 'STANDARD'}</Text>
-                          <br />
-                          <Text type="secondary" className="text-sm">
-                            {formatStorageSize(storage.size_bytes || 0)}
-                          </Text>
-                        </div>
-                      </Col>
-
-                      {/* Created Date */}
-                      <Col>
-                        <div className="text-right">
-                          <Text className="text-sm">Created</Text>
-                          <br />
-                          <Text type="secondary" className="text-sm">
-                            {formatDateTime(storage.created_at)}
-                          </Text>
-                        </div>
-                      </Col>
-                    </>
-                  )}
-
-                  {/* Actions */}
-                  <div className="flex items-center gap-2">
-                    <Button
-                      size="small"
-                      icon={<InfoCircleOutlined />}
-                      onClick={() => toggleDetails(storage.id)}
-                      className="btn-secondary"
-                      title={showDetails[storage.id] ? 'Hide Details' : 'Show Details'}
-                    >
-                      {hideCreateButton ? '' : (showDetails[storage.id] ? 'Hide' : 'Details')}
-                    </Button>
-                    <Button
-                      size="small"
-                      danger
-                      icon={<DeleteOutlined />}
-                      onClick={() => toggleDeleteConfirm(storage.id)}
-                      loading={deleteMutation.isPending}
-                      title="Delete Workspace"
-                    >
-                      {hideCreateButton ? '' : 'Delete'}
-                    </Button>
-                  </div>
-                </div>
-
-                {/* Expanded Details */}
-                {showDetails[storage.id] && (
-                  <>
-                    <Divider />
-                    <Tabs defaultActiveKey="details" type="card" size="small">
-                      <TabPane tab="📋 Details" key="details">
-                        <Row gutter={16}>
-                          <Col span={12}>
-                            <div className="space-y-2">
-                              <div>
-                                <Text strong>Storage ID:</Text>
-                                <br />
-                                <Text type="secondary">{storage.id}</Text>
-                              </div>
-                              <div>
-                                <Text strong>Display Name:</Text>
-                                <br />
-                                <Text>{storage.display_name || 'N/A'}</Text>
-                              </div>
-                              <div>
-                                <Text strong>Bucket Name:</Text>
-                                <br />
-                                <Text type="secondary">{storage.bucket_name || 'N/A'}</Text>
-                              </div>
-                            </div>
-                          </Col>
-                          <Col span={12}>
-                            <div className="space-y-2">
-                              <div>
-                                <Text strong>Size:</Text>
-                                <br />
-                                <Text>{formatStorageSize(storage.size_bytes || 0)}</Text>
-                              </div>
-                              <div>
-                                <Text strong>Region:</Text>
-                                <br />
-                                <Text>{storage.region || 'Unknown'}</Text>
-                              </div>
-                              <div>
-                                <Text strong>Last Modified:</Text>
-                                <br />
-                                <Text type="secondary">{formatDateTime(storage.updated_at || storage.created_at)}</Text>
-                              </div>
-                            </div>
-                          </Col>
-                        </Row>
-                      </TabPane>
-                      <TabPane 
-                        tab="📁 Files" 
-                        key="files"
-                        disabled={storage.status !== 'active'}
-                      >
-                        {storage.status === 'active' ? (
-                          <StorageFileManager 
-                            storageId={storage.id} 
-                            storageName={storage.display_name || 'Workspace'}
-                          />
-                        ) : (
-                          <div className="text-center py-4">
-                            <Text type="secondary">
-                              File management is only available for active workspaces.
-                            </Text>
-                          </div>
-                        )}
-                      </TabPane>
-                    </Tabs>
-                  </>
-                )}
-
-                {/* Delete Confirmation */}
-                {deleteConfirm[storage.id] && (
-                  <>
-                    <Divider />
-                    <div className="bg-red-50 border border-red-200 rounded p-4">
-                      <Title level={5} type="danger" className="mb-2">
-                        ⚠️ Delete Workspace: {storage.display_name}
-                      </Title>
-                      <Text type="secondary" className="block mb-4">
-                        This action cannot be undone. All files and data in this workspace will be permanently deleted.
-                      </Text>
-                      <Space>
-                        <Button
-                          type="primary"
-                          danger
-                          icon={<DeleteOutlined />}
-                          loading={deleteMutation.isPending}
-                          onClick={() => handleDeleteStorage(storage.id)}
-                        >
-                          Confirm Delete
-                        </Button>
-                        <Button
-                          onClick={() => toggleDeleteConfirm(storage.id)}
-                          disabled={deleteMutation.isPending}
-                        >
-                          Cancel
-                        </Button>
-                      </Space>
-                    </div>
-                  </>
-                )}
-              </Card>
-            ))}
-          </div>
-        )}
-      </Card>
+          </Empty>
+        </Card>
+      ) : (
+        <StorageTable 
+          storages={filteredStorages}
+          loading={isLoading}
+          selectedRowKeys={selectedRowKeys}
+          onSelectionChange={setSelectedRowKeys}
+          onToggleDetails={toggleDetails}
+          onDelete={handleDeleteStorage}
+          showDetails={showDetails}
+          deleteConfirm={deleteConfirm}
+          onToggleDeleteConfirm={toggleDeleteConfirm}
+          deleteMutation={deleteMutation}
+          formatStorageSize={formatStorageSize}
+          formatDateTime={formatDateTime}
+          getStorageIcon={getStorageIcon}
+          copyToClipboard={copyToClipboard}
+        />
+      )}
 
       {/* Create Storage Form Modal */}
       {!hideCreateButton && (
@@ -497,3 +492,226 @@ export default function StorageManagement({ hideCreateButton = false }: StorageM
     </div>
   );
 }
+
+// Modern Table View Component
+interface StorageTableProps {
+  storages: StorageItem[];
+  loading: boolean;
+  selectedRowKeys: string[];
+  onSelectionChange: (keys: string[]) => void;
+  onToggleDetails: (id: string) => void;
+  onDelete: (id: string) => void;
+  showDetails: Record<string, boolean>;
+  deleteConfirm: Record<string, boolean>;
+  onToggleDeleteConfirm: (id: string) => void;
+  deleteMutation: any;
+  formatStorageSize: (bytes: number) => string;
+  formatDateTime: (date: string) => string;
+  getStorageIcon: (storage: StorageItem) => JSX.Element;
+  copyToClipboard: (text: string) => void;
+}
+
+function StorageTable({
+  storages,
+  loading,
+  selectedRowKeys,
+  onSelectionChange,
+  onToggleDetails,
+  onDelete,
+  formatStorageSize,
+  formatDateTime,
+  getStorageIcon,
+  copyToClipboard,
+}: StorageTableProps) {
+  const [expandedRowKeys, setExpandedRowKeys] = useState<string[]>([]);
+  const columns = [
+    {
+      title: 'Workspace',
+      dataIndex: 'display_name',
+      key: 'name',
+      render: (name: string, record: StorageItem) => (
+        <div className="flex items-center gap-3">
+          <div className="flex-shrink-0">
+            {getStorageIcon(record)}
+          </div>
+          <div>
+            <div className="font-semibold" style={{ color: 'var(--text-primary)' }}>
+              {name || record.bucket_name || 'Unknown'}
+            </div>
+            <div className="text-xs" style={{ color: 'var(--text-secondary)' }}>
+              {record.bucket_name}
+            </div>
+          </div>
+        </div>
+      ),
+    },
+    {
+      title: 'Status',
+      dataIndex: 'status',
+      key: 'status',
+      width: 100,
+      render: (status: string) => (
+        <Tag color={status === 'active' ? 'success' : 'default'}>
+          {status === 'active' ? 'Active' : 'Inactive'}
+        </Tag>
+      ),
+    },
+    {
+      title: 'Type',
+      dataIndex: 'storage_class',
+      key: 'class',
+      width: 120,
+      render: (storageClass: string) => (
+        <Tag color="blue">{(storageClass || 'standard').toUpperCase()}</Tag>
+      ),
+    },
+    {
+      title: 'Size',
+      dataIndex: 'size_bytes',
+      key: 'size',
+      width: 100,
+      render: (size: number) => (
+        <Text style={{ fontFamily: 'mono' }}>{formatStorageSize(size || 0)}</Text>
+      ),
+      sorter: (a: StorageItem, b: StorageItem) => (a.size_bytes || 0) - (b.size_bytes || 0),
+    },
+    {
+      title: 'Objects',
+      dataIndex: 'object_count',
+      key: 'objects',
+      width: 80,
+      render: (count: number) => (
+        <Text>{count || 0}</Text>
+      ),
+    },
+    {
+      title: 'Created',
+      dataIndex: 'created_at',
+      key: 'created',
+      width: 150,
+      render: (date: string) => (
+        <div className="text-xs">
+          <div>{new Date(date).toLocaleDateString()}</div>
+          <div style={{ color: 'var(--text-secondary)' }}>
+            {new Date(date).toLocaleTimeString()}
+          </div>
+        </div>
+      ),
+    },
+    {
+      title: 'Actions',
+      key: 'actions',
+      width: 120,
+      render: (_: any, record: StorageItem) => (
+        <Space size="small">
+          <Tooltip title="Manage Files">
+            <Button
+              size="small"
+              icon={<FileOutlined />}
+              disabled={record.status !== 'active'}
+              onClick={() => {
+                // Expand the row if not already expanded
+                if (!expandedRowKeys.includes(record.id)) {
+                  setExpandedRowKeys([...expandedRowKeys, record.id]);
+                }
+                // Small delay to ensure the row is expanded, then focus on files tab
+                setTimeout(() => {
+                  const filesTab = document.querySelector(`[data-node-key="files"]`);
+                  if (filesTab) {
+                    (filesTab as HTMLElement).click();
+                  }
+                }, 100);
+              }}
+            />
+          </Tooltip>
+          <Tooltip title="Copy Bucket Name">
+            <Button
+              size="small"
+              icon={<CopyOutlined />}
+              onClick={() => copyToClipboard(record.bucket_name || '')}
+            />
+          </Tooltip>
+          <Tooltip title="Delete">
+            <Button
+              size="small"
+              danger
+              icon={<DeleteOutlined />}
+              onClick={() => onDelete(record.id)}
+            />
+          </Tooltip>
+        </Space>
+      ),
+    },
+  ];
+
+  return (
+    <Card className="glass-card">
+      <Table
+        columns={columns}
+        dataSource={storages.map(s => ({ ...s, key: s.id }))}
+        loading={loading}
+        rowSelection={{
+          selectedRowKeys,
+          onChange: onSelectionChange,
+          checkStrictly: true,
+        }}
+        pagination={{
+          pageSize: 10,
+          size: 'small',
+          showSizeChanger: true,
+          showQuickJumper: true,
+          showTotal: (total, range) => `${range[0]}-${range[1]} of ${total} workspaces`,
+        }}
+        size="middle"
+        expandable={{
+          expandedRowKeys,
+          onExpandedRowsChange: (keys) => setExpandedRowKeys(keys as string[]),
+          expandedRowRender: (record) => (
+            <div style={{ margin: '16px 0' }}>
+              <Tabs size="small" defaultActiveKey="details">
+                <Tabs.TabPane tab="Details" key="details">
+                  <Row gutter={[24, 16]}>
+                    <Col span={8}>
+                      <div>
+                        <Text strong>Storage ID:</Text>
+                        <br />
+                        <Text copyable style={{ fontFamily: 'mono', fontSize: '12px' }}>
+                          {record.id}
+                        </Text>
+                      </div>
+                    </Col>
+                    <Col span={8}>
+                      <div>
+                        <Text strong>Location:</Text>
+                        <br />
+                        <Text>{record.location || record.region || 'Unknown'}</Text>
+                      </div>
+                    </Col>
+                    <Col span={8}>
+                      <div>
+                        <Text strong>Last Modified:</Text>
+                        <br />
+                        <Text>{formatDateTime(record.updated_at || record.created_at)}</Text>
+                      </div>
+                    </Col>
+                  </Row>
+                </Tabs.TabPane>
+                <Tabs.TabPane tab="Files" key="files" disabled={record.status !== 'active'}>
+                  {record.status === 'active' ? (
+                    <StorageFileManager 
+                      storageId={record.id} 
+                      storageName={record.display_name || 'Workspace'}
+                    />
+                  ) : (
+                    <Text type="secondary">File management requires active workspace</Text>
+                  )}
+                </Tabs.TabPane>
+              </Tabs>
+            </div>
+          ),
+        }}
+      />
+    </Card>
+  );
+}
+

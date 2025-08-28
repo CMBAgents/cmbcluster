@@ -13,6 +13,7 @@ import {
   Tag,
   Row,
   Col,
+  Tooltip,
 } from 'antd';
 import {
   DatabaseOutlined,
@@ -86,9 +87,9 @@ export default function StorageWorkspaceSelector({
         type="warning"
         showIcon
         action={
-          <Button type="primary" size="small" icon={<PlusOutlined />}>
-            Create Workspace
-          </Button>
+          <Tooltip title="Create Workspace">
+            <Button type="primary" size="small" icon={<PlusOutlined />} />
+          </Tooltip>
         }
       />
     );

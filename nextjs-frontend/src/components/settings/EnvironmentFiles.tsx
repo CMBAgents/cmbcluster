@@ -70,21 +70,20 @@ export default function EnvironmentFiles() {
     mutationFn: async (values: {
       file: File;
       file_type: string;
-      environment_variable_name?: string;
+      environment_variable_name: string;
       container_path?: string;
     }) => {
-      // Validate file size (1MB limit like Streamlit)
+      // Basic validation
       if (values.file.size > 1024 * 1024) {
         throw new Error('File size exceeds 1MB limit');
       }
 
-      // Validate JSON content
-      const fileContent = await values.file.text();
-      try {
-        JSON.parse(fileContent);
-      } catch (e) {
-        throw new Error('Invalid JSON file: ' + (e instanceof Error ? e.message : 'Unknown error'));
-      }
+      console.log('Environment file upload starting:', {
+        fileName: values.file.name,
+        fileType: values.file_type,
+        envVar: values.environment_variable_name,
+        containerPath: values.container_path
+      });
 
       const response = await apiClient.uploadUserFile(
         values.file,
@@ -92,6 +91,9 @@ export default function EnvironmentFiles() {
         values.environment_variable_name,
         values.container_path
       );
+      
+      console.log('API upload response:', response);
+      
       return response;
     },
     onSuccess: () => {
@@ -102,7 +104,23 @@ export default function EnvironmentFiles() {
       setFileList([]);
     },
     onError: (error: Error) => {
-      message.error(`Failed to upload file: ${error.message}`);
+      console.error('Upload error:', error);
+      console.error('Upload error details:', {
+        message: error.message,
+        name: error.name,
+        stack: error.stack,
+        cause: (error as any)?.cause,
+        response: (error as any)?.response
+      });
+      
+      let errorMessage = error.message;
+      if ((error as any)?.response?.data?.error) {
+        errorMessage = (error as any).response.data.error;
+      } else if ((error as any)?.response?.statusText) {
+        errorMessage = `${(error as any).response.status}: ${(error as any).response.statusText}`;
+      }
+      
+      message.error(`Failed to upload file: ${errorMessage}`);
     },
   });
 
@@ -205,25 +223,37 @@ export default function EnvironmentFiles() {
           const content = await file.text();
           const jsonContent = JSON.parse(content);
           
-          // Detect GCP service account
+          // Detect GCP service account - check for all required fields
+          const requiredGcpFields = [
+            'type', 'project_id', 'private_key_id', 'private_key',
+            'client_email', 'client_id', 'auth_uri', 'token_uri'
+          ];
+          
           const isGcp = (
             jsonContent.type === 'service_account' &&
-            jsonContent.project_id &&
-            jsonContent.private_key &&
-            jsonContent.client_email
+            requiredGcpFields.every(field => field in jsonContent && jsonContent[field])
           );
+          
+          console.log('GCP detection result:', {
+            hasTypeField: 'type' in jsonContent,
+            typeValue: jsonContent.type,
+            missingFields: requiredGcpFields.filter(field => !(field in jsonContent) || !jsonContent[field]),
+            isDetectedAsGcp: isGcp
+          });
           
           setIsGcpKey(isGcp);
           setFilePreview(JSON.stringify(jsonContent, null, 2));
           
           // Auto-update form if GCP key is detected
           if (isGcp) {
+            console.log('Auto-setting GCP service account type');
             form.setFieldsValue({
               file_type: 'gcp_service_account',
               environment_variable_name: 'GOOGLE_APPLICATION_CREDENTIALS',
               container_path: '/app/secrets/gcp_service_account.json'
             });
           } else {
+            console.log('Setting as custom JSON type');
             form.setFieldsValue({
               file_type: 'custom_json',
               container_path: `/mnt/user-files/${file.name}`
@@ -247,19 +277,49 @@ export default function EnvironmentFiles() {
 
   const handleUpload = (values: {
     file_type: string;
-    environment_variable_name?: string;
+    environment_variable_name: string;
     container_path?: string;
   }) => {
+    console.log('=== ENVIRONMENT FILES FRONTEND DEBUG ===');
+    console.log('handleUpload called with values:', values);
+    console.log('Current fileList:', fileList);
+
     if (fileList.length === 0) {
+      console.error('No files selected');
       message.error('Please select a file to upload');
       return;
     }
 
     const file = fileList[0].originFileObj as File;
+    console.log('Selected file details:', {
+      name: file?.name,
+      size: file?.size,
+      type: file?.type,
+      lastModified: file?.lastModified,
+      exists: !!file
+    });
+
+    if (!file) {
+      console.error('File object is null or undefined');
+      message.error('Invalid file selected');
+      return;
+    }
     
-    // Additional validation similar to Streamlit
-    if (!values.environment_variable_name?.trim()) {
+    const trimmedEnvVar = values.environment_variable_name?.trim();
+    console.log('Environment variable (trimmed):', trimmedEnvVar);
+    
+    // Environment variable name is required
+    if (!trimmedEnvVar) {
+      console.error('Environment variable name is empty');
       message.error('Environment variable name is required');
+      return;
+    }
+    
+    // Check for duplicate environment variable names
+    const existingEnvVar = files.find(f => f.environment_variable_name === trimmedEnvVar);
+    if (existingEnvVar) {
+      console.error('Duplicate environment variable:', trimmedEnvVar);
+      message.error(`Environment variable "${trimmedEnvVar}" already exists for file "${existingEnvVar.file_name}"`);
       return;
     }
 
@@ -271,12 +331,37 @@ export default function EnvironmentFiles() {
       autoContainerPath = `/mnt/user-files/${file.name}`;
     }
 
-    uploadMutation.mutate({
+    const finalContainerPath = autoContainerPath || values.container_path;
+    console.log('Final container path:', finalContainerPath);
+
+    // Check for duplicate container paths
+    if (finalContainerPath) {
+      const existingPath = files.find(f => f.container_path === finalContainerPath);
+      if (existingPath) {
+        console.error('Duplicate container path:', finalContainerPath);
+        message.error(`Container path "${finalContainerPath}" already exists for file "${existingPath.file_name}"`);
+        return;
+      }
+    }
+
+    const uploadData = {
       file,
       file_type: values.file_type,
-      environment_variable_name: values.environment_variable_name.trim(),
-      container_path: autoContainerPath || values.container_path,
+      environment_variable_name: trimmedEnvVar,
+      container_path: finalContainerPath,
+    };
+
+    console.log('Final upload data prepared:', {
+      fileName: file.name,
+      fileSize: file.size,
+      fileType: uploadData.file_type,
+      environmentVariable: uploadData.environment_variable_name,
+      containerPath: uploadData.container_path,
     });
+
+    console.log('Calling uploadMutation.mutate...');
+    uploadMutation.mutate(uploadData);
+    console.log('=== END ENVIRONMENT FILES FRONTEND DEBUG ===');
   };
 
   const handleEdit = (record: UserFile) => {
@@ -294,9 +379,34 @@ export default function EnvironmentFiles() {
   }) => {
     if (!editingRecord) return;
 
+    const trimmedEnvVar = values.environment_variable_name?.trim();
+    
+    // Check for duplicate environment variable names (excluding current file)
+    if (trimmedEnvVar) {
+      const existingEnvVar = files.find(f => 
+        f.environment_variable_name === trimmedEnvVar && f.id !== editingRecord.id
+      );
+      if (existingEnvVar) {
+        message.error(`Environment variable "${trimmedEnvVar}" already exists for file "${existingEnvVar.file_name}"`);
+        return;
+      }
+    }
+
+    // Check for duplicate container paths (excluding current file)
+    if (values.container_path?.trim()) {
+      const existingPath = files.find(f => 
+        f.container_path === values.container_path && f.id !== editingRecord.id
+      );
+      if (existingPath) {
+        message.error(`Container path "${values.container_path}" already exists for file "${existingPath.file_name}"`);
+        return;
+      }
+    }
+
     updateMutation.mutate({
       fileId: editingRecord.id,
-      ...values,
+      environment_variable_name: trimmedEnvVar,
+      container_path: values.container_path?.trim(),
     });
   };
 
@@ -310,9 +420,8 @@ export default function EnvironmentFiles() {
 
   const getFileTypeColor = (fileType: string) => {
     switch (fileType) {
-      case 'json': return 'blue';
-      case 'gcp': return 'green';
-      case 'config': return 'orange';
+      case 'custom_json': return 'blue';
+      case 'gcp_service_account': return 'green';
       default: return 'default';
     }
   };
@@ -338,7 +447,7 @@ export default function EnvironmentFiles() {
       render: (text, record) => (
         <div className="flex items-center space-x-2">
           {getFileTypeIcon(record.file_type)}
-          <Text className="text-white font-medium">{text}</Text>
+          <Text strong>{text}</Text>
         </div>
       ),
     },
@@ -352,9 +461,8 @@ export default function EnvironmentFiles() {
         </Tag>
       ),
       filters: [
-        { text: 'JSON', value: 'json' },
-        { text: 'GCP', value: 'gcp' },
-        { text: 'Config', value: 'config' },
+        { text: 'JSON', value: 'custom_json' },
+        { text: 'GCP', value: 'gcp_service_account' },
       ],
       onFilter: (value, record) => record.file_type === value,
     },
@@ -363,11 +471,11 @@ export default function EnvironmentFiles() {
       dataIndex: 'environment_variable_name',
       key: 'environment_variable_name',
       render: (name) => name ? (
-        <Text code className="text-green-400 font-mono text-sm">
+        <Text code style={{ color: 'var(--success-600)', fontFamily: 'monospace', fontSize: '12px' }}>
           {name}
         </Text>
       ) : (
-        <Text className="text-text-secondary italic">Not set</Text>
+        <Text style={{ color: 'var(--text-secondary)', fontStyle: 'italic' }}>Not set</Text>
       ),
     },
     {
@@ -375,11 +483,11 @@ export default function EnvironmentFiles() {
       dataIndex: 'container_path',
       key: 'container_path',
       render: (path) => path ? (
-        <Text code className="text-yellow-400 font-mono text-sm">
+        <Text code style={{ color: 'var(--warning-600)', fontFamily: 'monospace', fontSize: '12px' }}>
           {path}
         </Text>
       ) : (
-        <Text className="text-text-secondary italic">Default</Text>
+        <Text style={{ color: 'var(--text-secondary)', fontStyle: 'italic' }}>Default</Text>
       ),
     },
     {
@@ -387,7 +495,7 @@ export default function EnvironmentFiles() {
       dataIndex: 'file_size',
       key: 'file_size',
       render: (size) => (
-        <Text className="text-text-secondary">
+        <Text style={{ color: 'var(--text-secondary)' }}>
           {formatFileSize(size)}
         </Text>
       ),
@@ -398,7 +506,7 @@ export default function EnvironmentFiles() {
       dataIndex: 'created_at',
       key: 'created_at',
       render: (date) => (
-        <Text className="text-text-secondary">
+        <Text style={{ color: 'var(--text-secondary)' }}>
           {new Date(date).toLocaleDateString()}
         </Text>
       ),
@@ -416,7 +524,6 @@ export default function EnvironmentFiles() {
               icon={<DownloadOutlined />}
               onClick={() => handleDownload(record.id)}
               loading={downloadMutation.isPending}
-              className="text-blue-400 hover:text-blue-300"
             />
           </Tooltip>
           <Tooltip title="Edit file settings">
@@ -425,7 +532,6 @@ export default function EnvironmentFiles() {
               size="small"
               icon={<EditOutlined />}
               onClick={() => handleEdit(record)}
-              className="text-green-400 hover:text-green-300"
             />
           </Tooltip>
           <Popconfirm
@@ -440,7 +546,7 @@ export default function EnvironmentFiles() {
               type="text"
               size="small"
               icon={<DeleteOutlined />}
-              className="text-red-400 hover:text-red-300"
+              danger
             />
           </Popconfirm>
         </Space>
@@ -448,116 +554,115 @@ export default function EnvironmentFiles() {
     },
   ];
 
-  const sectionStyle: React.CSSProperties = {
-    background: 'rgba(26, 31, 46, 0.5)',
-    borderRadius: '12px',
-    padding: '24px',
-    margin: '16px 0',
-    borderLeft: '4px solid #4A9EFF',
-  };
-
-  const metricCardStyle: React.CSSProperties = {
-    background: 'rgba(26, 31, 46, 0.8)',
-    borderRadius: '12px',
-    padding: '20px',
-    textAlign: 'center',
-    border: '1px solid #2D3748',
-    transition: 'all 0.3s ease',
-  };
-
   const totalSize = files.reduce((sum, file) => sum + file.file_size, 0);
 
   return (
-    <div className="space-y-6">
-      <div style={sectionStyle}>
-        <Title level={3} className="text-white mb-4">
-          Environment Files Management
-        </Title>
-        <Paragraph className="text-text-secondary mb-6">
-          Upload and manage files that will be automatically available in your research environments. 
-          These files can be mounted as environment variables or at specific container paths.
+    <div className="space-y-4">
+      {/* Header */}
+      <Card className="glass-card">
+        <div className="flex justify-between items-start mb-4">
+          <div>
+            <Title level={3} style={{ margin: 0, color: 'var(--text-primary)' }}>
+              Environment Files
+            </Title>
+            <Text style={{ color: 'var(--text-secondary)' }}>
+              Upload and manage configuration files for your research environments
+            </Text>
+          </div>
+          <Tooltip title="Upload File">
+            <Button
+              type="primary"
+              shape="circle"
+              icon={<PlusOutlined />}
+              onClick={() => setIsModalVisible(true)}
+              className="glass-button"
+            />
+          </Tooltip>
+        </div>
+
+        <Paragraph style={{ color: 'var(--text-secondary)', marginBottom: 0 }}>
+          Files can be mounted as environment variables or at specific container paths in your environments.
         </Paragraph>
+      </Card>
 
-        {/* Statistics */}
-        <Row gutter={[16, 16]} className="mb-6">
-          <Col xs={24} sm={8}>
-            <div style={metricCardStyle}>
-              <Title level={4} className="text-white mb-2">Total Files</Title>
-              <Title level={2} className="text-blue-400 mb-0">{files.length}</Title>
+      {/* Statistics */}
+      <Row gutter={[16, 16]}>
+        <Col xs={24} sm={8}>
+          <Card className="glass-card text-center">
+            <div className="icon-container primary mb-3" style={{ width: '48px', height: '48px', margin: '0 auto' }}>
+              <FileOutlined style={{ fontSize: '24px' }} />
             </div>
-          </Col>
-          
-          <Col xs={24} sm={8}>
-            <div style={metricCardStyle}>
-              <Title level={4} className="text-white mb-2">Total Size</Title>
-              <Title level={2} className="text-green-400 mb-0 text-lg">
-                {formatFileSize(totalSize)}
-              </Title>
+            <Title level={2} style={{ margin: 0, color: 'var(--primary-600)' }}>
+              {files.length}
+            </Title>
+            <Text style={{ color: 'var(--text-secondary)' }}>Total Files</Text>
+          </Card>
+        </Col>
+        
+        <Col xs={24} sm={8}>
+          <Card className="glass-card text-center">
+            <div className="icon-container success mb-3" style={{ width: '48px', height: '48px', margin: '0 auto' }}>
+              <UploadOutlined style={{ fontSize: '24px' }} />
             </div>
-          </Col>
-          
-          <Col xs={24} sm={8}>
-            <div style={metricCardStyle}>
-              <Title level={4} className="text-white mb-2">File Types</Title>
-              <Text className="text-text-secondary">
-                {Array.from(new Set(files.map(f => f.file_type))).length} different types
-              </Text>
+            <Title level={2} style={{ margin: 0, color: 'var(--success-600)' }}>
+              {formatFileSize(totalSize)}
+            </Title>
+            <Text style={{ color: 'var(--text-secondary)' }}>Total Size</Text>
+          </Card>
+        </Col>
+        
+        <Col xs={24} sm={8}>
+          <Card className="glass-card text-center">
+            <div className="icon-container warning mb-3" style={{ width: '48px', height: '48px', margin: '0 auto' }}>
+              <InfoCircleOutlined style={{ fontSize: '24px' }} />
             </div>
-          </Col>
-        </Row>
+            <Title level={2} style={{ margin: 0, color: 'var(--warning-600)' }}>
+              {Array.from(new Set(files.map(f => f.file_type))).length}
+            </Title>
+            <Text style={{ color: 'var(--text-secondary)' }}>File Types</Text>
+          </Card>
+        </Col>
+      </Row>
 
-        <Divider className="border-border-primary" />
-
-        {/* Actions Bar */}
-        <div className="flex flex-wrap gap-4 mb-6">
+      {/* Search and Files Table */}
+      <Card className="glass-card">
+        <div className="flex justify-between items-center mb-4">
+          <Title level={4} style={{ margin: 0, color: 'var(--text-primary)' }}>
+            Uploaded Files
+          </Title>
           <Input
             placeholder="Search files..."
             prefix={<SearchOutlined />}
             value={searchText}
             onChange={(e) => setSearchText(e.target.value)}
-            className="max-w-xs"
+            style={{ width: 240 }}
+            allowClear
           />
-          
-          <Button
-            type="primary"
-            icon={<PlusOutlined />}
-            onClick={() => setIsModalVisible(true)}
-          >
-            Upload File
-          </Button>
         </div>
 
-        {/* Files Table */}
-        <Card className="bg-background-tertiary border-border-primary">
-          <Table
-            columns={columns}
-            dataSource={filteredFiles}
-            rowKey="id"
-            loading={isLoading}
-            pagination={{
-              pageSize: 10,
-              showSizeChanger: true,
-              showQuickJumper: true,
-              showTotal: (total, range) => 
-                `${range[0]}-${range[1]} of ${total} files`,
-            }}
-            locale={{
-              emptyText: searchText 
-                ? 'No files found matching your search'
-                : 'No files uploaded yet'
-            }}
-          />
-        </Card>
-      </div>
+        <Table
+          columns={columns}
+          dataSource={filteredFiles}
+          rowKey="id"
+          loading={isLoading}
+          pagination={{
+            pageSize: 10,
+            showSizeChanger: true,
+            showQuickJumper: true,
+            showTotal: (total, range) => 
+              `${range[0]}-${range[1]} of ${total} files`,
+          }}
+          locale={{
+            emptyText: searchText 
+              ? 'No files found matching your search'
+              : 'No files uploaded yet'
+          }}
+        />
+      </Card>
 
       {/* Upload File Modal */}
       <Modal
-        title={
-          <span className="text-white">
-            <UploadOutlined className="mr-2" />
-            Upload Environment File
-          </span>
-        }
+        title="Upload Environment File"
         open={isModalVisible}
         onCancel={() => {
           setIsModalVisible(false);
@@ -565,7 +670,6 @@ export default function EnvironmentFiles() {
           setFileList([]);
         }}
         footer={null}
-        className="dark-modal"
         width={600}
       >
         <Form
@@ -575,7 +679,7 @@ export default function EnvironmentFiles() {
           className="mt-4"
         >
           <Form.Item
-            label={<span className="text-white">Select File</span>}
+            label="Select File"
             required
           >
             <Upload
@@ -598,7 +702,7 @@ export default function EnvironmentFiles() {
             {/* File preview */}
             {filePreview && (
               <div className="mt-3">
-                <Text strong className="text-white">File Preview:</Text>
+                <Text strong>File Preview:</Text>
                 {isGcpKey && (
                   <Alert
                     message="GCP Service Account Detected"
@@ -608,7 +712,15 @@ export default function EnvironmentFiles() {
                     className="mb-2"
                   />
                 )}
-                <pre className="bg-gray-800 p-2 rounded text-xs overflow-auto max-h-32 text-gray-300">
+                <pre style={{ 
+                  background: 'var(--bg-secondary)', 
+                  padding: '8px', 
+                  borderRadius: '4px', 
+                  fontSize: '12px', 
+                  overflow: 'auto', 
+                  maxHeight: '128px', 
+                  color: 'var(--text-secondary)' 
+                }}>
                   {filePreview.substring(0, 500)}{filePreview.length > 500 ? '...' : ''}
                 </pre>
               </div>
@@ -617,20 +729,23 @@ export default function EnvironmentFiles() {
 
           <Form.Item
             name="file_type"
-            label={<span className="text-white">File Type</span>}
+            label="File Type"
             rules={[{ required: true, message: 'Please select a file type' }]}
           >
             <Select placeholder="Select file type">
-              <Option value="json">JSON - Configuration data</Option>
-              <Option value="gcp">GCP - Google Cloud credentials</Option>
-              <Option value="config">Config - General configuration</Option>
+              <Option value="custom_json">JSON - Configuration data</Option>
+              <Option value="gcp_service_account">GCP - Google Cloud credentials</Option>
             </Select>
           </Form.Item>
 
           <Form.Item
             name="environment_variable_name"
-            label={<span className="text-white">Environment Variable Name (Optional)</span>}
-            help="If specified, the file path will be available as this environment variable"
+            label="Environment Variable Name"
+            rules={[
+              { required: true, message: 'Environment variable name is required' },
+              { whitespace: true, message: 'Environment variable name cannot be empty' }
+            ]}
+            help="The environment variable name for accessing the file in containers"
           >
             <Input 
               placeholder="e.g., GOOGLE_APPLICATION_CREDENTIALS" 
@@ -640,7 +755,7 @@ export default function EnvironmentFiles() {
 
           <Form.Item
             name="container_path"
-            label={<span className="text-white">Container Path (Optional)</span>}
+            label="Container Path (Optional)"
             help="If specified, the file will be mounted at this path in the container"
           >
             <Input 
@@ -650,33 +765,34 @@ export default function EnvironmentFiles() {
           </Form.Item>
           
           <div className="flex justify-end space-x-2">
-            <Button onClick={() => {
-              setIsModalVisible(false);
-              form.resetFields();
-              setFileList([]);
-            }}>
-              Cancel
-            </Button>
-            <Button 
-              type="primary" 
-              htmlType="submit"
-              loading={uploadMutation.isPending}
-              disabled={fileList.length === 0}
-            >
-              Upload File
-            </Button>
+            <Tooltip title="Cancel upload">
+              <Button 
+                shape="circle"
+                icon={<DeleteOutlined />}
+                onClick={() => {
+                  setIsModalVisible(false);
+                  form.resetFields();
+                  setFileList([]);
+                }}
+              />
+            </Tooltip>
+            <Tooltip title="Upload file">
+              <Button 
+                type="primary" 
+                shape="circle"
+                icon={<UploadOutlined />}
+                htmlType="submit"
+                loading={uploadMutation.isPending}
+                disabled={fileList.length === 0}
+              />
+            </Tooltip>
           </div>
         </Form>
       </Modal>
 
       {/* Edit File Modal */}
       <Modal
-        title={
-          <span className="text-white">
-            <EditOutlined className="mr-2" />
-            Edit File Settings
-          </span>
-        }
+        title="Edit File Settings"
         open={isEditModalVisible}
         onCancel={() => {
           setIsEditModalVisible(false);
@@ -684,7 +800,6 @@ export default function EnvironmentFiles() {
           editForm.resetFields();
         }}
         footer={null}
-        className="dark-modal"
       >
         <Form
           form={editForm}
@@ -693,10 +808,10 @@ export default function EnvironmentFiles() {
           className="mt-4"
         >
           {editingRecord && (
-            <div className="mb-4 p-3 bg-gray-800 rounded">
-              <Text className="text-white font-medium">File: {editingRecord.file_name}</Text>
+            <div className="mb-4 p-3 glass-card">
+              <Text strong>File: {editingRecord.file_name}</Text>
               <br />
-              <Text className="text-text-secondary text-sm">
+              <Text style={{ color: 'var(--text-secondary)', fontSize: '14px' }}>
                 Type: {editingRecord.file_type.toUpperCase()} • 
                 Size: {formatFileSize(editingRecord.file_size)}
               </Text>
@@ -705,7 +820,7 @@ export default function EnvironmentFiles() {
 
           <Form.Item
             name="environment_variable_name"
-            label={<span className="text-white">Environment Variable Name (Optional)</span>}
+            label="Environment Variable Name (Optional)"
             help="If specified, the file path will be available as this environment variable"
           >
             <Input 
@@ -716,7 +831,7 @@ export default function EnvironmentFiles() {
 
           <Form.Item
             name="container_path"
-            label={<span className="text-white">Container Path (Optional)</span>}
+            label="Container Path (Optional)"
             help="If specified, the file will be mounted at this path in the container"
           >
             <Input 
@@ -726,58 +841,73 @@ export default function EnvironmentFiles() {
           </Form.Item>
           
           <div className="flex justify-end space-x-2">
-            <Button onClick={() => {
-              setIsEditModalVisible(false);
-              setEditingRecord(null);
-              editForm.resetFields();
-            }}>
-              Cancel
-            </Button>
-            <Button 
-              type="primary" 
-              htmlType="submit"
-              loading={updateMutation.isPending}
-            >
-              Update Settings
-            </Button>
+            <Tooltip title="Cancel changes">
+              <Button 
+                shape="circle"
+                icon={<DeleteOutlined />}
+                onClick={() => {
+                  setIsEditModalVisible(false);
+                  setEditingRecord(null);
+                  editForm.resetFields();
+                }}
+              />
+            </Tooltip>
+            <Tooltip title="Save changes">
+              <Button 
+                type="primary" 
+                shape="circle"
+                icon={<EditOutlined />}
+                htmlType="submit"
+                loading={updateMutation.isPending}
+              />
+            </Tooltip>
           </div>
         </Form>
       </Modal>
 
       {/* Help Section */}
-      <Card 
-        title="Environment Files Help"
-        className="bg-background-tertiary border-border-primary"
-        headStyle={{ color: '#FFFFFF', borderBottom: '1px solid #2D3748' }}
-      >
-        <div className="space-y-4 text-text-secondary">
-          <div>
-            <Title level={5} className="text-white mb-2">What are Environment Files?</Title>
-            <Text className="text-text-secondary">
-              Environment files are configuration files, credentials, and other resources that are automatically 
-              made available in your research environments. They can be mounted as environment variables or at 
-              specific container paths.
+      <Card title="Help & Information" className="glass-card">
+        <Row gutter={[24, 16]}>
+          <Col xs={24} md={8}>
+            <Title level={5} style={{ color: 'var(--text-primary)', marginBottom: '8px' }}>
+              What are Environment Files?
+            </Title>
+            <Text style={{ color: 'var(--text-secondary)' }}>
+              Configuration files and credentials that are automatically made available in your research environments.
             </Text>
-          </div>
+          </Col>
           
-          <div>
-            <Title level={5} className="text-white mb-2">File Types:</Title>
-            <ul className="list-disc list-inside space-y-1 text-text-secondary">
-              <li><strong>JSON</strong> - Configuration data, API responses, structured data</li>
-              <li><strong>GCP</strong> - Google Cloud Platform credentials and service account keys</li>
-              <li><strong>Config</strong> - General configuration files (YAML, INI, etc.)</li>
-            </ul>
-          </div>
+          <Col xs={24} md={8}>
+            <Title level={5} style={{ color: 'var(--text-primary)', marginBottom: '8px' }}>
+              File Types
+            </Title>
+            <div className="space-y-1">
+              <Text style={{ color: 'var(--text-secondary)', display: 'block' }}>
+                <strong>JSON:</strong> Configuration data
+              </Text>
+              <Text style={{ color: 'var(--text-secondary)', display: 'block' }}>
+                <strong>GCP:</strong> Google Cloud credentials
+              </Text>
+            </div>
+          </Col>
           
-          <div>
-            <Title level={5} className="text-white mb-2">Usage Options:</Title>
-            <ul className="list-disc list-inside space-y-1 text-text-secondary">
-              <li><strong>Environment Variable</strong> - File path accessible via environment variable</li>
-              <li><strong>Container Path</strong> - File mounted at specific location in container</li>
-              <li><strong>Both</strong> - File available through both methods</li>
-            </ul>
-          </div>
-        </div>
+          <Col xs={24} md={8}>
+            <Title level={5} style={{ color: 'var(--text-primary)', marginBottom: '8px' }}>
+              Usage Options
+            </Title>
+            <div className="space-y-1">
+              <Text style={{ color: 'var(--text-secondary)', display: 'block' }}>
+                <strong>Environment Variable:</strong> File path via env var
+              </Text>
+              <Text style={{ color: 'var(--text-secondary)', display: 'block' }}>
+                <strong>Container Path:</strong> File at specific location
+              </Text>
+              <Text style={{ color: 'var(--text-secondary)', display: 'block' }}>
+                <strong>Both:</strong> Available through both methods
+              </Text>
+            </div>
+          </Col>
+        </Row>
       </Card>
     </div>
   );
