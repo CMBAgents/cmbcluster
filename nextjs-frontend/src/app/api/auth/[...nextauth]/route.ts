@@ -2,6 +2,7 @@ import NextAuth from 'next-auth';
 import GoogleProvider from 'next-auth/providers/google';
 import type { NextAuthOptions } from 'next-auth';
 import { JWT } from 'next-auth/jwt';
+import jwt from 'jsonwebtoken';
 
 // Force dynamic rendering for NextAuth
 export const dynamic = 'force-dynamic';
@@ -64,6 +65,20 @@ async function exchangeTokenWithBackend(googleToken: string, userInfo: any): Pro
     console.error('=== TOKEN EXCHANGE ERROR ===');
     console.error('Error:', error);
     console.error('============================');
+    return null;
+  }
+}
+
+/**
+ * Decode JWT token to extract user role information
+ */
+function decodeBackendToken(token: string): { role?: string; [key: string]: any } | null {
+  try {
+    // Decode without verification since we trust our backend
+    const decoded = jwt.decode(token) as { role?: string; [key: string]: any } | null;
+    return decoded;
+  } catch (error) {
+    console.error('Failed to decode backend token:', error);
     return null;
   }
 }
@@ -169,10 +184,21 @@ function getAuthOptions(): NextAuthOptions {
       if (token.backendAccessToken) {
         session.accessToken = token.backendAccessToken as string;
         console.log('✅ Session has backend token');
+        
+        // Decode backend token to extract role
+        const decodedToken = decodeBackendToken(token.backendAccessToken as string);
+        if (decodedToken && decodedToken.role) {
+          session.user.role = decodedToken.role as 'user' | 'admin' | 'researcher';
+          console.log('✅ Extracted role from token:', decodedToken.role);
+        } else {
+          session.user.role = 'user'; // Default role
+          console.log('⚠️ No role found in token, defaulting to user');
+        }
       } else {
         // No backend token available - user will have limited access
         console.warn('❌ Session created without backend token for user:', token.email);
         console.warn('User will not be able to access protected API endpoints');
+        session.user.role = 'user'; // Default role
       }
       
       session.user = {
@@ -181,11 +207,13 @@ function getAuthOptions(): NextAuthOptions {
         email: token.email as string,
         image: token.picture as string,
         sub: token.sub as string,
+        role: session.user.role, // Add the extracted role
       };
       
       console.log('Final session:', { 
         hasAccessToken: !!session.accessToken, 
-        userEmail: session.user.email 
+        userEmail: session.user.email,
+        userRole: session.user.role
       });
       console.log('==============================');
       

@@ -852,6 +852,9 @@ export default function EnvironmentManagement() {
         launchStep={launchStep}
         loading={launchMutation.isPending}
         form={form}
+        applications={applications || []}
+        selectedApplication={selectedApplication}
+        onApplicationChange={setSelectedApplication}
       />
 
       {/* Environment Details Modal */}
@@ -1084,6 +1087,10 @@ interface LaunchEnvironmentModalProps {
   launchStep: string;
   loading: boolean;
   form: any;
+  // Application-related props
+  applications: ApplicationImage[];
+  selectedApplication: ApplicationImage | null;
+  onApplicationChange: (application: ApplicationImage | null) => void;
 }
 
 function LaunchEnvironmentModal({
@@ -1101,7 +1108,10 @@ function LaunchEnvironmentModal({
   launchProgress,
   launchStep,
   loading,
-  form
+  form,
+  applications,
+  selectedApplication,
+  onApplicationChange,
 }: LaunchEnvironmentModalProps) {
   const preset = presetConfigs[selectedPreset];
 
@@ -1181,7 +1191,7 @@ function LaunchEnvironmentModal({
             value={selectedApplication?.id || undefined}
             onChange={(appId) => {
               const app = applications?.find((a: ApplicationImage) => a.id === appId);
-              setSelectedApplication(app || null);
+              onApplicationChange(app || null);
             }}
             placeholder="Select research environment (optional)"
             allowClear

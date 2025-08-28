@@ -10,18 +10,21 @@ declare module "next-auth" {
       email?: string | null;
       image?: string | null;
       sub?: string;
+      role?: 'user' | 'admin' | 'researcher';
     };
   }
 
   interface User {
     id?: string;
     sub?: string;
+    role?: 'user' | 'admin' | 'researcher';
   }
 
   interface Profile {
     sub?: string;
     email_verified?: boolean;
     picture?: string;
+    role?: 'user' | 'admin' | 'researcher';
   }
 }
 
@@ -32,5 +35,6 @@ declare module "next-auth/jwt" {
     email?: string;
     name?: string;
     picture?: string;
+    role?: 'user' | 'admin' | 'researcher';
   }
 }
