@@ -156,6 +156,12 @@ app.include_router(oauth_router, prefix="/auth")
 app.include_router(storage_api.router)
 app.include_router(file_api.router)
 
+# Admin and application endpoints
+import admin_api
+import applications_api
+app.include_router(admin_api.router)
+app.include_router(applications_api.router)
+
 
 # Remove non-working router includes - main.py direct endpoints are used instead
 # import environment_api  

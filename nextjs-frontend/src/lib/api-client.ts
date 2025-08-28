@@ -7,7 +7,8 @@ import type {
   UserFile, 
   ApiResponse, 
   EnvironmentConfig,
-  UserEnvVar 
+  UserEnvVar,
+  ApplicationImage
 } from '@/types';
 
 // Production configuration with enhanced security
@@ -254,6 +255,25 @@ class CMBClusterAPIClient {
   async healthCheck(): Promise<ApiResponse> {
     try {
       const response = await this.api.get('/health');
+      return await this.handleResponse(response);
+    } catch (error) {
+      return this.handleError(error);
+    }
+  }
+
+  // Application management
+  async listApplications(): Promise<ApiResponse<ApplicationImage[]>> {
+    try {
+      const response = await this.api.get('/applications');
+      return await this.handleResponse(response);
+    } catch (error) {
+      return this.handleError(error);
+    }
+  }
+
+  async getApplication(applicationId: string): Promise<ApiResponse<ApplicationImage>> {
+    try {
+      const response = await this.api.get(`/applications/${applicationId}`);
       return await this.handleResponse(response);
     } catch (error) {
       return this.handleError(error);

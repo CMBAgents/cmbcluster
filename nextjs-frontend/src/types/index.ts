@@ -87,6 +87,59 @@ export interface EnvironmentConfig {
   storage_id?: string;
   create_new_storage?: boolean;
   storage_class?: 'standard' | 'nearline' | 'coldline';
+  application_id?: string; // New field for application selection
+}
+
+// Application/Image Management types
+export interface ApplicationImage {
+  id: string;
+  name: string;
+  summary: string;
+  image_path: string;
+  icon_url?: string;
+  category: string;
+  created_at: string;
+  created_by: string;
+  is_active: boolean;
+  tags: string[];
+}
+
+export interface ApplicationImageRequest {
+  name: string;
+  summary: string;
+  image_path: string;
+  icon_url?: string;
+  category?: string;
+  tags?: string[];
+}
+
+// User Management types
+export interface UserWithRole {
+  id: string;
+  email: string;
+  name: string;
+  role: 'user' | 'admin' | 'researcher';
+  created_at: string;
+  last_login?: string;
+  is_active: boolean;
+  promoted_by?: string;
+  promoted_at?: string;
+}
+
+export interface UserManagementRequest {
+  new_role: 'user' | 'admin' | 'researcher';
+  reason?: string;
+}
+
+export interface RoleChangeRecord {
+  id: string;
+  user_id: string;
+  changed_by: string;
+  changed_by_name: string;
+  old_role: string;
+  new_role: string;
+  reason?: string;
+  changed_at: string;
 }
 
 // Storage selection types

@@ -55,6 +55,29 @@ class PodManager:
                 logger.error("Failed to create env secret", secret_name=secret_name, error=str(e))
                 raise
         return secret_name
+    
+    async def _resolve_image_path(self, config: EnvironmentRequest) -> str:
+        """Resolve the container image path from application ID or use default"""
+        # If application_id is provided, look up the image path
+        if hasattr(config, 'application_id') and config.application_id:
+            try:
+                application = await self.db.get_application(config.application_id)
+                if application and application.is_active:
+                    logger.info("Using application image", 
+                              application_id=config.application_id,
+                              application_name=application.name,
+                              image_path=application.image_path)
+                    return application.image_path
+                else:
+                    logger.warning("Application not found or inactive, using default image",
+                                 application_id=config.application_id)
+            except Exception as e:
+                logger.error("Failed to resolve application image, using default",
+                           application_id=config.application_id,
+                           error=str(e))
+        
+        # Fall back to explicit image or default
+        return config.image or f"{settings.registry_url}/cmbagent:latest"
 
     async def _create_file_secret(self, safe_user_id: str, env_id: str, user_files: dict):
         """Create a Kubernetes Secret for user files"""
@@ -249,6 +272,9 @@ class PodManager:
 
             # Handle storage selection/creation
             storage = await self._handle_storage_selection(user_id, config)
+            
+            # Resolve image path from application ID if provided
+            image_path = await self._resolve_image_path(config)
 
             # Create secret for env vars
             secret_name = await self._create_env_secret(safe_user_id, env_id, merged_env_vars)
@@ -258,7 +284,7 @@ class PodManager:
 
             # Create pod with cloud storage, referencing secrets
             pod_spec = self._build_pod_spec_with_storage(
-                user_id, safe_user_id, env_id, user_email, pod_name, config, storage, secret_name, file_secret_name
+                user_id, safe_user_id, env_id, user_email, pod_name, config, storage, secret_name, file_secret_name, image_path
             )
             self.k8s_client.create_namespaced_pod(
                 namespace=namespace, 
@@ -541,10 +567,11 @@ class PodManager:
         config: EnvironmentRequest,
         storage: UserStorage,
         secret_name: str = None,
-        file_secret_name: str = None
+        file_secret_name: str = None,
+        image_path: str = None
     ) -> Dict:
         """Build Kubernetes pod specification with cloud storage and env secret"""
-        image = config.image or f"{settings.registry_url}/cmbagent:latest"
+        image = image_path or config.image or f"{settings.registry_url}/cmbagent:latest"
 
         # Default env vars (non-sensitive, always injected)
         env_list = [

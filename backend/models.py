@@ -30,6 +30,10 @@ class User(BaseModel):
     last_login: Optional[datetime] = None
     is_active: bool = True
     
+    # Role management fields
+    promoted_by: Optional[str] = None
+    promoted_at: Optional[datetime] = None
+    
     # Subscription fields
     subscription_tier: SubscriptionTier = SubscriptionTier.FREE
     subscription_expires_at: Optional[datetime] = None
@@ -53,6 +57,9 @@ class EnvironmentRequest(BaseModel):
     memory_limit: Optional[str] = "2Gi"
     storage_size: Optional[str] = "10Gi"  # Kept for backward compatibility
     image: Optional[str] = None
+    
+    # Application/Image selection (new)
+    application_id: Optional[str] = None  # ID of selected application
 
     # Storage selection (new)
     storage_id: Optional[str] = None  # Existing storage to attach
@@ -83,3 +90,25 @@ class TokenData(BaseModel):
 
 class UserInDB(User):
     hashed_password: Optional[str] = None
+
+class ApplicationImage(BaseModel):
+    id: str
+    name: str
+    summary: str
+    image_path: str
+    icon_url: Optional[str] = None
+    category: str = "research"
+    created_at: datetime
+    created_by: str
+    is_active: bool = True
+    tags: List[str] = Field(default_factory=list)
+
+class RoleChangeRecord(BaseModel):
+    id: str
+    user_id: str
+    changed_by: str
+    changed_by_name: str
+    old_role: str
+    new_role: str
+    reason: Optional[str] = None
+    changed_at: datetime

@@ -407,6 +407,54 @@ class DatabaseManager:
                     # Migration might have already been applied
                     logger.debug("User files migration might already be applied", error=str(e))
                 
+                # Create applications table for multi-image support
+                conn.execute("""
+                    CREATE TABLE IF NOT EXISTS applications (
+                        id TEXT PRIMARY KEY,
+                        name TEXT NOT NULL,
+                        summary TEXT,
+                        image_path TEXT NOT NULL,
+                        icon_url TEXT,
+                        category TEXT DEFAULT 'research',
+                        created_at TIMESTAMP NOT NULL,
+                        created_by TEXT NOT NULL,
+                        is_active BOOLEAN DEFAULT 1,
+                        tags TEXT,  -- JSON array as text
+                        FOREIGN KEY (created_by) REFERENCES users (id)
+                    )
+                """)
+                
+                # Create user_role_changes table for audit trail
+                conn.execute("""
+                    CREATE TABLE IF NOT EXISTS user_role_changes (
+                        id TEXT PRIMARY KEY,
+                        user_id TEXT NOT NULL,
+                        changed_by TEXT NOT NULL,
+                        old_role TEXT NOT NULL,
+                        new_role TEXT NOT NULL,
+                        reason TEXT,
+                        changed_at TIMESTAMP NOT NULL,
+                        FOREIGN KEY (user_id) REFERENCES users (id),
+                        FOREIGN KEY (changed_by) REFERENCES users (id)
+                    )
+                """)
+                
+                # Add promoted_by and promoted_at columns to users table
+                try:
+                    conn.execute("ALTER TABLE users ADD COLUMN promoted_by TEXT")
+                    conn.execute("ALTER TABLE users ADD COLUMN promoted_at TIMESTAMP")
+                    logger.info("Added role management columns to users table")
+                except Exception as e:
+                    logger.debug("Role management columns might already exist", error=str(e))
+                
+                # Add application_id and image_path columns to environments table
+                try:
+                    conn.execute("ALTER TABLE environments ADD COLUMN application_id TEXT")
+                    conn.execute("ALTER TABLE environments ADD COLUMN image_path TEXT")
+                    logger.info("Added application columns to environments table")
+                except Exception as e:
+                    logger.debug("Application columns might already exist", error=str(e))
+                
                 # Add subscription columns with defaults for existing users
                 try:
                     conn.execute("ALTER TABLE users ADD COLUMN subscription_tier TEXT DEFAULT 'free'")
@@ -437,6 +485,17 @@ class DatabaseManager:
                 conn.execute("CREATE INDEX IF NOT EXISTS idx_user_files_user_id ON user_files (user_id)")
                 conn.execute("CREATE INDEX IF NOT EXISTS idx_user_files_type ON user_files (file_type)")
                 conn.execute("CREATE INDEX IF NOT EXISTS idx_user_files_env_var ON user_files (environment_variable_name)")
+                
+                # Application and role management indexes
+                conn.execute("CREATE INDEX IF NOT EXISTS idx_applications_created_by ON applications (created_by)")
+                conn.execute("CREATE INDEX IF NOT EXISTS idx_applications_category ON applications (category)")
+                conn.execute("CREATE INDEX IF NOT EXISTS idx_applications_is_active ON applications (is_active)")
+                conn.execute("CREATE INDEX IF NOT EXISTS idx_user_role_changes_user_id ON user_role_changes (user_id)")
+                conn.execute("CREATE INDEX IF NOT EXISTS idx_user_role_changes_changed_by ON user_role_changes (changed_by)")
+                conn.execute("CREATE INDEX IF NOT EXISTS idx_user_role_changes_changed_at ON user_role_changes (changed_at)")
+                conn.execute("CREATE INDEX IF NOT EXISTS idx_environments_application_id ON environments (application_id)")
+                conn.execute("CREATE INDEX IF NOT EXISTS idx_users_role ON users (role)")
+                conn.execute("CREATE INDEX IF NOT EXISTS idx_users_promoted_by ON users (promoted_by)")
                 
                 conn.commit()
                 conn.close()
@@ -932,6 +991,206 @@ class DatabaseManager:
                 environments.append(env)
             
             return environments
+    
+    # Application Management Methods
+    async def create_application(self, application) -> None:
+        """Create a new application image"""
+        async with self.get_connection() as conn:
+            await asyncio.get_event_loop().run_in_executor(
+                None,
+                lambda: conn.execute(
+                    """INSERT INTO applications 
+                       (id, name, summary, image_path, icon_url, category, created_at, created_by, is_active, tags)
+                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                    (application.id, application.name, application.summary, application.image_path,
+                     application.icon_url, application.category, application.created_at.isoformat(),
+                     application.created_by, application.is_active, json.dumps(application.tags))
+                )
+            )
+            await asyncio.get_event_loop().run_in_executor(None, conn.commit)
+    
+    async def list_applications(self) -> List:
+        """List all applications"""
+        from models import ApplicationImage
+        async with self.get_connection() as conn:
+            rows = await asyncio.get_event_loop().run_in_executor(
+                None,
+                lambda: conn.execute(
+                    "SELECT * FROM applications WHERE is_active = 1 ORDER BY created_at DESC"
+                ).fetchall()
+            )
+            
+            applications = []
+            for row in rows:
+                app = ApplicationImage(
+                    id=row['id'],
+                    name=row['name'],
+                    summary=row['summary'],
+                    image_path=row['image_path'],
+                    icon_url=row['icon_url'],
+                    category=row['category'],
+                    created_at=datetime.fromisoformat(row['created_at']),
+                    created_by=row['created_by'],
+                    is_active=bool(row['is_active']),
+                    tags=json.loads(row['tags']) if row['tags'] else []
+                )
+                applications.append(app)
+            return applications
+    
+    async def get_application(self, application_id: str):
+        """Get application by ID"""
+        from models import ApplicationImage
+        async with self.get_connection() as conn:
+            row = await asyncio.get_event_loop().run_in_executor(
+                None,
+                lambda: conn.execute(
+                    "SELECT * FROM applications WHERE id = ?",
+                    (application_id,)
+                ).fetchone()
+            )
+            
+            if row:
+                return ApplicationImage(
+                    id=row['id'],
+                    name=row['name'],
+                    summary=row['summary'],
+                    image_path=row['image_path'],
+                    icon_url=row['icon_url'],
+                    category=row['category'],
+                    created_at=datetime.fromisoformat(row['created_at']),
+                    created_by=row['created_by'],
+                    is_active=bool(row['is_active']),
+                    tags=json.loads(row['tags']) if row['tags'] else []
+                )
+            return None
+    
+    async def update_application(self, application) -> None:
+        """Update an application"""
+        async with self.get_connection() as conn:
+            await asyncio.get_event_loop().run_in_executor(
+                None,
+                lambda: conn.execute(
+                    """UPDATE applications 
+                       SET name=?, summary=?, image_path=?, icon_url=?, category=?, tags=?
+                       WHERE id=?""",
+                    (application.name, application.summary, application.image_path,
+                     application.icon_url, application.category, json.dumps(application.tags),
+                     application.id)
+                )
+            )
+            await asyncio.get_event_loop().run_in_executor(None, conn.commit)
+    
+    async def delete_application(self, application_id: str) -> None:
+        """Delete an application (soft delete)"""
+        async with self.get_connection() as conn:
+            await asyncio.get_event_loop().run_in_executor(
+                None,
+                lambda: conn.execute(
+                    "UPDATE applications SET is_active = 0 WHERE id = ?",
+                    (application_id,)
+                )
+            )
+            await asyncio.get_event_loop().run_in_executor(None, conn.commit)
+    
+    # User Management Methods
+    async def list_all_users(self) -> List[User]:
+        """List all users (admin only)"""
+        async with self.get_connection() as conn:
+            rows = await asyncio.get_event_loop().run_in_executor(
+                None,
+                lambda: conn.execute(
+                    """SELECT * FROM users ORDER BY created_at DESC"""
+                ).fetchall()
+            )
+            
+            users = []
+            for row in rows:
+                user = User(
+                    id=row['id'],
+                    email=row['email'],
+                    name=row['name'],
+                    role=UserRole(row['role']),
+                    created_at=datetime.fromisoformat(row['created_at']),
+                    last_login=datetime.fromisoformat(row['last_login']) if row['last_login'] else None,
+                    is_active=bool(row['is_active']),
+                    promoted_by=row.get('promoted_by'),
+                    promoted_at=datetime.fromisoformat(row['promoted_at']) if row.get('promoted_at') else None
+                )
+                users.append(user)
+            return users
+    
+    async def update_user_role(self, user_id: str, new_role: UserRole, promoted_by: str, promoted_at: datetime) -> None:
+        """Update user role"""
+        async with self.get_connection() as conn:
+            await asyncio.get_event_loop().run_in_executor(
+                None,
+                lambda: conn.execute(
+                    """UPDATE users 
+                       SET role=?, promoted_by=?, promoted_at=?
+                       WHERE id=?""",
+                    (new_role.value, promoted_by, promoted_at.isoformat(), user_id)
+                )
+            )
+            await asyncio.get_event_loop().run_in_executor(None, conn.commit)
+    
+    async def update_user_status(self, user_id: str, is_active: bool) -> None:
+        """Update user active status"""
+        async with self.get_connection() as conn:
+            await asyncio.get_event_loop().run_in_executor(
+                None,
+                lambda: conn.execute(
+                    "UPDATE users SET is_active=? WHERE id=?",
+                    (is_active, user_id)
+                )
+            )
+            await asyncio.get_event_loop().run_in_executor(None, conn.commit)
+    
+    async def log_role_change(self, change_record: Dict) -> None:
+        """Log role change for audit trail"""
+        async with self.get_connection() as conn:
+            await asyncio.get_event_loop().run_in_executor(
+                None,
+                lambda: conn.execute(
+                    """INSERT INTO user_role_changes 
+                       (id, user_id, changed_by, old_role, new_role, reason, changed_at)
+                       VALUES (?, ?, ?, ?, ?, ?, ?)""",
+                    (change_record['id'], change_record['user_id'], change_record['changed_by'],
+                     change_record['old_role'], change_record['new_role'], change_record['reason'],
+                     change_record['changed_at'].isoformat())
+                )
+            )
+            await asyncio.get_event_loop().run_in_executor(None, conn.commit)
+    
+    async def get_user_role_history(self, user_id: str) -> List:
+        """Get role change history for a user"""
+        from models import RoleChangeRecord
+        async with self.get_connection() as conn:
+            rows = await asyncio.get_event_loop().run_in_executor(
+                None,
+                lambda: conn.execute(
+                    """SELECT rc.*, u.name as changed_by_name 
+                       FROM user_role_changes rc 
+                       LEFT JOIN users u ON rc.changed_by = u.id 
+                       WHERE rc.user_id = ? 
+                       ORDER BY rc.changed_at DESC""",
+                    (user_id,)
+                ).fetchall()
+            )
+            
+            history = []
+            for row in rows:
+                record = RoleChangeRecord(
+                    id=row['id'],
+                    user_id=row['user_id'],
+                    changed_by=row['changed_by'],
+                    changed_by_name=row['changed_by_name'] or 'Unknown',
+                    old_role=row['old_role'],
+                    new_role=row['new_role'],
+                    reason=row['reason'],
+                    changed_at=datetime.fromisoformat(row['changed_at'])
+                )
+                history.append(record)
+            return history
 
 # Global database instance
 db_manager: Optional[DatabaseManager] = None

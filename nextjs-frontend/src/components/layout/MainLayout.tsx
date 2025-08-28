@@ -6,6 +6,7 @@ import { useRouter, usePathname } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 import { apiClient } from '@/lib/api-client';
 import type { Environment } from '@/types';
+import { useAdmin } from '@/contexts/AdminContext';
 import {
   Layout,
   Menu,
@@ -38,6 +39,9 @@ import {
   CloudServerOutlined,
   FolderOutlined,
   BarChartOutlined,
+  ShopOutlined,
+  CrownOutlined,
+  UsergroupAddOutlined,
 } from '@ant-design/icons';
 import type { MenuProps } from 'antd';
 import { useTheme } from '@/contexts/ThemeContext';
@@ -55,6 +59,7 @@ export default function MainLayout({ children }: MainLayoutProps) {
   const router = useRouter();
   const pathname = usePathname();
   const { theme, toggleTheme } = useTheme();
+  const { canSwitchToAdmin, currentRole, switchToAdmin, switchToUser } = useAdmin();
 
   // Memoize logo to prevent re-rendering
   const logoElement = useMemo(() => (
@@ -79,17 +84,40 @@ export default function MainLayout({ children }: MainLayoutProps) {
   const menuItems: MenuProps['items'] = [
     {
       key: '/',
-      icon: <DashboardOutlined />,
+      icon: <DashboardOutlined className="text-primary" />,
       label: 'Dashboard',
     },
     {
       key: '/environments',
-      icon: <RocketOutlined />,
+      icon: <RocketOutlined className="text-primary" />,
       label: 'Environments',
     },
+    ...(currentRole === 'admin' ? [
+      {
+        key: '/store',
+        icon: <ShopOutlined className="text-primary" />,
+        label: 'Agentic Store',
+      },
+      {
+        key: '/admin',
+        icon: <CrownOutlined className="text-primary" />,
+        label: 'Admin Panel',
+      },
+      {
+        key: '/admin/users',
+        icon: <UsergroupAddOutlined className="text-primary" />,
+        label: 'User Management',
+      },
+    ] : [
+      {
+        key: '/store',
+        icon: <ShopOutlined className="text-primary" />,
+        label: 'Agentic Store',
+      },
+    ]),
     {
       key: '/settings',
-      icon: <SettingOutlined />,
+      icon: <SettingOutlined className="text-primary" />,
       label: 'Settings',
     },
   ];
@@ -116,20 +144,44 @@ export default function MainLayout({ children }: MainLayoutProps) {
     navigateTo(e.key);
   };
 
-  // User dropdown menu - without onClick functions
+  // User dropdown menu - with admin role switching
   const userMenuItems: MenuProps['items'] = [
     {
       key: 'profile',
-      icon: <UserOutlined />,
-      label: 'Profile',
+      icon: <UserOutlined className="text-secondary" />,
+      label: (
+        <span className="text-primary font-medium">
+          Profile
+        </span>
+      ),
     },
+    ...(canSwitchToAdmin ? [
+      {
+        type: 'divider' as const,
+      },
+      {
+        key: 'admin-switch',
+        icon: currentRole === 'admin' 
+          ? <UserOutlined className="text-warning" /> 
+          : <CrownOutlined className="text-primary" />,
+        label: (
+          <span className={currentRole === 'admin' ? 'text-warning font-medium' : 'text-primary font-medium'}>
+            {currentRole === 'admin' ? 'Switch to User Mode' : 'Switch to Admin Mode'}
+          </span>
+        ),
+      },
+    ] : []),
     {
-      type: 'divider',
+      type: 'divider' as const,
     },
     {
       key: 'logout',
-      icon: <LogoutOutlined />,
-      label: 'Sign Out',
+      icon: <LogoutOutlined className="text-error" />,
+      label: (
+        <span className="text-error font-medium">
+          Sign Out
+        </span>
+      ),
       danger: true,
     },
   ];
@@ -140,6 +192,12 @@ export default function MainLayout({ children }: MainLayoutProps) {
       signOut({ callbackUrl: '/auth/signin' });
     } else if (e.key === 'profile') {
       navigateTo('/settings');
+    } else if (e.key === 'admin-switch') {
+      if (currentRole === 'admin') {
+        switchToUser();
+      } else {
+        switchToAdmin();
+      }
     }
   };
 

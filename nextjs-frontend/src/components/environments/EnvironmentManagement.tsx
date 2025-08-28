@@ -1,7 +1,7 @@
 'use client';
 
-import React, { useState } from 'react';
-import { useRouter } from 'next/navigation';
+import React, { useState, useEffect } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { 
   Card, 
   Button, 
@@ -45,7 +45,7 @@ import {
   MonitorOutlined,
 } from '@ant-design/icons';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import type { Environment, StorageSelection, StorageItem } from '@/types';
+import type { Environment, StorageSelection, StorageItem, ApplicationImage } from '@/types';
 import { apiClient } from '@/lib/api-client';
 import { formatDateTime, getStatusColor, capitalize, getDisplayId } from '@/lib/utils';
 import { useCommonNotifications } from '@/contexts/NotificationContext';
@@ -90,6 +90,7 @@ const PRESET_CONFIGS = {
 
 export default function EnvironmentManagement() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [activeTab, setActiveTab] = useState('environments');
   const [launchModalVisible, setLaunchModalVisible] = useState(false);
   const [selectedPreset, setSelectedPreset] = useState<keyof typeof PRESET_CONFIGS>('standard');
@@ -99,6 +100,7 @@ export default function EnvironmentManagement() {
   const [selectedStorage, setSelectedStorage] = useState<StorageSelection | null>(null);
   const [launchProgress, setLaunchProgress] = useState(0);
   const [launchStep, setLaunchStep] = useState('');
+  const [selectedApplication, setSelectedApplication] = useState<ApplicationImage | null>(null);
   const [selectedRowKeys, setSelectedRowKeys] = useState<string[]>([]);
   const [detailsModalVisible, setDetailsModalVisible] = useState(false);
   const [selectedEnvironment, setSelectedEnvironment] = useState<Environment | null>(null);
@@ -169,6 +171,27 @@ export default function EnvironmentManagement() {
       return response.storages || [];
     }
   });
+
+  // Fetch available applications
+  const { data: applications } = useQuery({
+    queryKey: ['applications'],
+    queryFn: async () => {
+      const response = await apiClient.listApplications();
+      return response.data || [];
+    }
+  });
+
+  // Handle app query parameter (from store page)
+  useEffect(() => {
+    const appId = searchParams.get('app');
+    if (appId && applications) {
+      const app = applications.find((app: ApplicationImage) => app.id === appId);
+      if (app) {
+        setSelectedApplication(app);
+        setLaunchModalVisible(true);
+      }
+    }
+  }, [searchParams, applications]);
 
   // Launch environment mutation with progress tracking
   const launchMutation = useMutation({
@@ -306,6 +329,11 @@ export default function EnvironmentManagement() {
           config.storage_class = selectedStorage.storage_class;
         }
       }
+    }
+
+    // Add selected application
+    if (selectedApplication) {
+      config.application_id = selectedApplication.id;
     }
     
     launchMutation.mutate(config);
@@ -1145,6 +1173,50 @@ function LaunchEnvironmentModal({
               </Option>
             ))}
           </Select>
+        </Form.Item>
+
+        {/* Application Selection */}
+        <Form.Item label="Research Environment" style={{ marginBottom: '12px' }}>
+          <Select
+            value={selectedApplication?.id || undefined}
+            onChange={(appId) => {
+              const app = applications?.find((a: ApplicationImage) => a.id === appId);
+              setSelectedApplication(app || null);
+            }}
+            placeholder="Select research environment (optional)"
+            allowClear
+            style={{ width: '100%' }}
+            size="middle"
+          >
+            {applications?.map((app: ApplicationImage) => (
+              <Option key={app.id} value={app.id}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <div 
+                    style={{ 
+                      width: '8px', 
+                      height: '8px', 
+                      borderRadius: '50%',
+                      backgroundColor: app.category === 'research' ? 'var(--primary-500)' : 
+                                     app.category === 'ml' ? 'var(--success-500)' : 
+                                     'var(--warning-500)',
+                      flexShrink: 0
+                    }}
+                  />
+                  <span style={{ fontWeight: '500' }}>{app.name}</span>
+                  <span style={{ fontSize: '12px', color: 'var(--text-secondary)', marginLeft: 'auto' }}>
+                    {app.category}
+                  </span>
+                </div>
+              </Option>
+            ))}
+          </Select>
+          {selectedApplication && (
+            <div style={{ marginTop: '8px', padding: '8px', backgroundColor: 'var(--glass-bg-secondary)', borderRadius: 'var(--radius-sm)' }}>
+              <Text style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
+                {selectedApplication.summary}
+              </Text>
+            </div>
+          )}
         </Form.Item>
 
         {/* Compact Custom Configuration Toggle */}
