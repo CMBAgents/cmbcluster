@@ -176,8 +176,24 @@ export default function EnvironmentManagement() {
   const { data: applications } = useQuery({
     queryKey: ['applications'],
     queryFn: async () => {
+      console.log('Fetching applications for environment launch...');
       const response = await apiClient.listApplications();
-      return response.data || [];
+      console.log('Environment applications API response:', response);
+      
+      // Handle different response formats
+      if (response.status === 'success' && response.data) {
+        console.log('Using response.data for environment launch:', response.data);
+        return response.data;
+      } else if (Array.isArray(response)) {
+        console.log('Response is direct array for environment launch:', response);
+        return response;
+      } else if (response.applications) {
+        console.log('Using response.applications for environment launch:', response.applications);
+        return response.applications;
+      } else {
+        console.warn('Unexpected response format for environment launch:', response);
+        return [];
+      }
     }
   });
 
@@ -198,13 +214,16 @@ export default function EnvironmentManagement() {
     mutationFn: async (config: any) => {
       setLaunchStep('Validating configuration...');
       setLaunchProgress(25);
+      console.log('Environment launch config:', config);
       
       await new Promise(resolve => setTimeout(resolve, 300));
       
       setLaunchStep('Launching environment...');
       setLaunchProgress(75);
       
+      console.log('Calling createEnvironment API...');
       const result = await apiClient.createEnvironment(config);
+      console.log('Environment creation result:', result);
       setLaunchProgress(100);
       
       return result;
@@ -245,9 +264,21 @@ export default function EnvironmentManagement() {
     },
     onError: (error: any) => {
       setLaunchStep('Launch failed!');
+      console.error('Environment launch failed:', error);
+      
+      // Extract detailed error message
+      let errorMessage = 'Failed to launch environment';
+      if (error.response?.data?.detail) {
+        errorMessage = error.response.data.detail;
+      } else if (error.message) {
+        errorMessage = error.message;
+      } else if (typeof error === 'string') {
+        errorMessage = error;
+      }
+      
       notifyError(
         'Launch Failed',
-        error.message || 'Failed to launch environment'
+        errorMessage
       );
       setLaunchProgress(0);
     }
@@ -486,33 +517,50 @@ export default function EnvironmentManagement() {
           {record.url && (
             <Tooltip title="Access Environment">
               <Button
-                type="link"
+                type="primary"
                 icon={<LinkOutlined />}
                 onClick={() => router.push(`/environment/${record.env_id || record.id}`)}
                 size="small"
-                style={{ padding: '4px 8px' }}
-              />
+                style={{ 
+                  padding: '4px 8px',
+                  background: 'var(--interactive-primary)',
+                  borderColor: 'var(--interactive-primary)',
+                  color: 'white'
+                }}
+              >
+                Access
+              </Button>
              </Tooltip>
           )}
           
           <Tooltip title="Restart">
             <Button
+              type="default"
               icon={<RedoOutlined />}
               size="small"
               onClick={() => handleRestart(record.env_id || record.id)}
               loading={restartMutation.isPending}
-              style={{ padding: '4px 8px' }}
+              style={{ 
+                padding: '4px 8px',
+                borderColor: 'var(--border-primary)',
+                color: 'var(--text-primary)'
+              }}
             />
           </Tooltip>
           
           <Tooltip title="Stop">
             <Button
+              type="default"
               icon={<StopOutlined />}
               size="small"
               danger
               onClick={() => handleStop(record.env_id || record.id)}
               loading={stopMutation.isPending}
-              style={{ padding: '4px 8px' }}
+              style={{ 
+                padding: '4px 8px',
+                borderColor: 'var(--error-300)',
+                color: 'var(--error-500)'
+              }}
             />
           </Tooltip>
           
@@ -1197,8 +1245,9 @@ function LaunchEnvironmentModal({
             allowClear
             style={{ width: '100%' }}
             size="middle"
+            loading={!applications}
           >
-            {applications?.map((app: ApplicationImage) => (
+            {applications && Array.isArray(applications) ? applications.map((app: ApplicationImage) => (
               <Option key={app.id} value={app.id}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                   <div 
@@ -1218,12 +1267,25 @@ function LaunchEnvironmentModal({
                   </span>
                 </div>
               </Option>
-            ))}
+            )) : null}
+            {(!applications || applications.length === 0) && !loading && (
+              <Option disabled value="">
+                No applications available - Contact administrator
+              </Option>
+            )}
           </Select>
           {selectedApplication && (
             <div style={{ marginTop: '8px', padding: '8px', backgroundColor: 'var(--glass-bg-secondary)', borderRadius: 'var(--radius-sm)' }}>
               <Text style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
                 {selectedApplication.summary}
+              </Text>
+            </div>
+          )}
+          {process.env.NODE_ENV === 'development' && (!applications || applications.length === 0) && (
+            <div style={{ marginTop: '8px', padding: '8px', backgroundColor: 'var(--warning-50)', border: '1px solid var(--warning-200)', borderRadius: 'var(--radius-sm)' }}>
+              <Text style={{ fontSize: '11px', color: 'var(--warning-700)' }}>
+                <strong>Debug:</strong> No applications loaded. Check console for API response details.
+                {applications !== undefined && `Applications: ${JSON.stringify(applications)}`}
               </Text>
             </div>
           )}

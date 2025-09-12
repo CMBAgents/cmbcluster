@@ -42,7 +42,7 @@ spec:
               command:
               - "/bin/sh"
               - "-c"
-              - "echo 'Waiting for GCS FUSE mount...' && sleep 5 && echo 'Checking mount readiness...' && touch /app/data/.mount_check && rm /app/data/.mount_check && echo 'GCS FUSE mount is ready.'"
+              - "echo 'Waiting for GCS FUSE mount...' && sleep 5 && echo 'Checking mount readiness...' && touch /app/data/.mount_check && rm /app/data/.mount_check && echo 'Creating uploads directory...' && mkdir -p /app/data/uploads/applications && echo 'GCS FUSE mount is ready.'"
         # Mount the database storage via Cloud Storage FUSE CSI driver
         volumeMounts:
         - name: gcs-fuse-volume
@@ -81,13 +81,6 @@ spec:
           value: "/app/data/cmbcluster.db"
         - name: DATABASE_BUCKET
           value: "{{ .Values.global.projectId }}-{{ .Values.global.clusterName }}-db"
-        # GCSFUSE optimization settings for better I/O performance
-        - name: GCSFUSE_WRITE_BUFFER_SIZE
-          value: "67108864"
-        - name: GCSFUSE_MAX_RETRY_SLEEP
-          value: "30"
-        - name: GCSFUSE_MAX_CONNS_PER_HOST
-          value: "100"
         # Enhanced security configuration
         - name: TLS_ENABLED
           value: {{ .Values.backend.config.tlsEnabled | default "true" | quote }}
@@ -141,8 +134,10 @@ spec:
           driver: gcsfuse.csi.storage.gke.io
           volumeAttributes:
             bucketName: "{{ .Values.global.projectId }}-{{ .Values.global.clusterName }}-db"
-            # Disable streaming writes to prevent "OutOfOrderError" with SQLite WAL mode.
-            mountOptions: "implicit-dirs"
+            # Optimized mountOptions for SQLite on GCS FUSE.
+            # This enables file/metadata caching, increases connections, and sets correct permissions for database workloads.
+            # The 'cache-file-for-range-read' flag was removed as it is not supported by the GKE CSI driver's gcsfuse version.
+            mountOptions: "implicit-dirs,uid=1000,gid=1000,file-mode=770,dir-mode=770,cache-dir=/tmp/gcs-cache,file-cache-max-size-mb=2048,metadata-cache-ttl-secs=600,stat-cache-max-size-mb=-1,max-conns-per-host=100,write-global-max-blocks=1000"
       - name: tmp-storage
         emptyDir: {}
 ---

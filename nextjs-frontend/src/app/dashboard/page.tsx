@@ -27,44 +27,61 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Fetch dashboard data
+  // Fetch dashboard data - only once when component mounts and user is authenticated
   useEffect(() => {
+    let mounted = true;
+    
     const fetchDashboardData = async () => {
-      if (!session) return;
+      if (!session?.user) return;
       
       try {
         setLoading(true);
+        setError(null);
         
         const [envResponse, storageResponse] = await Promise.all([
           apiClient.listEnvironments(),
           apiClient.listUserStorages()
         ]);
 
-        console.log('Dashboard envResponse:', envResponse);
-        console.log('Dashboard storageResponse:', storageResponse);
+        // Only update state if component is still mounted
+        if (mounted) {
+          console.log('Dashboard envResponse:', envResponse);
+          console.log('Dashboard storageResponse:', storageResponse);
 
-        // Handle environment response - now properly structured
-        if (envResponse.status === 'success' && envResponse.environments) {
-          setEnvironments(envResponse.environments);
-        }
+          // Handle environment response - now properly structured
+          if (envResponse.status === 'success' && envResponse.environments) {
+            setEnvironments(envResponse.environments);
+          }
 
-        // Handle storage response - now properly structured
-        if (storageResponse.status === 'success' && storageResponse.storages) {
-          setStorages(storageResponse.storages);
+          // Handle storage response - now properly structured
+          if (storageResponse.status === 'success' && storageResponse.storages) {
+            setStorages(storageResponse.storages);
+          }
         }
       } catch (error) {
-        console.error('Error fetching dashboard data:', error);
-        setError(error instanceof Error ? error.message : 'Failed to load dashboard data');
-        // Set empty arrays as fallback to prevent UI issues
-        setEnvironments([]);
-        setStorages([]);
+        if (mounted) {
+          console.error('Error fetching dashboard data:', error);
+          setError(error instanceof Error ? error.message : 'Failed to load dashboard data');
+          // Set empty arrays as fallback to prevent UI issues
+          setEnvironments([]);
+          setStorages([]);
+        }
       } finally {
-        setLoading(false);
+        if (mounted) {
+          setLoading(false);
+        }
       }
     };
 
-    fetchDashboardData();
-  }, [session]);
+    // Only fetch once when we have a session
+    if (session?.user && environments.length === 0 && storages.length === 0 && !loading) {
+      fetchDashboardData();
+    }
+
+    return () => {
+      mounted = false;
+    };
+  }, [session?.user?.email]); // Only depend on user email to prevent constant refetching
 
   // Calculate statistics from real data
   const stats = [

@@ -2,6 +2,38 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Store card image upload styles */
+.avatar-uploader .ant-upload {
+  width: 80px;
+  height: 80px;
+  border-radius: 8px;
+}
+
+.avatar-uploader .ant-upload-select-picture-card {
+  width: 80px;
+  height: 80px;
+  border-radius: 8px;
+}
+
+/* Store application card styling */
+.store-app-card {
+  transition: all 0.2s ease;
+  overflow: hidden;
+}
+
+.store-app-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 12px 24px rgba(0, 0, 0, 0.1);
+}
+
+.store-app-image {
+  transition: transform 0.2s ease;
+}
+
+.store-app-card:hover .store-app-image {
+  transform: scale(1.05);
+}
+
 /* Import Professional Fonts */
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap');
 

@@ -262,9 +262,26 @@ class DatabaseManager:
                         created_at TIMESTAMP NOT NULL,
                         last_login TIMESTAMP,
                         is_active BOOLEAN NOT NULL DEFAULT 1,
-                        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        promoted_by TEXT,
+                        promoted_at TIMESTAMP
                     )
                 """)
+                
+                # Add missing columns to existing users table (migration)
+                try:
+                    conn.execute("ALTER TABLE users ADD COLUMN promoted_by TEXT")
+                    logger.info("Added promoted_by column to users table")
+                except sqlite3.OperationalError as e:
+                    if "duplicate column name" not in str(e).lower():
+                        logger.warning("Could not add promoted_by column", error=str(e))
+                
+                try:
+                    conn.execute("ALTER TABLE users ADD COLUMN promoted_at TIMESTAMP")
+                    logger.info("Added promoted_at column to users table")
+                except sqlite3.OperationalError as e:
+                    if "duplicate column name" not in str(e).lower():
+                        logger.warning("Could not add promoted_at column", error=str(e))
                 
                 # Create environments table
                 conn.execute("""
@@ -414,6 +431,7 @@ class DatabaseManager:
                         name TEXT NOT NULL,
                         summary TEXT,
                         image_path TEXT NOT NULL,
+                        port INTEGER DEFAULT 8888,
                         icon_url TEXT,
                         category TEXT DEFAULT 'research',
                         created_at TIMESTAMP NOT NULL,
@@ -446,6 +464,42 @@ class DatabaseManager:
                     logger.info("Added role management columns to users table")
                 except Exception as e:
                     logger.debug("Role management columns might already exist", error=str(e))
+
+                # Add missing columns to applications table (migration)
+                try:
+                    conn.execute("ALTER TABLE applications ADD COLUMN port INTEGER DEFAULT 8888")
+                    logger.info("Added port column to applications table")
+                except sqlite3.OperationalError as e:
+                    if "duplicate column name" not in str(e).lower():
+                        logger.warning("Could not add port column", error=str(e))
+                
+                try:
+                    conn.execute("ALTER TABLE applications ADD COLUMN icon_url TEXT")
+                    logger.info("Added icon_url column to applications table")
+                except sqlite3.OperationalError as e:
+                    if "duplicate column name" not in str(e).lower():
+                        logger.warning("Could not add icon_url column", error=str(e))
+                
+                try:
+                    conn.execute("ALTER TABLE applications ADD COLUMN category TEXT DEFAULT 'research'")
+                    logger.info("Added category column to applications table")
+                except sqlite3.OperationalError as e:
+                    if "duplicate column name" not in str(e).lower():
+                        logger.warning("Could not add category column", error=str(e))
+                
+                try:
+                    conn.execute("ALTER TABLE applications ADD COLUMN is_active BOOLEAN DEFAULT 1")
+                    logger.info("Added is_active column to applications table")
+                except sqlite3.OperationalError as e:
+                    if "duplicate column name" not in str(e).lower():
+                        logger.warning("Could not add is_active column", error=str(e))
+                
+                try:
+                    conn.execute("ALTER TABLE applications ADD COLUMN tags TEXT")
+                    logger.info("Added tags column to applications table")
+                except sqlite3.OperationalError as e:
+                    if "duplicate column name" not in str(e).lower():
+                        logger.warning("Could not add tags column", error=str(e))
                 
                 # Add application_id and image_path columns to environments table
                 try:
@@ -573,20 +627,41 @@ class DatabaseManager:
             )
             
             if row:
-                from models import SubscriptionTier
-                return User(
-                    id=row['id'],
-                    email=row['email'],
-                    name=row['name'],
-                    role=UserRole(row['role']),
-                    created_at=datetime.fromisoformat(row['created_at']),
-                    last_login=datetime.fromisoformat(row['last_login']) if row['last_login'] else None,
-                    is_active=bool(row['is_active']),
-                    subscription_tier=SubscriptionTier(row['subscription_tier'] or 'free'),
-                    subscription_expires_at=datetime.fromisoformat(row['subscription_expires_at']) if row['subscription_expires_at'] else None,
-                    max_uptime_minutes=row['max_uptime_minutes'] or 60,
-                    auto_shutdown_enabled=bool(row['auto_shutdown_enabled'])
-                )
+                try:
+                    from models import SubscriptionTier
+                    # Safely access optional fields by converting row to dict
+                    row_dict = dict(row)
+                    
+                    return User(
+                        id=row['id'],
+                        email=row['email'],
+                        name=row['name'],
+                        role=UserRole(row['role']),
+                        created_at=datetime.fromisoformat(row['created_at']),
+                        last_login=datetime.fromisoformat(row['last_login']) if row['last_login'] else None,
+                        is_active=bool(row['is_active']),
+                        subscription_tier=SubscriptionTier(row_dict.get('subscription_tier', 'free') or 'free'),
+                        subscription_expires_at=datetime.fromisoformat(row_dict['subscription_expires_at']) if row_dict.get('subscription_expires_at') else None,
+                        max_uptime_minutes=row_dict.get('max_uptime_minutes', 60) or 60,
+                        auto_shutdown_enabled=bool(row_dict.get('auto_shutdown_enabled', True))
+                    )
+                except Exception as e:
+                    logger.error("Error processing user row in get_user", user_id=user_id, error=str(e))
+                    # Return a basic user object with defaults if subscription columns don't exist
+                    from models import SubscriptionTier
+                    return User(
+                        id=row['id'],
+                        email=row['email'],
+                        name=row['name'],
+                        role=UserRole(row['role']),
+                        created_at=datetime.fromisoformat(row['created_at']),
+                        last_login=datetime.fromisoformat(row['last_login']) if row['last_login'] else None,
+                        is_active=bool(row['is_active']),
+                        subscription_tier=SubscriptionTier.FREE,
+                        subscription_expires_at=None,
+                        max_uptime_minutes=60,
+                        auto_shutdown_enabled=True
+                    )
             return None
     
     async def update_user_login(self, user_id: str) -> None:
@@ -1000,11 +1075,12 @@ class DatabaseManager:
                 None,
                 lambda: conn.execute(
                     """INSERT INTO applications 
-                       (id, name, summary, image_path, icon_url, category, created_at, created_by, is_active, tags)
-                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                       (id, name, summary, image_path, port, icon_url, category, created_at, created_by, is_active, tags)
+                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                     (application.id, application.name, application.summary, application.image_path,
-                     application.icon_url, application.category, application.created_at.isoformat(),
-                     application.created_by, application.is_active, json.dumps(application.tags))
+                     application.port or 8888, application.icon_url, application.category, 
+                     application.created_at.isoformat(), application.created_by, application.is_active, 
+                     json.dumps(application.tags))
                 )
             )
             await asyncio.get_event_loop().run_in_executor(None, conn.commit)
@@ -1022,19 +1098,40 @@ class DatabaseManager:
             
             applications = []
             for row in rows:
-                app = ApplicationImage(
-                    id=row['id'],
-                    name=row['name'],
-                    summary=row['summary'],
-                    image_path=row['image_path'],
-                    icon_url=row['icon_url'],
-                    category=row['category'],
-                    created_at=datetime.fromisoformat(row['created_at']),
-                    created_by=row['created_by'],
-                    is_active=bool(row['is_active']),
-                    tags=json.loads(row['tags']) if row['tags'] else []
-                )
-                applications.append(app)
+                try:
+                    # Safely access optional fields by checking column names
+                    row_dict = dict(row)
+                    
+                    # Handle tags field safely
+                    tags = []
+                    if 'tags' in row_dict and row_dict['tags']:
+                        try:
+                            tags = json.loads(row_dict['tags'])
+                        except (json.JSONDecodeError, TypeError):
+                            tags = []
+                    
+                    app = ApplicationImage(
+                        id=row['id'],
+                        name=row['name'],
+                        summary=row['summary'] or "",
+                        image_path=row['image_path'],
+                        port=row_dict.get('port', 8888),
+                        icon_url=row_dict.get('icon_url'),
+                        category=row_dict.get('category', 'research'),
+                        created_at=datetime.fromisoformat(row['created_at']),
+                        created_by=row['created_by'],
+                        is_active=bool(row_dict.get('is_active', True)),
+                        tags=tags
+                    )
+                    applications.append(app)
+                except Exception as e:
+                    try:
+                        app_id = row['id'] if 'id' in dict(row) else 'unknown'
+                    except:
+                        app_id = 'unknown'
+                    logger.error("Error processing application row", app_id=app_id, error=str(e))
+                    # Skip this row and continue
+                    continue
             return applications
     
     async def get_application(self, application_id: str):
@@ -1050,11 +1147,14 @@ class DatabaseManager:
             )
             
             if row:
+                # Safely access optional fields by checking column names
+                row_dict = dict(row)
                 return ApplicationImage(
                     id=row['id'],
                     name=row['name'],
                     summary=row['summary'],
                     image_path=row['image_path'],
+                    port=row_dict.get('port', 8888),
                     icon_url=row['icon_url'],
                     category=row['category'],
                     created_at=datetime.fromisoformat(row['created_at']),
@@ -1071,11 +1171,11 @@ class DatabaseManager:
                 None,
                 lambda: conn.execute(
                     """UPDATE applications 
-                       SET name=?, summary=?, image_path=?, icon_url=?, category=?, tags=?
+                       SET name=?, summary=?, image_path=?, port=?, icon_url=?, category=?, tags=?
                        WHERE id=?""",
                     (application.name, application.summary, application.image_path,
-                     application.icon_url, application.category, json.dumps(application.tags),
-                     application.id)
+                     application.port or 8888, application.icon_url, application.category, 
+                     json.dumps(application.tags), application.id)
                 )
             )
             await asyncio.get_event_loop().run_in_executor(None, conn.commit)
@@ -1105,18 +1205,43 @@ class DatabaseManager:
             
             users = []
             for row in rows:
-                user = User(
-                    id=row['id'],
-                    email=row['email'],
-                    name=row['name'],
-                    role=UserRole(row['role']),
-                    created_at=datetime.fromisoformat(row['created_at']),
-                    last_login=datetime.fromisoformat(row['last_login']) if row['last_login'] else None,
-                    is_active=bool(row['is_active']),
-                    promoted_by=row.get('promoted_by'),
-                    promoted_at=datetime.fromisoformat(row['promoted_at']) if row.get('promoted_at') else None
-                )
-                users.append(user)
+                try:
+                    # Safely access optional fields by checking column names
+                    row_dict = dict(row)
+                    
+                    # Check if optional columns exist by trying to access them
+                    promoted_by = None
+                    promoted_at = None
+                    
+                    try:
+                        promoted_by = row_dict.get('promoted_by')
+                        if row_dict.get('promoted_at'):
+                            promoted_at = datetime.fromisoformat(row_dict['promoted_at'])
+                    except (KeyError, TypeError):
+                        # Columns don't exist or are malformed, use defaults
+                        promoted_by = None
+                        promoted_at = None
+                    
+                    user = User(
+                        id=row['id'],
+                        email=row['email'],
+                        name=row['name'],
+                        role=UserRole(row['role']),
+                        created_at=datetime.fromisoformat(row['created_at']),
+                        last_login=datetime.fromisoformat(row['last_login']) if row['last_login'] else None,
+                        is_active=bool(row['is_active']),
+                        promoted_by=promoted_by,
+                        promoted_at=promoted_at
+                    )
+                    users.append(user)
+                except Exception as e:
+                    try:
+                        row_id = row['id'] if 'id' in dict(row) else 'unknown'
+                    except:
+                        row_id = 'unknown'
+                    logger.error("Error processing user row", row_id=row_id, error=str(e))
+                    # Skip this row and continue
+                    continue
             return users
     
     async def update_user_role(self, user_id: str, new_role: UserRole, promoted_by: str, promoted_at: datetime) -> None:

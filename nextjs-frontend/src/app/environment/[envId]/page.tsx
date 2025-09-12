@@ -145,13 +145,32 @@ export default function EnvironmentAccessPage() {
     setIframeError(true);
   };
 
-  // Get application type from URL or environment metadata
-  const getAppType = (url: string) => {
-    if (url.includes('streamlit')) return 'Streamlit';
-    if (url.includes('jupyter')) return 'Jupyter';
-    if (url.includes('rstudio')) return 'RStudio';
-    if (url.includes('react')) return 'React App';
-    return 'Web Application';
+  // Get application display name, with fallback to type detection
+  const getApplicationName = (environment: Environment) => {
+    // First priority: use actual application name if available
+    if (environment.application_name) {
+      return environment.application_name;
+    }
+    
+    // Second priority: detect from URL for legacy environments
+    if (environment.url) {
+      if (environment.url.includes('streamlit')) return 'Streamlit Application';
+      if (environment.url.includes('jupyter')) return 'Jupyter Notebook';
+      if (environment.url.includes('rstudio')) return 'RStudio Server';
+      if (environment.url.includes('react')) return 'React Application';
+      if (environment.url.includes('python')) return 'Python Environment';
+    }
+    
+    // Third priority: use image name if available
+    if (environment.image) {
+      const imageName = environment.image.split('/').pop()?.split(':')[0];
+      if (imageName) {
+        return imageName.charAt(0).toUpperCase() + imageName.slice(1) + ' Environment';
+      }
+    }
+    
+    // Fallback
+    return 'Research Environment';
   };
 
   // Handle different states after all hooks are called
@@ -245,7 +264,7 @@ export default function EnvironmentAccessPage() {
                     <RocketOutlined style={{ fontSize: '18px' }} />
                   </div>
                   <Title level={2} style={{ margin: 0, color: 'var(--text-primary)' }}>
-                    {getAppType(environment.url || '')} Environment
+                    {getApplicationName(environment)}
                   </Title>
                 </div>
                 <Space size="medium">
@@ -268,31 +287,48 @@ export default function EnvironmentAccessPage() {
             </div>
 
             <Space size="middle">
-              <Tooltip title="Refresh application">
+              <Tooltip title="Refresh Environment">
                 <Button
+                  type="default"
                   icon={<ReloadOutlined />}
                   onClick={handleIframeReload}
                   className="glass-button"
                   loading={isLoading}
+                  style={{
+                    borderColor: 'var(--border-primary)',
+                    color: 'var(--text-primary)',
+                    background: 'var(--glass-bg-secondary)'
+                  }}
                 >
                   Refresh
                 </Button>
               </Tooltip>
-              <Tooltip title="Open in new tab">
+              <Tooltip title="Open in New Tab">
                 <Button
+                  type="primary"
                   icon={<LinkOutlined />}
                   onClick={handleExternalLink}
-                  type="primary"
                   className="glass-button"
+                  style={{
+                    background: 'var(--interactive-primary)',
+                    borderColor: 'var(--interactive-primary)',
+                    color: 'white'
+                  }}
                 >
                   Open External
                 </Button>
               </Tooltip>
-              <Tooltip title="Toggle fullscreen">
+              <Tooltip title="Toggle Fullscreen">
                 <Button
+                  type="default"
                   icon={<FullscreenOutlined />}
                   onClick={() => setFullscreen(!fullscreen)}
                   className="glass-button"
+                  style={{
+                    borderColor: 'var(--border-primary)',
+                    color: 'var(--text-primary)',
+                    background: 'var(--glass-bg-secondary)'
+                  }}
                 />
               </Tooltip>
             </Space>
@@ -381,12 +417,32 @@ export default function EnvironmentAccessPage() {
                   showIcon
                   action={
                     <Space>
-                      <Button onClick={handleIframeReload} icon={<ReloadOutlined />}>
-                        Retry Loading
-                      </Button>
-                      <Button type="primary" onClick={handleExternalLink} icon={<LinkOutlined />}>
-                        Open External
-                      </Button>
+                      <Tooltip title="Retry Loading">
+                        <Button 
+                          onClick={handleIframeReload} 
+                          icon={<ReloadOutlined />}
+                          style={{
+                            borderColor: 'var(--border-primary)',
+                            color: 'var(--text-primary)',
+                            background: 'var(--glass-bg-secondary)'
+                          }}
+                        >
+                          Retry Loading
+                        </Button>
+                      </Tooltip>
+                      <Tooltip title="Open in New Tab">
+                        <Button 
+                          type="primary" 
+                          onClick={handleExternalLink} 
+                          icon={<LinkOutlined />}
+                          style={{
+                            background: 'var(--interactive-primary)',
+                            borderColor: 'var(--interactive-primary)'
+                          }}
+                        >
+                          Open External
+                        </Button>
+                      </Tooltip>
                     </Space>
                   }
                   className="glass-alert"
@@ -461,17 +517,46 @@ export default function EnvironmentAccessPage() {
                 <RocketOutlined style={{ fontSize: '16px' }} />
               </div>
               <Text strong style={{ color: 'var(--text-primary)' }}>
-                {getAppType(environment.url || '')} - {environment.env_id}
+                {getApplicationName(environment)} - {environment.env_id}
               </Text>
             </div>
             <Space>
-              <Button onClick={handleIframeReload} icon={<ReloadOutlined />} className="glass-button">
-                Refresh
-              </Button>
-              <Button onClick={handleExternalLink} icon={<LinkOutlined />} className="glass-button">
-                External
-              </Button>
-              <Button onClick={() => setFullscreen(false)} type="primary">
+              <Tooltip title="Refresh Environment">
+                <Button 
+                  onClick={handleIframeReload} 
+                  icon={<ReloadOutlined />} 
+                  className="glass-button"
+                  style={{
+                    borderColor: 'var(--border-primary)',
+                    color: 'var(--text-primary)',
+                    background: 'var(--glass-bg-secondary)'
+                  }}
+                >
+                  Refresh
+                </Button>
+              </Tooltip>
+              <Tooltip title="Open in New Tab">
+                <Button 
+                  onClick={handleExternalLink} 
+                  icon={<LinkOutlined />} 
+                  className="glass-button"
+                  style={{
+                    borderColor: 'var(--border-primary)',
+                    color: 'var(--text-primary)',
+                    background: 'var(--glass-bg-secondary)'
+                  }}
+                >
+                  External
+                </Button>
+              </Tooltip>
+              <Button 
+                onClick={() => setFullscreen(false)} 
+                type="primary"
+                style={{
+                  background: 'var(--interactive-primary)',
+                  borderColor: 'var(--interactive-primary)'
+                }}
+              >
                 Exit Fullscreen
               </Button>
             </Space>

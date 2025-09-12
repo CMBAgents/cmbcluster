@@ -8,7 +8,9 @@ import type {
   ApiResponse, 
   EnvironmentConfig,
   UserEnvVar,
-  ApplicationImage
+  ApplicationImage,
+  ApplicationImageRequest,
+  UserWithRole
 } from '@/types';
 
 // Production configuration with enhanced security
@@ -265,7 +267,18 @@ class CMBClusterAPIClient {
   async listApplications(): Promise<ApiResponse<ApplicationImage[]>> {
     try {
       const response = await this.api.get('/applications');
-      return await this.handleResponse(response);
+      const data = await this.handleResponse(response);
+      
+      // Backend returns direct array, wrap in ApiResponse format
+      if (Array.isArray(data)) {
+        return {
+          status: 'success',
+          data: data,
+          applications: data
+        };
+      }
+      
+      return data;
     } catch (error) {
       return this.handleError(error);
     }
@@ -836,6 +849,144 @@ class CMBClusterAPIClient {
   async getActivityLog(limit: number = 50): Promise<ApiResponse> {
     try {
       const response = await this.api.get('/activity', { params: { limit } });
+      return await this.handleResponse(response);
+    } catch (error) {
+      return this.handleError(error);
+    }
+  }
+
+  // ============ ADMIN API METHODS ============
+
+  // Application Management (Admin)
+  async createApplication(app: ApplicationImageRequest): Promise<ApiResponse<ApplicationImage>> {
+    try {
+      const response = await this.api.post('/admin/applications', app);
+      return await this.handleResponse(response);
+    } catch (error) {
+      return this.handleError(error);
+    }
+  }
+
+  async updateApplication(id: string, app: Partial<ApplicationImageRequest>): Promise<ApiResponse<ApplicationImage>> {
+    try {
+      const response = await this.api.put(`/admin/applications/${id}`, app);
+      return await this.handleResponse(response);
+    } catch (error) {
+      return this.handleError(error);
+    }
+  }
+
+  async deleteApplication(id: string): Promise<ApiResponse> {
+    try {
+      const response = await this.api.delete(`/admin/applications/${id}`);
+      return await this.handleResponse(response);
+    } catch (error) {
+      return this.handleError(error);
+    }
+  }
+
+  async getAdminApplications(): Promise<ApiResponse<ApplicationImage[]>> {
+    try {
+      const response = await this.api.get('/admin/applications');
+      const data = await this.handleResponse(response);
+      
+      // Admin endpoints return direct arrays, wrap in ApiResponse format
+      if (Array.isArray(data)) {
+        return {
+          status: 'success',
+          data: data,
+          applications: data
+        };
+      }
+      
+      return data;
+    } catch (error) {
+      return this.handleError(error);
+    }
+  }
+
+  // Application creation/update with image upload
+  async createApplicationWithImage(formData: FormData): Promise<ApiResponse<ApplicationImage>> {
+    try {
+      console.log('Creating application with image via apiClient');
+      
+      // Use axios to post FormData with proper headers
+      const response = await this.api.post('/admin/applications-with-image', formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data'
+        }
+      });
+      
+      return await this.handleResponse(response);
+    } catch (error) {
+      console.error('Error in createApplicationWithImage:', error);
+      return this.handleError(error);
+    }
+  }
+
+  async updateApplicationWithImage(id: string, formData: FormData): Promise<ApiResponse<ApplicationImage>> {
+    try {
+      console.log('Updating application with image via apiClient', { id });
+      
+      // Use axios to put FormData with proper headers  
+      const response = await this.api.put(`/admin/applications-with-image/${id}`, formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data'
+        }
+      });
+      
+      return await this.handleResponse(response);
+    } catch (error) {
+      console.error('Error in updateApplicationWithImage:', error);
+      return this.handleError(error);
+    }
+  }
+
+  // User Management (Admin)
+  async getAllUsers(): Promise<ApiResponse<UserWithRole[]>> {
+    try {
+      const response = await this.api.get('/admin/users');
+      const data = await this.handleResponse(response);
+      
+      // Admin endpoints return direct arrays, wrap in ApiResponse format
+      if (Array.isArray(data)) {
+        return {
+          status: 'success',
+          data: data,
+          users: data
+        };
+      }
+      
+      return data;
+    } catch (error) {
+      return this.handleError(error);
+    }
+  }
+
+  async updateUserRole(userId: string, newRole: 'user' | 'admin' | 'researcher', reason?: string): Promise<ApiResponse> {
+    try {
+      const response = await this.api.post(`/admin/users/${userId}/role`, {
+        new_role: newRole,
+        reason
+      });
+      return await this.handleResponse(response);
+    } catch (error) {
+      return this.handleError(error);
+    }
+  }
+
+  async deactivateUser(userId: string): Promise<ApiResponse> {
+    try {
+      const response = await this.api.post(`/admin/users/${userId}/deactivate`);
+      return await this.handleResponse(response);
+    } catch (error) {
+      return this.handleError(error);
+    }
+  }
+
+  async getUserRoleHistory(userId: string): Promise<ApiResponse> {
+    try {
+      const response = await this.api.get(`/admin/users/${userId}/role-history`);
       return await this.handleResponse(response);
     } catch (error) {
       return this.handleError(error);

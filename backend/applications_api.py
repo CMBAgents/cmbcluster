@@ -16,8 +16,10 @@ async def list_public_applications(
 ):
     """List available applications for all users"""
     try:
+        logger.info("Listing public applications", user_id=current_user.get('sub'))
         db = get_database()
         applications = await db.list_applications()
+        logger.info("Found applications for public listing", count=len(applications))
         return applications
         
     except Exception as e:

@@ -27,8 +27,8 @@ gcloud auth configure-docker "$REGISTRY_HOSTNAME" --quiet
 
 #SERVICES=("backend" "frontend" "user-environment")
 
- SERVICES=("frontend")
-#  SERVICES=("backend" )
+# SERVICES=("frontend")
+SERVICES=("frontend" )
 # SERVICES=("frontend" "backend")
 for SERVICE in "${SERVICES[@]}"; do
     # Use nextjs-frontend directory for frontend service
@@ -55,3 +55,4 @@ echo "📋 Built images:"
 echo "- $IMAGE_REPO/cmbcluster-backend:$TAG"
 echo "- $IMAGE_REPO/cmbcluster-frontend:$TAG"
 echo "- $IMAGE_REPO/cmbcluster-user-env:$TAG"
+

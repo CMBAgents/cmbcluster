@@ -40,7 +40,7 @@ import {
   CodeOutlined,
   FileImageOutlined,
   FileZipOutlined,
-  VideoOutlined,
+  PlayCircleOutlined,
   AudioOutlined,
 } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
@@ -185,7 +185,7 @@ export default function StorageFileManager({ storageId, storageName }: StorageFi
     
     // Video files
     if (['mp4', 'avi', 'mov', 'mkv', 'webm'].includes(ext || '')) {
-      return <VideoOutlined style={{ color: 'var(--error-600)' }} />;
+      return <PlayCircleOutlined style={{ color: 'var(--error-600)' }} />;
     }
     
     // Audio files

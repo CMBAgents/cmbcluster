@@ -1,8 +1,13 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Form
+from fastapi.responses import JSONResponse, FileResponse
 from typing import Dict, List, Optional
+from pydantic import BaseModel
 import structlog
 from datetime import datetime
 import uuid
+import os
+import aiofiles
+from pathlib import Path
 
 from auth import get_current_user, require_role
 from models import User, UserRole, ActivityLog
@@ -12,28 +17,25 @@ logger = structlog.get_logger()
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 
-# Application/Image Management Models
-from pydantic import BaseModel
-
-class ApplicationImage(BaseModel):
-    id: str
-    name: str
-    summary: str
-    image_path: str
-    icon_url: Optional[str] = None
-    category: str = "research"
-    created_at: datetime
-    created_by: str
-    is_active: bool = True
-    tags: List[str] = []
+# Import application models from models.py
+from models import ApplicationImage
 
 class ApplicationImageRequest(BaseModel):
     name: str
     summary: str
     image_path: str
+    port: Optional[int] = 8888
     icon_url: Optional[str] = None
     category: str = "research"
     tags: List[str] = []
+
+class ApplicationImageRequestWithFile(BaseModel):
+    name: str
+    summary: str
+    image_path: str
+    port: Optional[int] = 8888
+    category: str = "research"
+    tags: str = ""  # Comma-separated string for form data
 
 class ApplicationImageResponse(BaseModel):
     status: str
@@ -93,13 +95,67 @@ async def log_role_change(changed_by: str, user_id: str, old_role: UserRole, new
     }
     await db.log_role_change(change_record)
 
+# Helper function to save uploaded image
+async def save_uploaded_image(file: UploadFile, app_name: str) -> str:
+    """Save uploaded image to GCS bucket and return the file path"""
+    import os
+    
+    # Determine the correct upload directory based on environment
+    # In production (k8s), use GCS FUSE mount at /app/data
+    # In development, use local uploads directory
+    if os.path.exists("/app/data"):
+        # Production: GCS FUSE mount
+        upload_dir = Path("/app/data/uploads/applications")
+        url_prefix = "/data"
+        logger.info("Using GCS FUSE mount for image storage", upload_dir=str(upload_dir))
+    else:
+        # Development: Local storage
+        upload_dir = Path("./uploads/applications")
+        url_prefix = "/uploads"
+        logger.info("Using local storage for image storage", upload_dir=str(upload_dir))
+    
+    try:
+        upload_dir.mkdir(parents=True, exist_ok=True)
+        logger.info("Upload directory created/verified", path=str(upload_dir))
+    except Exception as e:
+        logger.error("Failed to create upload directory", error=str(e), path=str(upload_dir))
+        raise
+    
+    # Generate safe filename
+    safe_name = "".join(c for c in app_name if c.isalnum() or c in (' ', '_', '-')).strip().replace(' ', '_')
+    file_extension = Path(file.filename).suffix if file.filename else '.png'
+    filename = f"{safe_name}_{uuid.uuid4().hex[:8]}{file_extension}"
+    file_path = upload_dir / filename
+    
+    logger.info("Saving uploaded image", filename=filename, path=str(file_path), size=file.size)
+    
+    try:
+        # Save file
+        async with aiofiles.open(file_path, 'wb') as f:
+            content = await file.read()
+            await f.write(content)
+        
+        # Verify file was saved
+        if not file_path.exists():
+            raise Exception(f"File was not saved successfully: {file_path}")
+        
+        logger.info("Image saved successfully", filename=filename, size=file_path.stat().st_size)
+        
+    except Exception as e:
+        logger.error("Failed to save image file", error=str(e), filename=filename)
+        raise
+    
+    # Return relative URL path for serving the image
+    # This allows the frontend to serve images from the same domain
+    return f"{url_prefix}/uploads/applications/{filename}"
+
 # Application/Image Management Endpoints
 @router.post("/applications", response_model=ApplicationImageResponse)
 async def create_application(
     request: ApplicationImageRequest,
-    current_user: Dict = Depends(require_admin_mode)
+    current_user: Dict = Depends(require_admin_mode())
 ):
-    """Create a new application image (admin only)"""
+    """Create a new application image (admin only) - for API usage"""
     try:
         db = get_database()
         
@@ -108,6 +164,7 @@ async def create_application(
             name=request.name,
             summary=request.summary,
             image_path=request.image_path,
+            port=request.port or 8888,
             icon_url=request.icon_url,
             category=request.category,
             created_at=datetime.utcnow(),
@@ -136,9 +193,115 @@ async def create_application(
             detail="Failed to create application"
         )
 
+# Test endpoint for debugging
+@router.post("/test-form")
+async def test_form_submission(
+    name: str = Form(...),
+    summary: str = Form(...),
+    current_user: Dict = Depends(require_admin_mode())
+):
+    """Test endpoint to verify form submission is working"""
+    return JSONResponse({
+        "status": "success",
+        "message": "Form submission test successful",
+        "data": {"name": name, "summary": summary}
+    })
+
+@router.post("/applications-with-image", response_model=ApplicationImageResponse)
+async def create_application_with_image(
+    name: str = Form(...),
+    summary: str = Form(...),
+    image_path: str = Form(...),
+    category: str = Form("research"),
+    port: int = Form(8888),
+    tags: str = Form(""),
+    image_file: Optional[UploadFile] = File(None),
+    current_user: Dict = Depends(require_admin_mode())
+):
+    """Create a new application image with optional image upload (admin only)"""
+    logger.info("Starting application creation with image", 
+                name=name, 
+                summary=summary[:50] + "..." if len(summary) > 50 else summary,
+                image_path=image_path,
+                category=category,
+                port=port,
+                tags=tags,
+                has_image_file=image_file is not None,
+                image_file_size=image_file.size if image_file else 0,
+                user_id=current_user.get("sub"))
+    
+    try:
+        db = get_database()
+        logger.info("Database connection obtained")
+        
+        # Handle image upload if provided
+        icon_url = None
+        if image_file and image_file.size > 0:
+            # Validate file type
+            if not image_file.content_type.startswith('image/'):
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="File must be an image"
+                )
+            
+            # Save uploaded image
+            try:
+                icon_url = await save_uploaded_image(image_file, name)
+                logger.info("Image uploaded successfully", filename=icon_url, app_name=name)
+            except Exception as img_error:
+                logger.error("Failed to save uploaded image", error=str(img_error), app_name=name)
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail=f"Failed to save uploaded image: {str(img_error)}"
+                )
+        
+        # Parse tags
+        tags_list = [tag.strip() for tag in tags.split(',') if tag.strip()] if tags else []
+        
+        application = ApplicationImage(
+            id=str(uuid.uuid4()),
+            name=name,
+            summary=summary,
+            image_path=image_path,
+            port=port,
+            icon_url=icon_url,
+            category=category,
+            created_at=datetime.utcnow(),
+            created_by=current_user["sub"],
+            is_active=True,
+            tags=tags_list
+        )
+        
+        await db.create_application(application)
+        
+        logger.info("Application created with image", 
+                   application_id=application.id,
+                   name=application.name,
+                   has_image=icon_url is not None,
+                   created_by=current_user["email"])
+        
+        return ApplicationImageResponse(
+            status="success",
+            message="Application created successfully",
+            application=application
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        import traceback
+        logger.error("Failed to create application with image", 
+                    error=str(e), 
+                    traceback=traceback.format_exc(),
+                    name=name)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to create application: {str(e)}"
+        )
+
 @router.get("/applications", response_model=List[ApplicationImage])
 async def list_applications(
-    current_user: Dict = Depends(require_admin_mode)
+    current_user: Dict = Depends(require_admin_mode())
 ):
     """List all applications (admin only)"""
     try:
@@ -157,9 +320,9 @@ async def list_applications(
 async def update_application(
     application_id: str,
     request: ApplicationImageRequest,
-    current_user: Dict = Depends(require_admin_mode)
+    current_user: Dict = Depends(require_admin_mode())
 ):
-    """Update an application (admin only)"""
+    """Update an application (admin only) - for API usage"""
     try:
         db = get_database()
         
@@ -176,6 +339,7 @@ async def update_application(
             name=request.name,
             summary=request.summary,
             image_path=request.image_path,
+            port=request.port or 8888,
             icon_url=request.icon_url,
             category=request.category,
             created_at=existing_app.created_at,
@@ -205,10 +369,105 @@ async def update_application(
             detail="Failed to update application"
         )
 
+@router.put("/applications-with-image/{application_id}", response_model=ApplicationImageResponse)
+async def update_application_with_image(
+    application_id: str,
+    name: str = Form(...),
+    summary: str = Form(...),
+    image_path: str = Form(...),
+    category: str = Form("research"),
+    port: int = Form(8888),
+    tags: str = Form(""),
+    image_file: Optional[UploadFile] = File(None),
+    current_user: Dict = Depends(require_admin_mode())
+):
+    """Update an application with optional image upload (admin only)"""
+    try:
+        db = get_database()
+        
+        existing_app = await db.get_application(application_id)
+        if not existing_app:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Application not found"
+            )
+        
+        # Handle image upload if provided
+        icon_url = existing_app.icon_url  # Keep existing image by default
+        if image_file and image_file.size > 0:
+            # Validate file type
+            if not image_file.content_type.startswith('image/'):
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="File must be an image"
+                )
+            
+            # Delete old image file if it exists in GCS storage
+            if existing_app.icon_url and existing_app.icon_url.startswith('/data/uploads/'):
+                try:
+                    # Remove /data prefix to get the actual file path in the mounted GCS bucket
+                    relative_path = existing_app.icon_url.replace('/data/', '')
+                    old_file_path = Path(f"/app/data/{relative_path}")
+                    if old_file_path.exists():
+                        old_file_path.unlink()
+                except Exception as e:
+                    logger.warning("Failed to delete old image file from GCS", error=str(e))
+            
+            # Save new uploaded image
+            try:
+                icon_url = await save_uploaded_image(image_file, name)
+                logger.info("Image uploaded successfully", filename=icon_url, app_name=name)
+            except Exception as img_error:
+                logger.error("Failed to save uploaded image", error=str(img_error), app_name=name)
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail=f"Failed to save uploaded image: {str(img_error)}"
+                )
+        
+        # Parse tags
+        tags_list = [tag.strip() for tag in tags.split(',') if tag.strip()] if tags else []
+        
+        # Update application
+        updated_app = ApplicationImage(
+            id=application_id,
+            name=name,
+            summary=summary,
+            image_path=image_path,
+            port=port,
+            icon_url=icon_url,
+            category=category,
+            created_at=existing_app.created_at,
+            created_by=existing_app.created_by,
+            is_active=existing_app.is_active,
+            tags=tags_list
+        )
+        
+        await db.update_application(updated_app)
+        
+        logger.info("Application updated with image",
+                   application_id=application_id,
+                   has_new_image=image_file is not None and image_file.size > 0,
+                   updated_by=current_user["email"])
+        
+        return ApplicationImageResponse(
+            status="success",
+            message="Application updated successfully",
+            application=updated_app
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("Failed to update application with image", error=str(e))
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to update application"
+        )
+
 @router.delete("/applications/{application_id}")
 async def delete_application(
     application_id: str,
-    current_user: Dict = Depends(require_admin_mode)
+    current_user: Dict = Depends(require_admin_mode())
 ):
     """Delete an application (admin only)"""
     try:
@@ -241,7 +500,7 @@ async def delete_application(
 # User Management Endpoints
 @router.get("/users", response_model=List[UserWithRole])
 async def list_users(
-    current_user: Dict = Depends(require_admin_mode)
+    current_user: Dict = Depends(require_admin_mode())
 ):
     """List all users with their roles (admin only)"""
     try:
@@ -273,11 +532,85 @@ async def list_users(
             detail="Failed to list users"
         )
 
+@router.post("/users/{user_id}/role")
+async def update_user_role(
+    user_id: str,
+    request: UserManagementRequest,
+    current_user: Dict = Depends(require_admin_mode())
+):
+    """Update user role (admin only)"""
+    try:
+        db = get_database()
+        
+        # Get target user
+        target_user = await db.get_user(user_id)
+        if not target_user:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="User not found"
+            )
+        
+        # Prevent self-demotion from admin
+        if (user_id == current_user["sub"] and 
+            target_user.role == UserRole.ADMIN and 
+            request.new_role != UserRole.ADMIN):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Cannot demote yourself"
+            )
+        
+        # Check if role is actually changing
+        if target_user.role == request.new_role:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"User already has {request.new_role.value} role"
+            )
+        
+        # Update user role
+        old_role = target_user.role
+        await db.update_user_role(
+            user_id, 
+            request.new_role, 
+            current_user["sub"], 
+            datetime.utcnow()
+        )
+        
+        # Log the role change
+        await log_role_change(
+            current_user["sub"], 
+            user_id, 
+            old_role, 
+            request.new_role, 
+            request.reason
+        )
+        
+        logger.info("User role updated",
+                   user_id=user_id,
+                   user_email=target_user.email,
+                   old_role=old_role.value,
+                   new_role=request.new_role.value,
+                   updated_by=current_user["email"],
+                   reason=request.reason)
+        
+        return {
+            "status": "success",
+            "message": f"User {target_user.name} role updated to {request.new_role.value} successfully"
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("Failed to update user role", error=str(e))
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to update user role"
+        )
+
 @router.post("/users/{user_id}/promote")
 async def promote_user_to_admin(
     user_id: str,
     request: UserManagementRequest,
-    current_user: Dict = Depends(require_admin_mode)
+    current_user: Dict = Depends(require_admin_mode())
 ):
     """Promote a user to admin role (admin only)"""
     try:
@@ -339,7 +672,7 @@ async def promote_user_to_admin(
 async def demote_admin_to_user(
     user_id: str,
     request: UserManagementRequest,
-    current_user: Dict = Depends(require_admin_mode)
+    current_user: Dict = Depends(require_admin_mode())
 ):
     """Demote an admin to user role (admin only)"""
     try:
@@ -407,7 +740,7 @@ async def demote_admin_to_user(
 @router.get("/users/{user_id}/audit", response_model=List[RoleChangeRecord])
 async def get_user_role_history(
     user_id: str,
-    current_user: Dict = Depends(require_admin_mode)
+    current_user: Dict = Depends(require_admin_mode())
 ):
     """Get role change history for a user (admin only)"""
     try:
@@ -425,7 +758,7 @@ async def get_user_role_history(
 @router.post("/users/{user_id}/deactivate")
 async def deactivate_user(
     user_id: str,
-    current_user: Dict = Depends(require_admin_mode)
+    current_user: Dict = Depends(require_admin_mode())
 ):
     """Deactivate a user account (admin only)"""
     try:
@@ -469,7 +802,7 @@ async def deactivate_user(
 @router.post("/users/{user_id}/activate")
 async def activate_user(
     user_id: str,
-    current_user: Dict = Depends(require_admin_mode)
+    current_user: Dict = Depends(require_admin_mode())
 ):
     """Activate a user account (admin only)"""
     try:
@@ -501,4 +834,62 @@ async def activate_user(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to activate user"
+        )
+
+@router.get("/data/uploads/applications/{filename}")
+async def serve_application_image(filename: str):
+    """Serve application image files from GCS storage"""
+    try:
+        # Check if we're in production (GCS FUSE mount exists)
+        if os.path.exists("/app/data"):
+            # Production: GCS FUSE mount
+            file_path = Path(f"/app/data/uploads/applications/{filename}")
+        else:
+            # Development: Local storage
+            file_path = Path(f"./uploads/applications/{filename}")
+        
+        # Verify file exists
+        if not file_path.exists():
+            logger.warning("Application image not found", filename=filename, path=str(file_path))
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Image not found"
+            )
+        
+        # Verify it's an image file
+        allowed_extensions = {'.png', '.jpg', '.jpeg', '.gif', '.webp', '.svg'}
+        if file_path.suffix.lower() not in allowed_extensions:
+            logger.warning("Invalid file type requested", filename=filename, extension=file_path.suffix)
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Invalid file type"
+            )
+        
+        logger.info("Serving application image", filename=filename, path=str(file_path), size=file_path.stat().st_size)
+        
+        # Determine media type
+        media_type_map = {
+            '.png': 'image/png',
+            '.jpg': 'image/jpeg', 
+            '.jpeg': 'image/jpeg',
+            '.gif': 'image/gif',
+            '.webp': 'image/webp',
+            '.svg': 'image/svg+xml'
+        }
+        media_type = media_type_map.get(file_path.suffix.lower(), 'application/octet-stream')
+        
+        return FileResponse(
+            path=str(file_path),
+            media_type=media_type,
+            filename=filename,
+            headers={"Cache-Control": "public, max-age=3600"}  # Cache for 1 hour
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("Failed to serve application image", filename=filename, error=str(e))
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to serve image"
         )

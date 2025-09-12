@@ -92,6 +92,34 @@ class Settings(BaseSettings):
     redis_url: Optional[str] = None
     redis_enabled: bool = False
     
+    # Admin user configuration  
+    admin_emails: List[str] = [
+        "g22yash.tiwari@gmail.com", 
+        "22yash.tiwari@gmail.com"  # Both variations of the email
+    ]
+    first_user_is_admin: bool = True  # First user automatically becomes admin
+    
+    def get_admin_emails(self) -> List[str]:
+        """Get admin emails from config and environment variables"""
+        emails = list(self.admin_emails)  # Start with configured emails
+        
+        # Add emails from environment variable (comma-separated)
+        env_emails = os.getenv("ADMIN_EMAILS", "").strip()
+        if env_emails:
+            env_email_list = [email.strip() for email in env_emails.split(",") if email.strip()]
+            emails.extend(env_email_list)
+        
+        # Remove duplicates (case-insensitive)
+        unique_emails = []
+        seen = set()
+        for email in emails:
+            email_lower = email.lower()
+            if email_lower not in seen:
+                unique_emails.append(email)
+                seen.add(email_lower)
+        
+        return unique_emails
+    
     def get_allowed_origins(self) -> List[str]:
         """Get allowed CORS origins based on environment"""
         if self.dev_mode:
@@ -200,6 +228,7 @@ class Settings(BaseSettings):
     class Config:
         env_file = ".env"
         case_sensitive = False
+        extra = "allow"  # Allow extra fields from .env file
 
 settings = Settings()
 

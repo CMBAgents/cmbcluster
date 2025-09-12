@@ -19,17 +19,19 @@ PROJECT_ID=${1:-$PROJECT_ID}
 CLUSTER_NAME=${2:-$CLUSTER_NAME}
 REGION=${3:-$REGION}
 ZONE=${4:-$ZONE}
+RELEASE_CHANNEL=${5:-$RELEASE_CHANNEL}
 
 # Set final defaults if variables are still not set
 PROJECT_ID=${PROJECT_ID:-$(gcloud config get-value project)}
 CLUSTER_NAME=${CLUSTER_NAME:-"cmbcluster"}
 REGION=${REGION:-"us-central1"}
 ZONE=${ZONE:-"${ZONE}"}
+RELEASE_CHANNEL=${RELEASE_CHANNEL:-"regular"} # Options: rapid, regular, stable
 
 # Validate required variables
 if [ -z "$PROJECT_ID" ]; then
     echo "Error: PROJECT_ID is required. Set it in .env or pass as an argument."
-    echo "Usage: $0 [PROJECT_ID] [CLUSTER_NAME] [REGION] [ZONE]"
+    echo "Usage: $0 [PROJECT_ID] [CLUSTER_NAME] [REGION] [ZONE] [RELEASE_CHANNEL]"
     exit 1
 fi
 
@@ -39,6 +41,7 @@ echo "Project:      $PROJECT_ID"
 echo "Cluster:      $CLUSTER_NAME"
 echo "Region:       $REGION"
 echo "Zone:         $ZONE"
+echo "Channel:      $RELEASE_CHANNEL"
 echo "--------------------------------------------------"
 
 # Get current external IP for master authorized networks
@@ -184,6 +187,7 @@ if ! gcloud container clusters describe $CLUSTER_NAME --zone=$ZONE --project=$PR
     # Using pd-balanced for node disk type for better performance than pd-standard
     # Note: The 'cmbcluster-ssd' StorageClass is for PVCs, not node boot disks.
     gcloud container clusters create $CLUSTER_NAME \
+        --release-channel=$RELEASE_CHANNEL \
         --zone=$ZONE \
         --network=$NETWORK_NAME \
         --subnetwork=$SUBNET_NAME \

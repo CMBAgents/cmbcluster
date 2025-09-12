@@ -9,6 +9,7 @@ import structlog
 from fastapi import FastAPI, Depends, HTTPException, Request, BackgroundTasks, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from fastapi.staticfiles import StaticFiles
 from fastapi import Body, Path
 from fastapi.security import HTTPBearer
 from pydantic import BaseModel
@@ -62,17 +63,7 @@ async def lifespan(app: FastAPI):
     logger.info("Database initialized", db_path=settings.database_path)
     
     # Check file encryption health
-    try:
-        from file_migration import check_file_decryption_health
-        healthy, failed_files = check_file_decryption_health()
-        if not healthy:
-            logger.warning("Some environment files cannot be decrypted with current key", 
-                         failed_count=len(failed_files))
-            logger.warning("Users may need to re-upload failed files")
-        else:
-            logger.info("All environment files can be decrypted successfully")
-    except Exception as e:
-        logger.warning("Could not check file encryption health", error=str(e))
+
     
     # Initialize pod manager (it will use the global database instance)
     app_state["pod_manager"] = PodManager()
@@ -161,6 +152,19 @@ import admin_api
 import applications_api
 app.include_router(admin_api.router)
 app.include_router(applications_api.router)
+
+# Mount static files for uploaded images
+# Support both development (local) and production (GCS FUSE) environments
+import os
+if os.path.exists("/app/data"):
+    # Production: Mount GCS FUSE directory
+    app.mount("/data", StaticFiles(directory="/app/data"), name="gcs-data")
+    logger.info("Mounted GCS FUSE storage at /data")
+else:
+    # Development: Mount local uploads directory
+    os.makedirs("uploads", exist_ok=True)
+    app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
+    logger.info("Mounted local storage at /uploads")
 
 
 # Remove non-working router includes - main.py direct endpoints are used instead
@@ -309,6 +313,68 @@ async def health_check():
         uptime=uptime
     )
 
+@app.get("/data/uploads/applications/{filename}")
+async def serve_application_image_direct(filename: str):
+    """Direct endpoint to serve application images from GCS storage (without /admin prefix)"""
+    from fastapi.responses import FileResponse
+    import os
+    from pathlib import Path
+    
+    try:
+        # Check if we're in production (GCS FUSE mount exists)
+        if os.path.exists("/app/data"):
+            # Production: GCS FUSE mount
+            file_path = Path(f"/app/data/uploads/applications/{filename}")
+        else:
+            # Development: Local storage
+            file_path = Path(f"./uploads/applications/{filename}")
+        
+        # Verify file exists
+        if not file_path.exists():
+            logger.warning("Application image not found", filename=filename, path=str(file_path))
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Image not found"
+            )
+        
+        # Verify it's an image file
+        allowed_extensions = {'.png', '.jpg', '.jpeg', '.gif', '.webp', '.svg'}
+        if file_path.suffix.lower() not in allowed_extensions:
+            logger.warning("Invalid file type requested", filename=filename, extension=file_path.suffix)
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Invalid file type"
+            )
+        
+        logger.info("Serving application image", filename=filename, path=str(file_path), size=file_path.stat().st_size)
+        
+        # Determine media type
+        media_type_map = {
+            '.png': 'image/png',
+            '.jpg': 'image/jpeg', 
+            '.jpeg': 'image/jpeg',
+            '.gif': 'image/gif',
+            '.webp': 'image/webp',
+            '.svg': 'image/svg+xml'
+        }
+        media_type = media_type_map.get(file_path.suffix.lower(), 'application/octet-stream')
+        
+        return FileResponse(
+            path=str(file_path),
+            media_type=media_type,
+            filename=filename,
+            headers={"Cache-Control": "public, max-age=3600"}  # Cache for 1 hour
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("Failed to serve application image", filename=filename, error=str(e))
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to serve image"
+        )
+
 @app.post("/environments", tags=["environments"])
 async def create_environment(
     request: EnvironmentRequest,
@@ -319,6 +385,7 @@ async def create_environment(
     user_id = current_user["sub"]
     user_email = current_user["email"]
     
+    logger.info("Creating environment", user_id=user_id, user_email=user_email, request=request.dict())
     pod_manager = app_state["pod_manager"]
     
     try:
@@ -352,11 +419,25 @@ async def create_environment(
         }
         
     except Exception as e:
-        logger.error("Failed to create environment", user_id=user_id, error=str(e))
+        import traceback
+        logger.error("Failed to create environment", 
+                   user_id=user_id, 
+                   error=str(e), 
+                   traceback=traceback.format_exc())
         await log_activity(user_id, "environment_creation_failed", str(e))
+        
+        # Provide more detailed error message
+        error_detail = f"Failed to create environment: {str(e)}"
+        if "already exists" in str(e).lower():
+            error_detail = "Environment with this configuration already exists"
+        elif "resource" in str(e).lower():
+            error_detail = "Insufficient resources available"
+        elif "storage" in str(e).lower():
+            error_detail = f"Storage configuration error: {str(e)}"
+        
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to create environment"
+            detail=error_detail
         )
 
 @app.get("/environments/{env_id}/info", tags=["environments"])

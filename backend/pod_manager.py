@@ -56,28 +56,65 @@ class PodManager:
                 raise
         return secret_name
     
-    async def _resolve_image_path(self, config: EnvironmentRequest) -> str:
-        """Resolve the container image path from application ID or use default"""
-        # If application_id is provided, look up the image path
+    async def _resolve_image_config(self, config: EnvironmentRequest) -> tuple[str, int]:
+        """Resolve the container image path and port from application ID or use defaults"""
+        # If application_id is provided, look up the image path and port
         if hasattr(config, 'application_id') and config.application_id:
             try:
+                logger.info("Looking up application", application_id=config.application_id)
                 application = await self.db.get_application(config.application_id)
                 if application and application.is_active:
+                    port = getattr(application, 'port', 8888) or 8888
                     logger.info("Using application image", 
                               application_id=config.application_id,
                               application_name=application.name,
-                              image_path=application.image_path)
-                    return application.image_path
+                              image_path=application.image_path,
+                              port=port)
+                    
+                    # Validate image path
+                    if not application.image_path or not application.image_path.strip():
+                        logger.warning("Application has empty image path, using default",
+                                     application_id=config.application_id)
+                        # Fall through to defaults
+                    else:
+                        return application.image_path, port
                 else:
                     logger.warning("Application not found or inactive, using default image",
-                                 application_id=config.application_id)
+                                 application_id=config.application_id,
+                                 application_exists=application is not None,
+                                 application_active=application.is_active if application else None)
             except Exception as e:
                 logger.error("Failed to resolve application image, using default",
                            application_id=config.application_id,
                            error=str(e))
+                import traceback
+                logger.error("Application lookup traceback", traceback=traceback.format_exc())
         
         # Fall back to explicit image or default
-        return config.image or f"{settings.registry_url}/cmbagent:latest"
+        image = config.image or f"{settings.registry_url}/cmbagent:latest"
+        port = getattr(config, 'port', 8888)  # Default port if not specified
+        return image, port
+
+    async def _resolve_image_path(self, config: EnvironmentRequest) -> str:
+        """Legacy method for backward compatibility"""
+        image, _ = await self._resolve_image_config(config)
+        return image
+
+    def _sanitize_k8s_key(self, key: str) -> str:
+        """Sanitize a string to be a valid Kubernetes Secret/ConfigMap key"""
+        import re
+        # Kubernetes keys must consist of alphanumeric characters, '-', '_' or '.'
+        # Replace invalid characters with underscores
+        sanitized = re.sub(r'[^a-zA-Z0-9._-]', '_', key)
+        
+        # Ensure it doesn't start or end with special characters
+        sanitized = sanitized.strip('._-')
+        
+        # Ensure it's not empty
+        if not sanitized:
+            sanitized = "file"
+        
+        return sanitized
 
     async def _create_file_secret(self, safe_user_id: str, env_id: str, user_files: dict):
         """Create a Kubernetes Secret for user files"""
@@ -92,18 +129,30 @@ class PodManager:
         # Decrypt and prepare file data for secret
         encryption = get_file_encryption()
         secret_data = {}
+        key_mapping = {}  # Track original filename to sanitized key mapping
         
         for file_id, user_file in user_files.items():
             try:
                 # Decrypt file content
                 decrypted_content = encryption.decrypt_content(user_file.encrypted_content)
                 
-                # Use a filename based on the container path
-                filename = os.path.basename(user_file.container_path)
-                secret_data[filename] = decrypted_content
+                # Use a filename based on the container path, but sanitize for Kubernetes
+                original_filename = os.path.basename(user_file.container_path)
+                sanitized_key = self._sanitize_k8s_key(original_filename)
+                
+                # Handle potential key collisions by adding a suffix
+                counter = 1
+                unique_key = sanitized_key
+                while unique_key in secret_data:
+                    unique_key = f"{sanitized_key}_{counter}"
+                    counter += 1
+                
+                secret_data[unique_key] = decrypted_content
+                key_mapping[unique_key] = original_filename
                 
                 logger.debug("Added file to secret", 
-                           filename=filename, 
+                           original_filename=original_filename,
+                           sanitized_key=unique_key,
                            env_var=user_file.environment_variable_name,
                            container_path=user_file.container_path)
                 
@@ -119,7 +168,13 @@ class PodManager:
                              filename=user_file.file_name)
         
         if not secret_data:
+            logger.info("No file data to create secret with", user_files_count=len(user_files))
             return None
+        
+        logger.info("Creating file secret with sanitized keys",
+                   secret_name=secret_name,
+                   file_count=len(secret_data),
+                   key_mapping=key_mapping)
         
         secret = V1Secret(
             metadata={"name": secret_name, "namespace": namespace},
@@ -273,8 +328,8 @@ class PodManager:
             # Handle storage selection/creation
             storage = await self._handle_storage_selection(user_id, config)
             
-            # Resolve image path from application ID if provided
-            image_path = await self._resolve_image_path(config)
+            # Resolve image path and port from application ID if provided
+            image_path, container_port = await self._resolve_image_config(config)
 
             # Create secret for env vars
             secret_name = await self._create_env_secret(safe_user_id, env_id, merged_env_vars)
@@ -283,19 +338,39 @@ class PodManager:
             file_secret_name = await self._create_file_secret(safe_user_id, env_id, user_files)
 
             # Create pod with cloud storage, referencing secrets
+            logger.info("Building pod specification", 
+                       pod_name=pod_name,
+                       image_path=image_path,
+                       container_port=container_port)
+            
             pod_spec = self._build_pod_spec_with_storage(
-                user_id, safe_user_id, env_id, user_email, pod_name, config, storage, secret_name, file_secret_name, image_path
+                user_id, safe_user_id, env_id, user_email, pod_name, config, storage, secret_name, file_secret_name, image_path, container_port
             )
-            self.k8s_client.create_namespaced_pod(
-                namespace=namespace, 
-                body=pod_spec
-            )
+            
+            logger.info("Creating pod in Kubernetes", pod_name=pod_name, namespace=namespace)
+            try:
+                self.k8s_client.create_namespaced_pod(
+                    namespace=namespace, 
+                    body=pod_spec
+                )
+                logger.info("Pod created successfully", pod_name=pod_name)
+            except Exception as k8s_error:
+                logger.error("Kubernetes pod creation failed", 
+                           pod_name=pod_name,
+                           error=str(k8s_error),
+                           error_type=type(k8s_error).__name__)
+                if hasattr(k8s_error, 'status') and hasattr(k8s_error, 'reason'):
+                    logger.error("Kubernetes API error details",
+                               status=k8s_error.status,
+                               reason=k8s_error.reason,
+                               body=getattr(k8s_error, 'body', None))
+                raise
 
             # Create service
-            await self._create_user_service(safe_user_id, env_id)
+            await self._create_user_service(safe_user_id, env_id, container_port)
 
             # Create ingress
-            await self._create_user_ingress(safe_user_id, env_id)
+            await self._create_user_ingress(safe_user_id, env_id, container_port)
 
             # Create environment record
             environment = Environment(
@@ -568,7 +643,8 @@ class PodManager:
         storage: UserStorage,
         secret_name: str = None,
         file_secret_name: str = None,
-        image_path: str = None
+        image_path: str = None,
+        container_port: int = 8888
     ) -> Dict:
         """Build Kubernetes pod specification with cloud storage and env secret"""
         image = image_path or config.image or f"{settings.registry_url}/cmbagent:latest"
@@ -660,7 +736,7 @@ class PodManager:
                 "containers": [{
                     "name": "cmbagent",
                     "image": image,
-                    "ports": [{"containerPort": 3000, "name": "ui"}],
+                    "ports": [{"containerPort": container_port, "name": "ui"}],
                     "env": env_list,
                     "envFrom": env_from,
                     "resources": {
@@ -708,10 +784,14 @@ class PodManager:
                       env_id=env_id)
         pass
     
-    async def _create_user_service(self, safe_user_id: str, env_id: str):
+    async def _create_user_service(self, safe_user_id: str, env_id: str, container_port: int = 8888):
         """Create Kubernetes service for user pod"""
         service_name = f"service-{safe_user_id}-{env_id}"
         namespace = settings.namespace
+        
+        logger.info("Creating service with dynamic port", 
+                   service_name=service_name,
+                   container_port=container_port)
         
         service_spec = {
             "apiVersion": "v1",
@@ -728,8 +808,8 @@ class PodManager:
             "spec": {
                 "selector": {"user-id": safe_user_id, "env-id": env_id},
                 "ports": [{
-                    "port": 80,
-                    "targetPort": 3000,
+                    "port": 80,  # External port (ingress -> service)
+                    "targetPort": container_port,  # Dynamic port to container
                     "protocol": "TCP"
                 }],
                 "type": "ClusterIP"
@@ -748,12 +828,17 @@ class PodManager:
             else:
                 raise
 
-    async def _create_user_ingress(self, safe_user_id: str, env_id: str):
+    async def _create_user_ingress(self, safe_user_id: str, env_id: str, container_port: int = 8888):
         """Create Kubernetes ingress for user pod"""
         ingress_name = f"ingress-{safe_user_id}-{env_id}"
         service_name = f"service-{safe_user_id}-{env_id}"
         namespace = settings.namespace
         host = f"{safe_user_id}-{env_id}.{settings.base_domain}"
+        
+        logger.info("Creating ingress with dynamic port", 
+                   ingress_name=ingress_name,
+                   host=host,
+                   container_port=container_port)
         
         # Base annotations
         annotations = {
@@ -803,7 +888,7 @@ class PodManager:
                                 "service": {
                                     "name": service_name,
                                     "port": {
-                                        "number": 80
+                                        "number": 80  # Service port (ingress -> service), service handles dynamic targetPort to container
                                     }
                                 }
                             }

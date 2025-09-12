@@ -20,6 +20,8 @@ export interface Environment {
   namespace?: string;
   image?: string;
   port?: number;
+  application_id?: string;
+  application_name?: string;
   resource_config?: {
     cpu_limit: number;
     memory_limit: string;
@@ -96,6 +98,7 @@ export interface ApplicationImage {
   name: string;
   summary: string;
   image_path: string;
+  port?: number;
   icon_url?: string;
   category: string;
   created_at: string;
@@ -108,6 +111,7 @@ export interface ApplicationImageRequest {
   name: string;
   summary: string;
   image_path: string;
+  port?: number;
   icon_url?: string;
   category?: string;
   tags?: string[];

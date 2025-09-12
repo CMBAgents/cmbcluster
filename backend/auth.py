@@ -281,6 +281,40 @@ async def oauth_callback(request: Request):
 
 # Legacy endpoint removed - use /auth/exchange instead
 
+async def determine_user_role(email: str, db) -> UserRole:
+    """
+    Determine user role based on project ownership logic:
+    1. First user in the system becomes admin (project owner)
+    2. Check against configured admin emails
+    3. Default to user role
+    """
+    try:
+        # Check if this is the first user (project owner)
+        if settings.first_user_is_admin:
+            try:
+                existing_users = await db.list_all_users()
+                if not existing_users or len(existing_users) == 0:
+                    logger.info("First user detected, assigning admin role", email=email)
+                    return UserRole.ADMIN
+            except Exception as e:
+                logger.warning("Error checking existing users, proceeding to email check", error=str(e), email=email)
+        
+        # Check if email matches any configured admin emails
+        admin_emails = settings.get_admin_emails()
+        logger.info("Checking admin emails", email=email, admin_emails=admin_emails)
+        
+        if email.lower() in [admin_email.lower() for admin_email in admin_emails]:
+            logger.info("Admin email detected, assigning admin role", email=email, admin_emails=admin_emails)
+            return UserRole.ADMIN
+            
+        # Default to user role
+        logger.info("Assigning user role", email=email)
+        return UserRole.USER
+        
+    except Exception as e:
+        logger.warning("Error determining user role, defaulting to user", error=str(e), email=email)
+        return UserRole.USER
+
 async def create_or_update_user(user_info: Dict) -> User:
     """Create or update user from OAuth info using database"""
     user_id = user_info.get('sub')
@@ -301,14 +335,29 @@ async def create_or_update_user(user_info: Dict) -> User:
         existing_user.last_login = datetime.utcnow()
         existing_user.name = name
         existing_user.email = email
+        
+        # Check if existing user should be promoted to admin
+        if existing_user.role == UserRole.USER:
+            should_be_admin_role = await determine_user_role(email, db)
+            if should_be_admin_role == UserRole.ADMIN:
+                logger.info("Promoting existing user to admin", 
+                           user_id=user_id, 
+                           email=email,
+                           old_role=existing_user.role.value)
+                await db.update_user_role(user_id, UserRole.ADMIN, "system", datetime.utcnow())
+                existing_user.role = UserRole.ADMIN
+        
         return existing_user
     else:
+        # Determine user role - first user becomes admin (project owner)
+        user_role = await determine_user_role(email, db)
+        
         # Create new user
         user = User(
             id=user_id,
             email=email,
             name=name,
-            role=UserRole.USER,
+            role=user_role,
             created_at=datetime.utcnow(),
             last_login=datetime.utcnow(),
             is_active=True
@@ -317,7 +366,8 @@ async def create_or_update_user(user_info: Dict) -> User:
         
         logger.info("New user created", 
                    user_id=user_id, 
-                   email=email)
+                   email=email,
+                   role=user_role.value)
         
         return user
 

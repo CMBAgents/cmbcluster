@@ -54,31 +54,47 @@ interface MainLayoutProps {
 }
 
 export default function MainLayout({ children }: MainLayoutProps) {
-  const [collapsed, setCollapsed] = useState(false);
+  const [collapsed, setCollapsed] = useState(true); // Start minimized by default
   const { data: session } = useSession();
   const router = useRouter();
   const pathname = usePathname();
   const { theme, toggleTheme } = useTheme();
   const { canSwitchToAdmin, currentRole, switchToAdmin, switchToUser } = useAdmin();
 
-  // Memoize logo to prevent re-rendering
-  const logoElement = useMemo(() => (
-    <img
-      src="/logos/cmbagent-logo.png"
-      alt="CMBAgent"
-      width={24}
-      height={24}
-      style={{ 
-        filter: 'brightness(1.1)',
-        display: 'block',
-        objectFit: 'contain',
-        pointerEvents: 'none',
-        userSelect: 'none'
-      }}
-      loading="eager"
-      decoding="sync"
-    />
-  ), []);
+  // Static logo element - no dependencies to prevent refreshing
+  const logoElement = useMemo(() => {
+    const logoImage = document.createElement('img');
+    logoImage.src = '/logos/cmbagent-logo.png';
+    logoImage.alt = 'CMBAgent';
+    logoImage.width = 24;
+    logoImage.height = 24;
+    logoImage.style.filter = 'brightness(1.1)';
+    logoImage.style.display = 'block';
+    logoImage.style.objectFit = 'contain';
+    logoImage.style.pointerEvents = 'none';
+    logoImage.style.userSelect = 'none';
+    logoImage.loading = 'eager';
+    logoImage.decoding = 'sync';
+    
+    return (
+      <img
+        src="/logos/cmbagent-logo.png"
+        alt="CMBAgent"
+        width={24}
+        height={24}
+        style={{ 
+          filter: 'brightness(1.1)',
+          display: 'block',
+          objectFit: 'contain',
+          pointerEvents: 'none',
+          userSelect: 'none'
+        }}
+        loading="eager"
+        decoding="sync"
+        key="sidebar-logo" // Add key to prevent re-mounting
+      />
+    );
+  }, []); // No dependencies to prevent refreshing
 
   // Static menu items to prevent icon reloading
   const menuItems: MenuProps['items'] = [
@@ -88,16 +104,16 @@ export default function MainLayout({ children }: MainLayoutProps) {
       label: 'Dashboard',
     },
     {
+      key: '/store',
+      icon: <ShopOutlined className="text-primary" />,
+      label: 'Research Store',
+    },
+    {
       key: '/environments',
       icon: <RocketOutlined className="text-primary" />,
       label: 'Environments',
     },
     ...(currentRole === 'admin' ? [
-      {
-        key: '/store',
-        icon: <ShopOutlined className="text-primary" />,
-        label: 'Agentic Store',
-      },
       {
         key: '/admin',
         icon: <CrownOutlined className="text-primary" />,
@@ -108,13 +124,7 @@ export default function MainLayout({ children }: MainLayoutProps) {
         icon: <UsergroupAddOutlined className="text-primary" />,
         label: 'User Management',
       },
-    ] : [
-      {
-        key: '/store',
-        icon: <ShopOutlined className="text-primary" />,
-        label: 'Agentic Store',
-      },
-    ]),
+    ] : []),
     {
       key: '/settings',
       icon: <SettingOutlined className="text-primary" />,
@@ -343,11 +353,15 @@ export default function MainLayout({ children }: MainLayoutProps) {
           height: '64px'
         }}>
           <div className="flex items-center space-x-4">
-            {/* Enhanced Glass Collapse Toggle */}
+            {/* Enhanced Glass Collapse Toggle - maintains state */}
             <Button
               type="text"
               icon={collapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />}
-              onClick={() => setCollapsed(!collapsed)}
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                setCollapsed(!collapsed);
+              }}
               className="glass-button"
               style={{
                 width: '40px',

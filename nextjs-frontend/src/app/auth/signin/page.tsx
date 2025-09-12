@@ -4,7 +4,7 @@ import { useEffect, Suspense, useState } from 'react';
 import { signIn, getSession } from 'next-auth/react';
 import { useRouter, useSearchParams } from 'next/navigation'; // Removed Button
 import { Typography, Image, Alert, Card } from 'antd';
-import { GoogleOutlined, LoadingOutlined, SunOutlined, MoonOutlined, SafetyCertificateOutlined, BarChartOutlined, RocketOutlined } from '@ant-design/icons';
+import { GoogleOutlined, LoadingOutlined, SunOutlined, MoonOutlined, SafetyCertificateOutlined } from '@ant-design/icons';
 import { useTheme } from '@/contexts/ThemeContext';
 
 const { Text } = Typography;
@@ -261,64 +261,6 @@ function SignInContent() {
           </Card>
         </div>
 
-        {/* Subtle Feature Highlights */}
-        <div className="w-full max-w-4xl mt-8 fade-in" style={{ animationDelay: '0.6s' }}>
-          <div className="grid grid-cols-3 gap-12 text-center">
-            <div className="group">
-              <div className="mb-4 mx-auto w-12 h-12 rounded-full flex items-center justify-center transition-all duration-300 group-hover:scale-110" 
-                   style={{ 
-                     background: 'rgba(14, 125, 184, 0.1)', 
-                     border: '1px solid rgba(14, 125, 184, 0.2)' 
-                   }}>
-              <RocketOutlined style={{ fontSize: '20px', color: 'var(--primary-400)' }} />
-              </div>
-              <Text style={{ 
-                color: 'var(--text-secondary)', 
-                fontSize: 'var(--text-sm)',
-                fontWeight: 'var(--font-medium)',
-                display: 'block'
-              }}>
-                Agent Hub
-              </Text>
-            </div>
-            
-            <div className="group">
-              <div className="mb-4 mx-auto w-12 h-12 rounded-full flex items-center justify-center transition-all duration-300 group-hover:scale-110" 
-                   style={{ 
-                     background: 'rgba(59, 130, 246, 0.1)', 
-                     border: '1px solid rgba(59, 130, 246, 0.2)' 
-                   }}>
-                <SafetyCertificateOutlined style={{ fontSize: '20px', color: 'var(--info-400)' }} />
-              </div>
-              <Text style={{ 
-                color: 'var(--text-secondary)', 
-                fontSize: 'var(--text-sm)',
-                fontWeight: 'var(--font-medium)',
-                display: 'block'
-              }}>
-                Privacy
-              </Text>
-            </div>
-            
-            <div className="group">
-              <div className="mb-4 mx-auto w-12 h-12 rounded-full flex items-center justify-center transition-all duration-300 group-hover:scale-110" 
-                   style={{ 
-                     background: 'rgba(245, 158, 11, 0.1)', 
-                     border: '1px solid rgba(245, 158, 11, 0.2)' 
-                   }}>
-                <BarChartOutlined style={{ fontSize: '20px', color: 'var(--warning-400)' }} />
-              </div>
-              <Text style={{ 
-                color: 'var(--text-secondary)', 
-                fontSize: 'var(--text-sm)',
-                fontWeight: 'var(--font-medium)',
-                display: 'block'
-              }}>
-                Research Tools
-              </Text>
-            </div>
-          </div>
-        </div>
         {/* Clean Footer */}
         <div className="text-center mt-6 fade-in" style={{ animationDelay: '0.8s' }}>
           <Text style={{ 

@@ -96,6 +96,7 @@ class ApplicationImage(BaseModel):
     name: str
     summary: str
     image_path: str
+    port: Optional[int] = 8888
     icon_url: Optional[str] = None
     category: str = "research"
     created_at: datetime
