@@ -66,6 +66,18 @@ graph TB
 
 ## Quick Start
 
+## Deployment Options
+
+CMBCluster supports deployment on multiple cloud platforms:
+
+- **Google Cloud Platform (GKE)** - Original implementation with GCS, Artifact Registry
+- **Amazon Web Services (EKS)** - Full feature parity with S3, ECR, ALB ([AWS Deployment Guide](scripts/aws/README.md))
+
+Choose your preferred platform and follow the corresponding deployment guide below.
+
+---
+
+
 ### Prerequisites
 
 - **Google Cloud Platform Account** with billing enabled
