@@ -3,34 +3,13 @@ env:
   shell: bash
   git-credential-helper: yes
 
-
-      - API_URL=https://api.cmbagent.cloud
-      - FRONTEND_URL=https://cmbagent.cloud
-
   parameter-store:
-    TASKREV_BE: "/denario/staging/TASKREV_BE"
     TASKREV_FE: "/denario/staging/TASKREV_FE"
 
 phases:
-  build:
-    on-failure: ABORT
-    commands:
-#      - "echo ${DOCKER_HUB_TOKEN} | docker login -u ${DOCKER_HUB_USER} --password-stdin"
-      - "codepipeline/build_env.sh"
-#      - "codepipeline/build_statics.sh"
-      - 'rc="${?}"'
-      - 'if [[ "${rc}" -ne 0 ]]; then exit "${rc}"; fi'
-#      - "codepipeline/run_tests.sh"
-#      - 'rc="${?}"'
-#      - 'if [[ "${rc}" -ne 0 ]]; then exit "${rc}"; fi'
-      - "codepipeline/build_docker.sh"
-      - "exit ${rc}"
   post_build:
     commands:
-       - bash -c "if [[ ${CODEBUILD_BUILD_SUCCEEDING} -eq 0 ]]; then exit 1; fi"
-       - "codepipeline/push_docker.sh staging"
-       - "codepipeline/build_appspec_be.sh staging"
-       - "aws codepipeline start-pipeline-execution --name denario-staging-${BranchName}-fe"
+       - "codepipeline/build_appspec_fe.sh staging"
 artifacts:
   files:
     - "appspec.yaml"

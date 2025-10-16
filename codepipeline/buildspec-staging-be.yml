@@ -3,14 +3,9 @@ env:
   shell: bash
   git-credential-helper: yes
 
-
-      - API_URL=https://api.cmbagent.cloud
-      - FRONTEND_URL=https://cmbagent.cloud
-
   parameter-store:
     TASKREV_BE: "/denario/staging/TASKREV_BE"
-    TASKREV_FE: "/denario/staging/TASKREV_FE"
-
+    
 phases:
   build:
     on-failure: ABORT

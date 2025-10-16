@@ -6,9 +6,9 @@ Resources:
   - TargetService:
       Type: AWS::ECS::Service
       Properties:
-        TaskDefinition: "arn:aws:ecs:us-east-1:${AWS_ACCOUNT_ID}:task-definition/genomecentral-${1}-fe:${TASKREV_FE}"
+        TaskDefinition: "arn:aws:ecs:us-east-1:${AWS_ACCOUNT_ID}:task-definition/denario-${1}-fe:${TASKREV_FE}"
         LoadBalancerInfo:
           ContainerName: "fe"
-          ContainerPort: 3000
+          ContainerPort: 8501
         PlatformVersion: "LATEST"
 EOF
