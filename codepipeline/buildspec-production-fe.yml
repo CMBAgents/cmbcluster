@@ -1,0 +1,15 @@
+version: 0.2
+env:
+  shell: bash
+  git-credential-helper: yes
+
+  parameter-store:
+    TASKREV_FE: "/genomecentral/production/TASKREV_FE"
+
+phases:
+  post_build:
+    commands:
+       - "codepipeline/build_appspec_fe.sh production"
+artifacts:
+  files:
+    - "appspec.yaml"

@@ -2,7 +2,7 @@
 # Based on existing Python Dockerfile patterns with Node.js optimizations
 
 # Stage 1: Base stage with Node.js
-FROM node:18-alpine AS base
+FROM public.ecr.aws/docker/library/node:18-alpine AS base
 WORKDIR /app
 
 # Install system dependencies (matching Python setup)

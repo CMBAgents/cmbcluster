@@ -1,0 +1,42 @@
+version: 0.2
+env:
+  shell: bash
+  git-credential-helper: yes
+
+  parameter-store:
+    BUILD_ENV: "/genomecentral/production/BUILD_ENV"
+    TASKREV_CORE: "/genomecentral/production/TASKREV_CORE"
+    TASKREV_BEAT: "/genomecentral/production/TASKREV_BEAT"
+    TASKREV_FE: "/genomecentral/production/TASKREV_FE"
+    TASKREV_WORKER: "/genomecentral/production/TASKREV_WORKER"
+
+  secrets-manager:
+    GITHUB_SSH_PRIV_KEY: "/genomecentral/production/GITHUB_SSH_PRIV_KEY"
+    DOCKER_HUB_TOKEN: "/genomecentral/production/DOCKER_HUB_TOKEN"
+    DOCKER_HUB_USER: "/genomecentral/production/DOCKER_HUB_USER"
+
+phases:
+  build:
+    on-failure: ABORT
+    commands:
+      - "echo ${DOCKER_HUB_TOKEN} | docker login -u ${DOCKER_HUB_USER} --password-stdin"
+      - "codepipeline/build_env.sh"
+      - "codepipeline/build_statics.sh"
+      - 'rc="${?}"'
+      - 'if [[ "${rc}" -ne 0 ]]; then exit "${rc}"; fi'
+      - "codepipeline/run_tests.sh"
+      - 'rc="${?}"'
+      - 'if [[ "${rc}" -ne 0 ]]; then exit "${rc}"; fi'
+      - "codepipeline/build_docker.sh"
+      - "exit ${rc}"
+  post_build:
+    commands:
+       - bash -c "if [[ ${CODEBUILD_BUILD_SUCCEEDING} -eq 0 ]]; then exit 1; fi"
+       - "codepipeline/push_docker.sh production"
+       - "codepipeline/build_appspec_core.sh production"
+       - "aws codepipeline start-pipeline-execution --name genomecentral-production-${BranchName}-beat"
+       - "aws codepipeline start-pipeline-execution --name genomecentral-production-${BranchName}-worker"
+       - "aws codepipeline start-pipeline-execution --name genomecentral-production-${BranchName}-fe"
+artifacts:
+  files:
+    - "appspec.yaml"
