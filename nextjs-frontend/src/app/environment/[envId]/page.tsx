@@ -251,13 +251,24 @@ export default function EnvironmentAccessPage() {
         <Card className="glass-card">
           <div className="flex justify-between items-center">
             <div className="flex items-center space-x-4">
-              <Button
-                icon={<ArrowLeftOutlined />}
-                onClick={() => router.push('/environments')}
-                className="glass-button"
-              >
-                Back to Environments
-              </Button>
+              <Tooltip title="Return to environments list">
+                <Button
+                  icon={<ArrowLeftOutlined />}
+                  onClick={() => router.push('/environments')}
+                  className="glass-button"
+                  shape="circle"
+                  style={{
+                    borderColor: 'var(--border-primary)',
+                    color: 'var(--text-primary)',
+                    background: 'var(--glass-bg-secondary)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    width: '40px',
+                    height: '40px'
+                  }}
+                />
+              </Tooltip>
               <div>
                 <div className="flex items-center gap-3 mb-2">
                   <div className="icon-container success p-2">
@@ -286,48 +297,62 @@ export default function EnvironmentAccessPage() {
               </div>
             </div>
 
-            <Space size="middle">
-              <Tooltip title="Refresh Environment">
+            <Space size="small" wrap>
+              <Tooltip title="Refresh the environment and reload the application">
                 <Button
                   type="default"
                   icon={<ReloadOutlined />}
                   onClick={handleIframeReload}
                   className="glass-button"
                   loading={isLoading}
+                  shape="circle"
                   style={{
                     borderColor: 'var(--border-primary)',
                     color: 'var(--text-primary)',
-                    background: 'var(--glass-bg-secondary)'
+                    background: 'var(--glass-bg-secondary)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    width: '40px',
+                    height: '40px'
                   }}
-                >
-                  Refresh
-                </Button>
+                />
               </Tooltip>
-              <Tooltip title="Open in New Tab">
+              <Tooltip title="Open environment in a new browser tab">
                 <Button
                   type="primary"
                   icon={<LinkOutlined />}
                   onClick={handleExternalLink}
                   className="glass-button"
+                  shape="circle"
                   style={{
                     background: 'var(--interactive-primary)',
                     borderColor: 'var(--interactive-primary)',
-                    color: 'white'
+                    color: 'white',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    width: '40px',
+                    height: '40px'
                   }}
-                >
-                  Open External
-                </Button>
+                />
               </Tooltip>
-              <Tooltip title="Toggle Fullscreen">
+              <Tooltip title="View environment in fullscreen mode">
                 <Button
                   type="default"
                   icon={<FullscreenOutlined />}
                   onClick={() => setFullscreen(!fullscreen)}
                   className="glass-button"
+                  shape="circle"
                   style={{
                     borderColor: 'var(--border-primary)',
                     color: 'var(--text-primary)',
-                    background: 'var(--glass-bg-secondary)'
+                    background: 'var(--glass-bg-secondary)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    width: '40px',
+                    height: '40px'
                   }}
                 />
               </Tooltip>
@@ -416,32 +441,40 @@ export default function EnvironmentAccessPage() {
                   type="warning"
                   showIcon
                   action={
-                    <Space>
-                      <Tooltip title="Retry Loading">
-                        <Button 
-                          onClick={handleIframeReload} 
+                    <Space size="small">
+                      <Tooltip title="Reload the application and try again">
+                        <Button
+                          onClick={handleIframeReload}
                           icon={<ReloadOutlined />}
+                          shape="circle"
                           style={{
                             borderColor: 'var(--border-primary)',
                             color: 'var(--text-primary)',
-                            background: 'var(--glass-bg-secondary)'
+                            background: 'var(--glass-bg-secondary)',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            width: '40px',
+                            height: '40px'
                           }}
-                        >
-                          Retry Loading
-                        </Button>
+                        />
                       </Tooltip>
-                      <Tooltip title="Open in New Tab">
-                        <Button 
-                          type="primary" 
-                          onClick={handleExternalLink} 
+                      <Tooltip title="Open environment in a new browser tab">
+                        <Button
+                          type="primary"
+                          onClick={handleExternalLink}
                           icon={<LinkOutlined />}
+                          shape="circle"
                           style={{
                             background: 'var(--interactive-primary)',
-                            borderColor: 'var(--interactive-primary)'
+                            borderColor: 'var(--interactive-primary)',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            width: '40px',
+                            height: '40px'
                           }}
-                        >
-                          Open External
-                        </Button>
+                        />
                       </Tooltip>
                     </Space>
                   }
@@ -520,45 +553,62 @@ export default function EnvironmentAccessPage() {
                 {getApplicationName(environment)} - {environment.env_id}
               </Text>
             </div>
-            <Space>
-              <Tooltip title="Refresh Environment">
-                <Button 
-                  onClick={handleIframeReload} 
-                  icon={<ReloadOutlined />} 
+            <Space size="small">
+              <Tooltip title="Refresh the environment and reload the application">
+                <Button
+                  onClick={handleIframeReload}
+                  icon={<ReloadOutlined />}
                   className="glass-button"
+                  shape="circle"
                   style={{
                     borderColor: 'var(--border-primary)',
                     color: 'var(--text-primary)',
-                    background: 'var(--glass-bg-secondary)'
+                    background: 'var(--glass-bg-secondary)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    width: '40px',
+                    height: '40px'
                   }}
-                >
-                  Refresh
-                </Button>
+                />
               </Tooltip>
-              <Tooltip title="Open in New Tab">
-                <Button 
-                  onClick={handleExternalLink} 
-                  icon={<LinkOutlined />} 
+              <Tooltip title="Open environment in a new browser tab">
+                <Button
+                  onClick={handleExternalLink}
+                  icon={<LinkOutlined />}
                   className="glass-button"
+                  shape="circle"
                   style={{
                     borderColor: 'var(--border-primary)',
                     color: 'var(--text-primary)',
-                    background: 'var(--glass-bg-secondary)'
+                    background: 'var(--glass-bg-secondary)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    width: '40px',
+                    height: '40px'
                   }}
-                >
-                  External
-                </Button>
+                />
               </Tooltip>
-              <Button 
-                onClick={() => setFullscreen(false)} 
-                type="primary"
-                style={{
-                  background: 'var(--interactive-primary)',
-                  borderColor: 'var(--interactive-primary)'
-                }}
-              >
-                Exit Fullscreen
-              </Button>
+              <Tooltip title="Exit fullscreen mode and return to normal view">
+                <Button
+                  onClick={() => setFullscreen(false)}
+                  type="default"
+                  icon={<FullscreenOutlined style={{ transform: 'rotate(45deg)' }} />}
+                  className="glass-button"
+                  shape="circle"
+                  style={{
+                    borderColor: 'var(--border-primary)',
+                    color: 'var(--text-primary)',
+                    background: 'var(--glass-bg-secondary)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    width: '40px',
+                    height: '40px'
+                  }}
+                />
+              </Tooltip>
             </Space>
           </div>
           <div style={{ flex: 1 }}>

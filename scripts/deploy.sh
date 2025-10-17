@@ -359,7 +359,7 @@ update_dns_record() {
 
   # Get the current IP address from DNS to check if an update is needed.
   local current_ip
-  current_ip=$(gcloud dns record-sets list --zone="$dns_zone_name" --name="$domain_name." --type=A --format="value(rrdatas[0])")
+  current_ip=$(gcloud dns record-sets list --zone="$dns_zone_name" --name="$domain_name." --type=A --format="value(rrdatas[0])" --project="$PROJECT_ID")
 
   if [[ "$current_ip" == "$ip_address" ]]; then
     echo "DNS record is already up to date. No changes needed."
@@ -367,17 +367,18 @@ update_dns_record() {
   fi
 
   # Use a transaction to make the change atomic and safe.
-  gcloud dns record-sets transaction start --zone="$dns_zone_name"
+  gcloud dns record-sets transaction start --zone="$dns_zone_name" --project="$PROJECT_ID"
 
   # If a record already exists, remove the old one from the transaction.
   if [[ -n "$current_ip" ]]; then
     echo "Removing old A record pointing to $current_ip..."
     local current_ttl
-    current_ttl=$(gcloud dns record-sets list --zone="$dns_zone_name" --name="$domain_name." --type=A --format="value(ttl)")
+    current_ttl=$(gcloud dns record-sets list --zone="$dns_zone_name" --name="$domain_name." --type=A --format="value(ttl)" --project="$PROJECT_ID")
     gcloud dns record-sets transaction remove --zone="$dns_zone_name" \
       --name="$domain_name." \
       --ttl="$current_ttl" \
-      --type=A "$current_ip"
+      --type=A "$current_ip" \
+      --project="$PROJECT_ID"
   fi
 
   # Add the new record to the transaction.
@@ -385,15 +386,16 @@ update_dns_record() {
   gcloud dns record-sets transaction add --zone="$dns_zone_name" \
     --name="$domain_name." \
     --ttl=300 \
-    --type=A "$ip_address"
+    --type=A "$ip_address" \
+    --project="$PROJECT_ID"
 
   # Execute the transaction to apply the changes.
   echo "Executing DNS transaction..."
-  if gcloud dns record-sets transaction execute --zone="$dns_zone_name"; then
+  if gcloud dns record-sets transaction execute --zone="$dns_zone_name" --project="$PROJECT_ID"; then
     echo "Successfully updated DNS record for $domain_name."
   else
     echo "Error: Failed to update DNS record. Aborting transaction." >&2
-    gcloud dns record-sets transaction abort --zone="$dns_zone_name"
+    gcloud dns record-sets transaction abort --zone="$dns_zone_name" --project="$PROJECT_ID"
     return 1
   fi
 }
@@ -409,14 +411,18 @@ if [[ -z "$INGRESS_IP" ]]; then
   exit 1
 fi
 
-# 3. Update the DNS record.
-update_dns_record "$INGRESS_IP" "$DOMAIN"
-if [[ $? -ne 0 ]]; then
-  echo "DNS update failed. Please check permissions and configuration." >&2
-  exit 1
+# 3. Update the DNS record (skip for nip.io domains as they auto-resolve).
+if [[ "$DOMAIN" == *".nip.io"* ]]; then
+  echo "📝 Skipping DNS update for nip.io domain (auto-resolves to $INGRESS_IP)"
+  echo "✅ Your domain $DOMAIN will automatically resolve to $INGRESS_IP"
+else
+  update_dns_record "$INGRESS_IP" "$DOMAIN"
+  if [[ $? -ne 0 ]]; then
+    echo "DNS update failed. Please check permissions and configuration." >&2
+    exit 1
+  fi
+  echo "DNS automation complete."
 fi
-
-echo "DNS automation complete."
 echo "✅ CMBCluster deployed successfully with enhanced security!"
 echo ""
 echo "🔒 Security Configuration:"

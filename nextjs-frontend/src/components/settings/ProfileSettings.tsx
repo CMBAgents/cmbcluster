@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { Card, Col, Row, Input, Button, message, Typography, Avatar, Badge, Statistic } from 'antd';
+import { Card, Col, Row, Input, Button, message, Typography, Avatar, Badge, Statistic, Tooltip } from 'antd';
 import { LogoutOutlined, ReloadOutlined, UserOutlined, CheckCircleOutlined, SafetyOutlined, CrownOutlined } from '@ant-design/icons';
 import { useSession, signOut } from 'next-auth/react';
 
@@ -99,7 +99,7 @@ export default function ProfileSettings() {
             </div>
             <Statistic
               title="Access Level"
-              value="Researcher"
+              value={user?.role ? user.role.charAt(0).toUpperCase() + user.role.slice(1) : 'User'}
               valueStyle={{ color: 'var(--warning-600)', fontSize: '18px', fontWeight: 'bold' }}
             />
           </Card>
@@ -165,31 +165,42 @@ export default function ProfileSettings() {
 
       {/* Account Actions */}
       <Card title="Account Actions" className="glass-card">
-        <Row gutter={[16, 16]}>
-          <Col xs={24} sm={12} md={8}>
+        <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+          <Tooltip title="Refresh profile information">
             <Button
               type="default"
               icon={<ReloadOutlined />}
               onClick={handleRefreshProfile}
               size="large"
-              className="glass-button w-full"
-            >
-              Refresh Profile
-            </Button>
-          </Col>
-          <Col xs={24} sm={12} md={8}>
+              className="glass-button"
+              shape="circle"
+              style={{
+                width: '48px',
+                height: '48px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center'
+              }}
+            />
+          </Tooltip>
+          <Tooltip title="Sign out of your account">
             <Button
               type="primary"
               danger
               icon={<LogoutOutlined />}
               onClick={handleSignOut}
               size="large"
-              className="w-full"
-            >
-              Sign Out
-            </Button>
-          </Col>
-        </Row>
+              shape="circle"
+              style={{
+                width: '48px',
+                height: '48px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center'
+              }}
+            />
+          </Tooltip>
+        </div>
       </Card>
     </div>
   );

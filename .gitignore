@@ -85,3 +85,4 @@ nextjs-frontend/.turbo/
 # TypeScript
 nextjs-frontend/*.tsbuildinfo
 nextjs-frontend/next-env.d.ts
+.claude/

@@ -406,26 +406,49 @@ export default function EnvironmentManagement() {
 
   const columns = [
     {
-      title: 'Name',
-      dataIndex: 'id',
-      key: 'id',
-      sorter: (a: Environment, b: Environment) => a.id.localeCompare(b.id),
-      render: (id: string, record: Environment) => (
-        <div>
-          <Text strong className="font-mono">
-            {getDisplayId(id)}
-          </Text>
-          <br />
-          <Text type="secondary" style={{ fontSize: '12px' }}>
-            {record.env_id && record.env_id !== id ? `Full: ${getDisplayId(record.env_id)}` : ''}
-          </Text>
-        </div>
-      ),
+      title: 'Environment',
+      dataIndex: 'application_name',
+      key: 'name',
+      width: 200,
+      sorter: (a: Environment, b: Environment) => {
+        const nameA = a.application_name || a.image || 'Environment';
+        const nameB = b.application_name || b.image || 'Environment';
+        return nameA.localeCompare(nameB);
+      },
+      render: (_: string, record: Environment) => {
+        // Get a meaningful name from application_name, image, or use default
+        let displayName = 'Research Environment';
+
+        if (record.application_name) {
+          displayName = record.application_name;
+        } else if (record.image) {
+          // Extract meaningful name from image (e.g., "streamlit-app" from "gcr.io/project/streamlit-app:v1")
+          const imageName = record.image.split('/').pop()?.split(':')[0];
+          if (imageName) {
+            displayName = imageName.split('-').map(word =>
+              word.charAt(0).toUpperCase() + word.slice(1)
+            ).join(' ');
+          }
+        }
+
+        return (
+          <div>
+            <Text strong style={{ fontSize: '14px' }}>
+              {displayName}
+            </Text>
+            <br />
+            <Text type="secondary" style={{ fontSize: '11px', fontFamily: 'monospace' }}>
+              {getDisplayId(record.env_id || record.id)}
+            </Text>
+          </div>
+        );
+      },
     },
     {
       title: 'Status',
       dataIndex: 'status',
       key: 'status',
+      width: 120,
       filters: [
         { text: 'Running', value: 'running' },
         { text: 'Pending', value: 'pending' },
@@ -481,36 +504,43 @@ export default function EnvironmentManagement() {
       title: 'CPU',
       dataIndex: 'resource_config',
       key: 'cpu',
+      width: 100,
       render: (config: any) => (
-        config?.cpu_limit ? `${config.cpu_limit} cores` : 'N/A'
+        <Text style={{ fontSize: '13px' }}>
+          {config?.cpu_limit ? `${config.cpu_limit}` : 'N/A'}
+        </Text>
       ),
-      sorter: (a: Environment, b: Environment) => 
+      sorter: (a: Environment, b: Environment) =>
         (a.resource_config?.cpu_limit || 0) - (b.resource_config?.cpu_limit || 0),
     },
     {
-      title: 'Memory', 
+      title: 'Memory',
       dataIndex: 'resource_config',
       key: 'memory',
-      render: (config: any) => config?.memory_limit || 'N/A',
+      width: 100,
+      render: (config: any) => (
+        <Text style={{ fontSize: '13px' }}>
+          {config?.memory_limit || 'N/A'}
+        </Text>
+      ),
     },
     {
-      title: 'Storage',
-      dataIndex: 'resource_config',
-      key: 'storage',
-      render: (config: any) => config?.storage_size || 'N/A',
-    },
-    {
-      title: 'Created Date',
+      title: 'Created',
       dataIndex: 'created_at',
       key: 'created_at',
-      render: (date: string) => formatDateTime(date),
-      sorter: (a: Environment, b: Environment) => 
+      width: 150,
+      render: (date: string) => (
+        <Text style={{ fontSize: '13px' }}>
+          {formatDateTime(date)}
+        </Text>
+      ),
+      sorter: (a: Environment, b: Environment) =>
         new Date(a.created_at).getTime() - new Date(b.created_at).getTime(),
     },
     {
       title: 'Actions',
       key: 'actions',
-      width: 120,
+      width: 160,
       fixed: 'right' as const,
       render: (_: any, record: Environment) => (
         <Space size="small">
@@ -716,19 +746,19 @@ export default function EnvironmentManagement() {
           </div>
 
           {/* Compact Search and Filters */}
-          <div className="mb-4" style={{ display: 'flex', alignItems: 'center', gap: '16px', padding: '12px 0' }}>
+          <div className="mb-3" style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
             <Search
               placeholder="Search environments..."
               value={searchText}
               onChange={(e) => setSearchText(e.target.value)}
               allowClear
-              style={{ maxWidth: '300px' }}
+              style={{ maxWidth: '280px' }}
               size="middle"
             />
             <Select
               value={statusFilter}
               onChange={setStatusFilter}
-              style={{ width: '140px' }}
+              style={{ width: '130px' }}
               placeholder="Filter status"
               size="middle"
             >
@@ -739,7 +769,7 @@ export default function EnvironmentManagement() {
               <Option value="failed">Failed</Option>
             </Select>
             <div style={{ flex: 1 }} />
-            <Text style={{ color: 'var(--text-secondary)', fontSize: '14px' }}>
+            <Text style={{ color: 'var(--text-secondary)', fontSize: '13px' }}>
               {filteredEnvironments.length} of {environments?.length || 0} environments
             </Text>
           </div>
@@ -748,22 +778,22 @@ export default function EnvironmentManagement() {
           <Card className="glass-card" bodyStyle={{ padding: '0' }}>
             <Table
               columns={columns}
-              dataSource={filteredEnvironments.map(env => ({ 
-                ...env, 
+              dataSource={filteredEnvironments.map(env => ({
+                ...env,
                 key: env.env_id || env.id,
                 // Ensure both id and env_id are available
                 env_id: env.env_id || env.id,
                 id: env.id || env.env_id
               }))}
               loading={isLoading}
-              size="middle"
-              scroll={{ x: 800 }}
+              size="small"
+              scroll={{ x: 'max-content' }}
               pagination={{
-                pageSize: 15,
+                pageSize: 10,
                 size: 'small',
                 showSizeChanger: false,
                 showQuickJumper: false,
-                showTotal: (total, range) => 
+                showTotal: (total, range) =>
                   `${range[0]}-${range[1]} of ${total}`,
               }}
               rowSelection={{

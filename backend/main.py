@@ -153,18 +153,9 @@ import applications_api
 app.include_router(admin_api.router)
 app.include_router(applications_api.router)
 
-# Mount static files for uploaded images
-# Support both development (local) and production (GCS FUSE) environments
-import os
-if os.path.exists("/app/data"):
-    # Production: Mount GCS FUSE directory
-    app.mount("/data", StaticFiles(directory="/app/data"), name="gcs-data")
-    logger.info("Mounted GCS FUSE storage at /data")
-else:
-    # Development: Mount local uploads directory
-    os.makedirs("uploads", exist_ok=True)
-    app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
-    logger.info("Mounted local storage at /uploads")
+# NOTE: Static file serving is handled by the dedicated endpoint below
+# at /data/uploads/applications/{filename} instead of using app.mount()
+# to avoid conflicts and allow proper error handling and logging
 
 
 # Remove non-working router includes - main.py direct endpoints are used instead

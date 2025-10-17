@@ -57,6 +57,12 @@ SERVICES_RANGE="${CLUSTER_NAME}-services"
 ROUTER_NAME="${CLUSTER_NAME}-nat-router"
 NAT_NAME="${CLUSTER_NAME}-nat-config"
 
+# Network CIDR ranges from .env (with fallback defaults)
+SUBNET_RANGE=${SUBNET_RANGE:-"10.1.0.0/16"}
+PODS_CIDR=${PODS_CIDR:-"10.4.0.0/16"}
+SERVICES_CIDR=${SERVICES_CIDR:-"10.5.0.0/20"}
+MASTER_IPV4_CIDR=${MASTER_IPV4_CIDR:-"172.16.0.16/28"}
+
 # Set the default project
 gcloud config set project $PROJECT_ID
 
@@ -129,8 +135,8 @@ if ! gcloud compute networks subnets describe $SUBNET_NAME --region=$REGION --pr
     gcloud compute networks subnets create $SUBNET_NAME \
         --network=$NETWORK_NAME \
         --region=$REGION \
-        --range=10.0.0.0/16 \
-        --secondary-range $PODS_RANGE=10.1.0.0/16,$SERVICES_RANGE=10.2.0.0/20 \
+        --range=$SUBNET_RANGE \
+        --secondary-range $PODS_RANGE=$PODS_CIDR,$SERVICES_RANGE=$SERVICES_CIDR \
         --enable-private-ip-google-access \
         --project=$PROJECT_ID
 else
@@ -173,7 +179,7 @@ if ! gcloud compute firewall-rules describe ${CLUSTER_NAME}-allow-master --proje
     gcloud compute firewall-rules create ${CLUSTER_NAME}-allow-master \
         --network=$NETWORK_NAME \
         --allow=tcp,udp,icmp \
-        --source-ranges=172.16.0.0/28 \
+        --source-ranges=$MASTER_IPV4_CIDR \
         --project=$PROJECT_ID \
         --quiet
 else
@@ -185,31 +191,33 @@ echo "🏗️ Creating private GKE cluster..."
 if ! gcloud container clusters describe $CLUSTER_NAME --zone=$ZONE --project=$PROJECT_ID >/dev/null 2>&1; then
     # Using e2-standard-2 for better cost/performance than n1-standard-2
     # Using pd-balanced for node disk type for better performance than pd-standard
-    # Note: The 'cmbcluster-ssd' StorageClass is for PVCs, not node boot disks.
+   # Create private GKE cluster
     gcloud container clusters create $CLUSTER_NAME \
-        --release-channel=$RELEASE_CHANNEL \
-        --zone=$ZONE \
-        --network=$NETWORK_NAME \
-        --subnetwork=$SUBNET_NAME \
-        --cluster-ipv4-cidr=10.1.0.0/16 \
-        --services-ipv4-cidr=10.2.0.0/20 \
-        --enable-ip-alias \
-        --enable-private-nodes \
-        --master-ipv4-cidr=172.16.0.0/28 \
-        --enable-master-authorized-networks \
-        --master-authorized-networks=$MY_IP/32 \
-        --default-max-pods-per-node=110 \
-        --node-locations=$ZONE \
-        --num-nodes=1 \
-        --min-nodes=1 \
-        --max-nodes=3 \
-        --machine-type=e2-standard-2 \
-        --disk-type=pd-balanced \
-        --disk-size=50GB \
-        --image-type=COS_CONTAINERD \
-        --metadata=disable-legacy-endpoints=true \
-        --addons=GcsFuseCsiDriver \
-        --project=$PROJECT_ID
+    --release-channel=$RELEASE_CHANNEL \
+    --zone=$ZONE \
+    --network=$NETWORK_NAME \
+    --subnetwork=$SUBNET_NAME \
+    --cluster-secondary-range-name=$PODS_RANGE \
+    --services-secondary-range-name=$SERVICES_RANGE \
+    --enable-ip-alias \
+    --enable-private-nodes \
+    --master-ipv4-cidr=$MASTER_IPV4_CIDR \
+    --enable-master-authorized-networks \
+    --master-authorized-networks=$MY_IP/32 \
+    --default-max-pods-per-node=110 \
+    --node-locations=$ZONE \
+    --num-nodes=2 \
+    --min-nodes=1 \
+    --max-nodes=3 \
+    --machine-type=e2-standard-2 \
+    --disk-type=pd-balanced \
+    --disk-size=50GB \
+    --image-type=COS_CONTAINERD \
+    --metadata=disable-legacy-endpoints=true \
+    --workload-pool=$PROJECT_ID.svc.id.goog \
+    --addons=GcsFuseCsiDriver \
+    --project=$PROJECT_ID \
+    --quiet
 
     echo "⏳ Waiting for cluster $CLUSTER_NAME to be ready..."
     gcloud container clusters wait $CLUSTER_NAME \
@@ -328,7 +336,41 @@ else
     echo "✅ Google Service Account $WORKLOAD_SA_EMAIL already exists"
 fi
 
-# Grant Storage Object Viewer role for image pulling
+# Grant Artifact Registry Reader role for pulling container images
+echo "Granting roles/artifactregistry.reader to $WORKLOAD_SA_EMAIL..."
+gcloud projects add-iam-policy-binding $PROJECT_ID \
+    --member="serviceAccount:$WORKLOAD_SA_EMAIL" \
+    --role="roles/artifactregistry.reader" \
+    --quiet || echo "✅ roles/artifactregistry.reader already granted to $WORKLOAD_SA_EMAIL"
+
+# Also grant repository-level access for the Artifact Registry
+echo "Granting repository-level access to $ARTIFACT_REGISTRY_NAME..."
+gcloud artifacts repositories add-iam-policy-binding $ARTIFACT_REGISTRY_NAME \
+    --location=$REGION \
+    --member="serviceAccount:$WORKLOAD_SA_EMAIL" \
+    --role="roles/artifactregistry.reader" \
+    --project=$PROJECT_ID \
+    --quiet || echo "✅ Repository-level access already granted"
+
+# Get project number for default Compute Engine service account
+PROJECT_NUMBER=$(gcloud projects describe $PROJECT_ID --format="value(projectNumber)")
+NODE_SA_EMAIL="${PROJECT_NUMBER}-compute@developer.gserviceaccount.com"
+
+# Grant Artifact Registry access to node service account (required for image pulling)
+echo "Granting Artifact Registry access to node service account $NODE_SA_EMAIL..."
+gcloud artifacts repositories add-iam-policy-binding $ARTIFACT_REGISTRY_NAME \
+    --location=$REGION \
+    --member="serviceAccount:$NODE_SA_EMAIL" \
+    --role="roles/artifactregistry.reader" \
+    --project=$PROJECT_ID \
+    --quiet || echo "✅ Node SA already has repository access"
+
+gcloud projects add-iam-policy-binding $PROJECT_ID \
+    --member="serviceAccount:$NODE_SA_EMAIL" \
+    --role="roles/artifactregistry.reader" \
+    --quiet || echo "✅ Node SA already has project-level Artifact Registry access"
+
+# Grant Storage Object Viewer role for image pulling (legacy GCR support)
 echo "Granting roles/storage.objectViewer to $WORKLOAD_SA_EMAIL..."
 gcloud projects add-iam-policy-binding $PROJECT_ID \
     --member="serviceAccount:$WORKLOAD_SA_EMAIL" \
@@ -380,12 +422,12 @@ echo "✅ Private CMBCluster infrastructure setup complete!"
 echo ""
 echo "📋 Summary:"
 echo "- Network: $NETWORK_NAME"
-echo "- Subnet: $SUBNET_NAME"
+echo "- Subnet: $SUBNET_NAME (Range: $SUBNET_RANGE)"
 echo "- Cluster: $CLUSTER_NAME"
 echo "- Authorized IP: $MY_IP/32"
-echo "- Master CIDR: 172.16.0.0/28"
-echo "- Pods CIDR: 10.1.0.0/16 (via secondary range)"
-echo "- Services CIDR: 10.2.0.0/20 (via secondary range)"
+echo "- Master CIDR: $MASTER_IPV4_CIDR"
+echo "- Pods CIDR: $PODS_CIDR (via secondary range)"
+echo "- Services CIDR: $SERVICES_CIDR (via secondary range)"
 echo "- Workload Identity SA: $WORKLOAD_SA_EMAIL"
 echo ""
 echo "📝 Next steps:"
