@@ -229,6 +229,7 @@ export default function EnvironmentVariables() {
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
           <Input
+            className="simple-search-input"
             placeholder="Search variables..."
             prefix={<SearchOutlined style={{ color: 'var(--text-tertiary)' }} />}
             value={searchText}

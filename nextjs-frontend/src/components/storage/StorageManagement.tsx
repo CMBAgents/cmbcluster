@@ -364,12 +364,13 @@ export default function StorageManagement({ hideCreateButton = false }: StorageM
       <Card className="glass-card" size="small">
         <Row gutter={[16, 16]} align="middle">
           <Col xs={24} md={8}>
-            <Search
+            <Input
               placeholder="Search workspaces..."
               value={searchText}
               onChange={(e) => setSearchText(e.target.value)}
               allowClear
               prefix={<SearchOutlined />}
+              className="simple-search-input"
             />
           </Col>
           <Col xs={12} md={4}>

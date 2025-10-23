@@ -26,7 +26,6 @@ export async function GET() {
     NODE_ENV: nodeEnv
   };
   
-  console.log(`[${timestamp}] Config API called - Environment variables:`, JSON.stringify(envVars, null, 2));
   
   const config = {
     apiUrl,
@@ -38,7 +37,6 @@ export async function GET() {
     debug: 'v2-runtime-env-vars'  // Version marker
   };
   
-  console.log(`[${timestamp}] Returning config:`, JSON.stringify(config, null, 2));
   
   return NextResponse.json(config);
 }

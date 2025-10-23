@@ -56,28 +56,33 @@ class PodManager:
                 raise
         return secret_name
     
-    async def _resolve_image_config(self, config: EnvironmentRequest) -> tuple[str, int]:
-        """Resolve the container image path and port from application ID or use defaults"""
-        # If application_id is provided, look up the image path and port
+    async def _resolve_image_config(self, config: EnvironmentRequest) -> tuple[str, int, str, str]:
+        """Resolve the container image path, port, working directory, and app name from application ID or use defaults"""
+        # If application_id is provided, look up the image path, port, working_dir, and name
         if hasattr(config, 'application_id') and config.application_id:
             try:
                 logger.info("Looking up application", application_id=config.application_id)
                 application = await self.db.get_application(config.application_id)
                 if application and application.is_active:
                     port = getattr(application, 'port', 8888) or 8888
-                    logger.info("Using application image", 
+                    working_dir = getattr(application, 'working_dir', '/cmbagent') or '/cmbagent'
+                    # Sanitize application name for use in Kubernetes labels and container names
+                    app_name = _sanitize_for_dns(application.name)
+                    logger.info("Using application image",
                               application_id=config.application_id,
                               application_name=application.name,
+                              sanitized_app_name=app_name,
                               image_path=application.image_path,
-                              port=port)
-                    
+                              port=port,
+                              working_dir=working_dir)
+
                     # Validate image path
                     if not application.image_path or not application.image_path.strip():
                         logger.warning("Application has empty image path, using default",
                                      application_id=config.application_id)
                         # Fall through to defaults
                     else:
-                        return application.image_path, port
+                        return application.image_path, port, working_dir, app_name
                 else:
                     logger.warning("Application not found or inactive, using default image",
                                  application_id=config.application_id,
@@ -89,15 +94,17 @@ class PodManager:
                            error=str(e))
                 import traceback
                 logger.error("Application lookup traceback", traceback=traceback.format_exc())
-        
-        # Fall back to explicit image or default
-        image = config.image or f"{settings.registry_url}/cmbagent:latest"
+
+        # Fall back to explicit image or configured default
+        image = config.image or settings.default_image
         port = getattr(config, 'port', 8888)  # Default port if not specified
-        return image, port
+        working_dir = '/cmbagent'  # Default working directory
+        app_name = 'cmbagent'  # Default application name
+        return image, port, working_dir, app_name
 
     async def _resolve_image_path(self, config: EnvironmentRequest) -> str:
         """Legacy method for backward compatibility"""
-        image, _ = await self._resolve_image_config(config)
+        image, _, _, _ = await self._resolve_image_config(config)
         return image
 
     def _sanitize_k8s_key(self, key: str) -> str:
@@ -327,24 +334,26 @@ class PodManager:
 
             # Handle storage selection/creation
             storage = await self._handle_storage_selection(user_id, config)
-            
-            # Resolve image path and port from application ID if provided
-            image_path, container_port = await self._resolve_image_config(config)
+
+            # Resolve image path, port, working directory, and app name from application ID if provided
+            image_path, container_port, working_dir, app_name = await self._resolve_image_config(config)
 
             # Create secret for env vars
             secret_name = await self._create_env_secret(safe_user_id, env_id, merged_env_vars)
-            
+
             # Create secret for user files
             file_secret_name = await self._create_file_secret(safe_user_id, env_id, user_files)
 
             # Create pod with cloud storage, referencing secrets
-            logger.info("Building pod specification", 
+            logger.info("Building pod specification",
                        pod_name=pod_name,
                        image_path=image_path,
-                       container_port=container_port)
-            
+                       container_port=container_port,
+                       working_dir=working_dir,
+                       app_name=app_name)
+
             pod_spec = self._build_pod_spec_with_storage(
-                user_id, safe_user_id, env_id, user_email, pod_name, config, storage, secret_name, file_secret_name, image_path, container_port
+                user_id, safe_user_id, env_id, user_email, pod_name, config, storage, secret_name, file_secret_name, image_path, container_port, working_dir, app_name
             )
             
             logger.info("Creating pod in Kubernetes", pod_name=pod_name, namespace=namespace)
@@ -367,10 +376,10 @@ class PodManager:
                 raise
 
             # Create service
-            await self._create_user_service(safe_user_id, env_id, container_port)
+            await self._create_user_service(safe_user_id, env_id, container_port, app_name)
 
             # Create ingress
-            await self._create_user_ingress(safe_user_id, env_id, container_port)
+            await self._create_user_ingress(safe_user_id, env_id, container_port, app_name)
 
             # Create environment record
             environment = Environment(
@@ -633,21 +642,23 @@ class PodManager:
         return f"user-{safe_user_id[:20]}-{env_id}-{timestamp}"
     
     def _build_pod_spec_with_storage(
-        self, 
-        user_id: str, 
+        self,
+        user_id: str,
         safe_user_id: str,
         env_id: str,
-        user_email: str, 
-        pod_name: str, 
+        user_email: str,
+        pod_name: str,
         config: EnvironmentRequest,
         storage: UserStorage,
         secret_name: str = None,
         file_secret_name: str = None,
         image_path: str = None,
-        container_port: int = 8888
+        container_port: int = 8888,
+        working_dir: str = '/cmbagent',
+        app_name: str = 'cmbagent'
     ) -> Dict:
         """Build Kubernetes pod specification with cloud storage and env secret"""
-        image = image_path or config.image or f"{settings.registry_url}/cmbagent:latest"
+        image = image_path or config.image or settings.default_image
 
         # Default env vars (non-sensitive, always injected)
         env_list = [
@@ -655,14 +666,16 @@ class PodManager:
             {"name": "USER_EMAIL", "value": user_email},
             {"name": "ENV_ID", "value": env_id},
             {"name": "HUB_URL", "value": settings.api_url},
-            {"name": "WORKSPACE_DIR", "value": "/cmbagent"},
+            {"name": "WORKSPACE_DIR", "value": working_dir},
             {"name": "STORAGE_BUCKET", "value": storage.bucket_name},
             {"name": "STORAGE_TYPE", "value": storage.storage_type.value},
-            # CMBAgent specific environment variables
-            {"name": "HOME", "value": "/cmbagent"},
-            {"name": "CMBAGENT_ROOT", "value": "/cmbagent"},
-            {"name": "CMBAGENT_OUTPUT_DIR", "value": "/cmbagent/cmbagent_output"},
-            {"name": "MPLCONFIGDIR", "value": "/cmbagent/.matplotlib"},
+            # Application specific environment variables (using dynamic working_dir)
+            {"name": "HOME", "value": working_dir},
+            {"name": "CMBAGENT_ROOT", "value": working_dir},
+            {"name": "CMBAGENT_OUTPUT_DIR", "value": f"{working_dir}/cmbagent_output"},
+            {"name": "MPLCONFIGDIR", "value": f"{working_dir}/.matplotlib"},
+            # Denario-specific environment variable to override PROJECT_DIR with absolute path
+            {"name": "PROJECT_DIR", "value": working_dir},
             # GCSFUSE optimization settings for better I/O performance
             {"name": "GCSFUSE_WRITE_BUFFER_SIZE", "value": "67108864"},  # 64MB
             {"name": "GCSFUSE_MAX_RETRY_SLEEP", "value": "30"},
@@ -673,13 +686,13 @@ class PodManager:
         if secret_name:
             env_from.append({"secretRef": {"name": secret_name}})
 
-        # Build volume mounts - start with default workspace mount
+        # Build volume mounts - start with workspace mount using dynamic working_dir
         volume_mounts = [{
             "name": "user-workspace",
-            "mountPath": "/cmbagent"
+            "mountPath": working_dir
         }]
-        
-        # Build volumes - start with default workspace volume
+
+        # Build volumes - start with workspace volume using dynamic working_dir
         volumes = [{
             "name": "user-workspace",
             "csi": {
@@ -716,7 +729,7 @@ class PodManager:
                 "name": pod_name,
                 "namespace": settings.namespace,
                 "labels": {
-                    "app": "cmbagent",
+                    "app": app_name,
                     "user-id": safe_user_id,
                     "env-id": env_id,
                     "component": "user-pod"
@@ -728,13 +741,32 @@ class PodManager:
                     "storage.bucket": storage.bucket_name,
                     "created.at": datetime.utcnow().isoformat(),
                     "managed.by": "cmbcluster",
+                    "app.name": app_name,
                     "gke-gcsfuse/volumes": "true",  # Enable GCS FUSE
                     "iam.gke.io/gcp-service-account": f"{settings.cluster_name}-workload-sa@{settings.project_id}.iam.gserviceaccount.com"
                 }
             },
             "spec": {
+                "initContainers": [{
+                    "name": "wait-for-mount",
+                    "image": "busybox:latest",
+                    "command": ["/bin/sh"],
+                    "args": [
+                        "-c",
+                        f"echo 'Waiting for GCS FUSE mount to be ready...'; for i in $(seq 1 60); do if [ -d {working_dir} ] && touch {working_dir}/.mount_test 2>/dev/null; then rm -f {working_dir}/.mount_test; echo 'Mount is ready and writable'; mkdir -p {working_dir}/cmbagent_output {working_dir}/.matplotlib 2>/dev/null || true; exit 0; fi; echo \"Attempt $i: Mount not ready yet...\"; sleep 2; done; echo 'ERROR: Mount did not become ready in time'; exit 1"
+                    ],
+                    "volumeMounts": [{
+                        "name": "user-workspace",
+                        "mountPath": working_dir
+                    }],
+                    "securityContext": {
+                        "runAsUser": 1000,
+                        "runAsGroup": 1000,
+                        "allowPrivilegeEscalation": False
+                    }
+                }],
                 "containers": [{
-                    "name": "cmbagent",
+                    "name": app_name,
                     "image": image,
                     "ports": [{"containerPort": container_port, "name": "ui"}],
                     "env": env_list,
@@ -750,20 +782,29 @@ class PodManager:
                         }
                     },
                     "volumeMounts": volume_mounts,
-                    "lifecycle": {
-                        "postStart": {
-                            "exec": {
-                                "command": [
-                                    "/bin/sh", "-c",
-                                    "sleep 10 && mkdir -p /cmbagent/cmbagent_output /cmbagent/.matplotlib && chmod 755 /cmbagent/cmbagent_output /cmbagent/.matplotlib && touch /cmbagent/mount_test.txt && echo 'Mount and directories initialized' || echo 'Mount initialization failed'"
-                                ]
-                            }
-                        }
-                    },
+                    "workingDir": working_dir,
                     "securityContext": {
                         "runAsUser": 1000,
                         "runAsGroup": 1000,
                         "allowPrivilegeEscalation": False
+                    },
+                    "startupProbe": {
+                        "exec": {
+                            "command": ["/bin/sh", "-c", f"test -d {working_dir} && test -w {working_dir}"]
+                        },
+                        "initialDelaySeconds": 10,
+                        "periodSeconds": 5,
+                        "failureThreshold": 30,
+                        "timeoutSeconds": 3
+                    },
+                    "readinessProbe": {
+                        "exec": {
+                            "command": ["/bin/sh", "-c", f"test -d {working_dir} && test -w {working_dir}"]
+                        },
+                        "initialDelaySeconds": 5,
+                        "periodSeconds": 10,
+                        "failureThreshold": 3,
+                        "timeoutSeconds": 3
                     }
                 }],
                 "volumes": volumes,
@@ -784,23 +825,24 @@ class PodManager:
                       env_id=env_id)
         pass
     
-    async def _create_user_service(self, safe_user_id: str, env_id: str, container_port: int = 8888):
+    async def _create_user_service(self, safe_user_id: str, env_id: str, container_port: int = 8888, app_name: str = 'cmbagent'):
         """Create Kubernetes service for user pod"""
         service_name = f"service-{safe_user_id}-{env_id}"
         namespace = settings.namespace
-        
-        logger.info("Creating service with dynamic port", 
+
+        logger.info("Creating service with dynamic port",
                    service_name=service_name,
-                   container_port=container_port)
-        
+                   container_port=container_port,
+                   app_name=app_name)
+
         service_spec = {
             "apiVersion": "v1",
-            "kind": "Service", 
+            "kind": "Service",
             "metadata": {
                 "name": service_name,
                 "namespace": namespace,
                 "labels": {
-                    "app": "cmbagent",
+                    "app": app_name,
                     "user-id": safe_user_id,
                     "env-id": env_id
                 }
@@ -828,17 +870,18 @@ class PodManager:
             else:
                 raise
 
-    async def _create_user_ingress(self, safe_user_id: str, env_id: str, container_port: int = 8888):
+    async def _create_user_ingress(self, safe_user_id: str, env_id: str, container_port: int = 8888, app_name: str = 'cmbagent'):
         """Create Kubernetes ingress for user pod"""
         ingress_name = f"ingress-{safe_user_id}-{env_id}"
         service_name = f"service-{safe_user_id}-{env_id}"
         namespace = settings.namespace
         host = f"{safe_user_id}-{env_id}.{settings.base_domain}"
-        
-        logger.info("Creating ingress with dynamic port", 
+
+        logger.info("Creating ingress with dynamic port",
                    ingress_name=ingress_name,
                    host=host,
-                   container_port=container_port)
+                   container_port=container_port,
+                   app_name=app_name)
         
         # Base annotations
         annotations = {
@@ -870,7 +913,7 @@ class PodManager:
                 "name": ingress_name,
                 "namespace": namespace,
                 "labels": {
-                    "app": "cmbcluster-user-env",
+                    "app": app_name,
                     "user-id": safe_user_id,
                     "env-id": env_id
                 },

@@ -31,17 +31,18 @@ function DashboardContent() {
   useEffect(() => {
     const fetchDashboardData = async () => {
       if (!session) return;
-      
+
       try {
-        setLoading(true);
-        
+        // Only show loading spinner on initial load
+        if (environments.length === 0 && storages.length === 0) {
+          setLoading(true);
+        }
+
         const [envResponse, storageResponse] = await Promise.all([
           apiClient.listEnvironments(),
           apiClient.listUserStorages()
         ]);
 
-        console.log('Root page envResponse:', envResponse);
-        console.log('Root page storageResponse:', storageResponse);
 
         // Handle environment response - now properly structured
         if (envResponse.status === 'success' && envResponse.environments) {
@@ -64,6 +65,14 @@ function DashboardContent() {
     };
 
     fetchDashboardData();
+
+    // Auto-refresh dashboard data every 30 seconds in background
+    const refreshInterval = setInterval(() => {
+      fetchDashboardData();
+    }, 30000); // 30 seconds
+
+    // Cleanup interval on unmount
+    return () => clearInterval(refreshInterval);
   }, [session]);
 
   // Calculate statistics from real data
@@ -85,12 +94,6 @@ function DashboardContent() {
       value: storages.length,
       icon: <DatabaseOutlined className="text-blue-500" />,
       color: '#1890ff',
-    },
-    {
-      title: 'Active User',
-      value: session?.user ? 1 : 0,
-      icon: <UserOutlined className="text-purple-500" />,
-      color: '#722ed1',
     },
   ];
 
@@ -146,30 +149,10 @@ function DashboardContent() {
   return (
     <MainLayout>
       <div className="space-y-6">
-        {/* Welcome Section */}
-        <div className="mb-8">
-          <Title level={2} className="text-text-primary mb-2">
-            Welcome back, {session?.user?.name?.split(' ')[0] || 'User'}! 👋
-          </Title>
-          <Paragraph className="text-text-secondary text-lg">
-            Here's an overview of your CMBAgent Cloud platform. Monitor your environments, 
-            manage storage, and access powerful computational resources.
-          </Paragraph>
-        </div>
-
-        {/* Platform Status Alert */}
-        <Alert
-          message="Platform Status: All Systems Operational"
-          description="All services are running normally. Last updated: Just now"
-          type="success"
-          showIcon
-          className="mb-6"
-        />
-
         {/* Statistics Cards */}
         <Row gutter={[24, 24]} className="mb-8">
           {stats.map((stat, index) => (
-            <Col xs={24} sm={12} md={6} key={index}>
+            <Col xs={24} sm={12} md={8} key={index}>
               <Card
                 className="bg-background-secondary border-border-primary hover:shadow-lg transition-shadow"
                 bodyStyle={{ padding: '24px' }}
@@ -226,20 +209,6 @@ function DashboardContent() {
               </Col>
             ))}
           </Row>
-        </div>
-
-        {/* Recent Activity Section */}
-        <div>
-          <Title level={3} className="text-text-primary mb-4">
-            Recent Activity
-          </Title>
-          <Card className="bg-background-secondary border-border-primary">
-            <div className="text-center py-8">
-              <Text className="text-text-secondary">
-                No recent activity to display. Start by launching an environment or uploading files.
-              </Text>
-            </div>
-          </Card>
         </div>
       </div>
     </MainLayout>

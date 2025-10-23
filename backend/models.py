@@ -97,6 +97,7 @@ class ApplicationImage(BaseModel):
     summary: str
     image_path: str
     port: Optional[int] = 8888
+    working_dir: Optional[str] = "/cmbagent"  # Default working directory/mount path
     icon_url: Optional[str] = None
     category: str = "research"
     created_at: datetime

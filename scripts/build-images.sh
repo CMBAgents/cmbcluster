@@ -7,7 +7,7 @@ PROJECT_ROOT=$(dirname "$SCRIPT_DIR")
 
 PROJECT_ID=${1:-$(gcloud config get-value project)}
 TAG=${2:-"latest"}
-IMAGE_REPO=${3:-"us-central1-docker.pkg.dev/$PROJECT_ID/cmbcluster-dev-images"}
+IMAGE_REPO=${3:-"us-central1-docker.pkg.dev/$PROJECT_ID/cmbcluster-images"}
 
 if [ -z "$PROJECT_ID" ]; then
     echo "Error: PROJECT_ID is required"
@@ -25,20 +25,29 @@ echo "🔐 Authenticating Docker with Artifact Registry..."
 REGISTRY_HOSTNAME=$(echo "$IMAGE_REPO" | cut -d'/' -f1)
 gcloud auth configure-docker "$REGISTRY_HOSTNAME" --quiet
 
-#SERVICES=("backend" "frontend" "user-environment")
+#SERVICES=("backend" "frontend" "user-environment" "denario")
 
-# SERVICES=("frontend")
-SERVICES=("frontend" )
+#  SERVICES=("frontend")
+SERVICES=("backend" )
 # SERVICES=("frontend" "backend")
 for SERVICE in "${SERVICES[@]}"; do
     # Use nextjs-frontend directory for frontend service
     if [ "$SERVICE" == "frontend" ]; then
         CONTEXT_PATH="$PROJECT_ROOT/nextjs-frontend"
+    # Use docker/denario directory for denario image
+    elif [ "$SERVICE" == "denario" ]; then
+        CONTEXT_PATH="$PROJECT_ROOT/docker/denario"
+        IMAGE_NAME="denario"  # Use denario instead of cmbcluster-denario
     else
         CONTEXT_PATH="$PROJECT_ROOT/$SERVICE"
+        IMAGE_NAME="cmbcluster-$SERVICE"
     fi
-    
-    IMAGE_NAME="cmbcluster-$SERVICE"
+
+    # Set image name if not already set
+    if [ "$SERVICE" != "denario" ]; then
+        IMAGE_NAME="cmbcluster-$SERVICE"
+    fi
+
     FULL_IMAGE_TAG="$IMAGE_REPO/$IMAGE_NAME:$TAG"
 
     echo "--------------------------------------------------"

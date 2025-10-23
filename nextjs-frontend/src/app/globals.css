@@ -2817,8 +2817,142 @@ html[data-theme='light'] .glass-modal-frosted {
 
 .ant-card.environment-overview-card:hover {
   transform: translateY(-4px) scale(1.02);
-  box-shadow: 
+  box-shadow:
     var(--glass-shadow-hover),
     0 0 40px rgba(14, 125, 184, 0.15);
   border-color: var(--interactive-primary);
+}
+
+/* ===========================================
+   Custom Component Styles
+   =========================================== */
+
+/* Simple Search Input Styling - Animated from Uiverse.io */
+.simple-search-input {
+  --timing: 0.3s;
+  --width-of-input: 280px;
+  --height-of-input: 40px;
+  --border-height: 2px;
+  --border-color: var(--interactive-primary);
+  --border-radius: 30px;
+  --after-border-radius: 1px;
+
+  position: relative;
+  border-radius: var(--border-radius) !important;
+  transition: border-radius 0.5s ease !important;
+  background: var(--bg-secondary) !important;
+  border: none !important;
+  box-shadow: none !important;
+}
+
+/* Darker background in light mode for better contrast */
+html[data-theme='light'] .simple-search-input {
+  background: rgba(14, 125, 184, 0.08) !important;
+}
+
+.simple-search-input:hover {
+  box-shadow: none !important;
+}
+
+.simple-search-input:focus,
+.simple-search-input:focus-within {
+  border-radius: var(--after-border-radius) !important;
+  box-shadow: none !important;
+  border: none !important;
+}
+
+/* Animated border */
+.simple-search-input::before {
+  content: "";
+  position: absolute;
+  background: var(--border-color);
+  transform: scaleX(0);
+  transform-origin: center;
+  width: 100%;
+  height: var(--border-height);
+  left: 0;
+  bottom: 0;
+  border-radius: 1px;
+  transition: transform var(--timing) ease;
+  pointer-events: none;
+}
+
+.simple-search-input:focus-within::before {
+  transform: scale(1);
+}
+
+.simple-search-input .ant-input {
+  background-color: transparent !important;
+  border: none !important;
+}
+
+.simple-search-input .ant-input:focus {
+  outline: none !important;
+  box-shadow: none !important;
+}
+
+.simple-search-input .ant-input-prefix {
+  color: var(--text-secondary);
+}
+
+.simple-search-input .ant-input-prefix svg {
+  width: 17px;
+  margin-top: 3px;
+}
+
+.simple-search-input .ant-input-clear-icon {
+  color: var(--text-secondary);
+}
+
+/* Settings Tabs Styling */
+.settings-tabs .ant-tabs-tab {
+  color: var(--text-secondary) !important;
+  padding: 12px 20px !important;
+  transition: all 0.2s ease !important;
+  border-radius: 8px !important;
+  margin: 0 4px !important;
+  background: transparent !important;
+}
+
+.settings-tabs .ant-tabs-tab:hover {
+  color: var(--text-primary) !important;
+  background: var(--background-secondary) !important;
+}
+
+.settings-tabs .ant-tabs-tab-active {
+  color: #ffffff !important;
+  background: var(--interactive-primary) !important;
+}
+
+.settings-tabs .ant-tabs-tab-active:hover {
+  color: #ffffff !important;
+  background: var(--interactive-primary) !important;
+}
+
+.settings-tabs .ant-tabs-tab-active .ant-tabs-tab-btn {
+  color: #ffffff !important;
+}
+
+.settings-tabs .ant-tabs-tab-active:hover .ant-tabs-tab-btn {
+  color: #ffffff !important;
+}
+
+.settings-tabs .ant-tabs-tab-active .anticon {
+  color: #ffffff !important;
+}
+
+.settings-tabs .ant-tabs-tab-active:hover .anticon {
+  color: #ffffff !important;
+}
+
+.settings-tabs .ant-tabs-ink-bar {
+  display: none !important;
+}
+
+.settings-tabs .ant-tabs-nav {
+  margin-bottom: 0 !important;
+}
+
+.settings-tabs .ant-tabs-nav::before {
+  border-bottom: none !important;
 }

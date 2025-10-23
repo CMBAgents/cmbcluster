@@ -74,10 +74,7 @@ NEXT_PUBLIC_API_DOMAIN=${rootEnv.API_URL ? new URL(rootEnv.API_URL).host : 'api.
   const envPath = path.join(__dirname, '../.env.local');
   fs.writeFileSync(envPath, envContent);
   
-  console.log(`✅ Generated ${isDev ? 'development' : 'production'} environment configuration:`);
-  console.log(`   - API URL: ${apiUrl}`);
-  console.log(`   - Frontend URL: ${frontendUrl}`);
-  console.log(`   - File: ${envPath}`);
+
 }
 
 // Run the script

@@ -49,8 +49,6 @@ export default function EnvironmentAccessPage() {
   const envId = params?.envId as string;
 
   // Debug logging
-  console.log('EnvironmentAccessPage params:', params);
-  console.log('EnvironmentAccessPage envId:', envId);
 
   // Fetch environment details
   const {
@@ -66,9 +64,7 @@ export default function EnvironmentAccessPage() {
       }
 
       try {
-        console.log('Fetching environment with ID:', envId);
         const response = await apiClient.getEnvironmentById(envId);
-        console.log('Environment API response:', response);
 
         if (response.status === 'success' && response.environment) {
           return response.environment;
@@ -496,7 +492,6 @@ export default function EnvironmentAccessPage() {
                 title={`Environment ${environment.env_id || environment.id}`}
                 onError={handleIframeError}
                 onLoad={() => {
-                  console.log('Iframe loaded successfully');
                   setIframeError(false);
                 }}
                 sandbox="allow-same-origin allow-scripts allow-popups allow-forms allow-downloads"

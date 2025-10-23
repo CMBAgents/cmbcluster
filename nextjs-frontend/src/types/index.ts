@@ -99,6 +99,7 @@ export interface ApplicationImage {
   summary: string;
   image_path: string;
   port?: number;
+  working_dir?: string;
   icon_url?: string;
   category: string;
   created_at: string;
@@ -112,6 +113,7 @@ export interface ApplicationImageRequest {
   summary: string;
   image_path: string;
   port?: number;
+  working_dir?: string;
   icon_url?: string;
   category?: string;
   tags?: string[];

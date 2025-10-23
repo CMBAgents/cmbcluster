@@ -135,27 +135,15 @@ function SignInContent() {
           {/* Sophisticated Branding */}
           <div>
             <div className="flex items-center justify-center gap-4 mb-4">
-              <Image
-                src="/logos/cmbagent-logo.png"
-                alt="CMBAgent"
-                width={48}
-                height={48}
-                preview={false}
-                style={{
-                  transition: 'all 0.4s ease',
-                  objectFit: 'contain',
-                  filter: theme === 'dark' ? 'brightness(1.1)' : 'brightness(0.9)'
-                }}
-              />
-              <h1 className="text-5xl font-light" style={{ 
+              <h1 className="text-5xl font-light" style={{
                 color: 'var(--text-primary)',
                 fontWeight: '300',
                 letterSpacing: '-0.02em',
                 lineHeight: 1.1,
                 margin: 0
               }}>
-                CMBAgent 
-                <span style={{ 
+                CMBAgent
+                <span style={{
                   fontWeight: '600',
                   background: `linear-gradient(135deg, var(--interactive-primary), var(--primary-300))`,
                   backgroundClip: 'text',

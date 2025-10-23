@@ -63,12 +63,10 @@ function ApplicationManagementContent() {
   const loadApplications = async () => {
     try {
       setLoading(true);
-      console.log('Loading admin applications...');
+     
       const response = await apiClient.getAdminApplications();
-      console.log('Admin applications response:', response);
       
       if (response.status === 'success' && response.data) {
-        console.log('Setting applications data:', response.data);
         setApplications(response.data);
       } else {
         console.error('Failed to load applications - invalid response:', response);
@@ -118,8 +116,9 @@ function ApplicationManagementContent() {
       formData.append('image_path', values.image_path);
       formData.append('category', values.category);
       formData.append('port', (values.port || 8888).toString());
+      formData.append('working_dir', values.working_dir || '/cmbagent');
       formData.append('tags', values.tags || '');
-      
+
       if (imageFile) {
         formData.append('image_file', imageFile);
       }
@@ -277,6 +276,16 @@ function ApplicationManagementContent() {
       )
     },
     {
+      title: 'Working Dir',
+      dataIndex: 'working_dir',
+      key: 'working_dir',
+      render: (workingDir: string) => (
+        <code className="bg-gray-100 px-2 py-1 rounded text-xs">
+          {workingDir || '/cmbagent'}
+        </code>
+      )
+    },
+    {
       title: 'Status',
       dataIndex: 'is_active',
       key: 'is_active',
@@ -430,6 +439,16 @@ function ApplicationManagementContent() {
               placeholder="8888"
               style={{ width: '100%' }}
             />
+          </Form.Item>
+
+          <Form.Item
+            name="working_dir"
+            label="Working Directory"
+            rules={[{ required: true, message: 'Please enter working directory' }]}
+            initialValue="/cmbagent"
+            tooltip="The mount path and working directory for the container. Must match your Docker image's WORKDIR."
+          >
+            <Input placeholder="/cmbagent" />
           </Form.Item>
 
           <Form.Item

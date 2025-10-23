@@ -45,9 +45,7 @@ export default function DashboardPage() {
 
         // Only update state if component is still mounted
         if (mounted) {
-          console.log('Dashboard envResponse:', envResponse);
-          console.log('Dashboard storageResponse:', storageResponse);
-
+ 
           // Handle environment response - now properly structured
           if (envResponse.status === 'success' && envResponse.environments) {
             setEnvironments(envResponse.environments);

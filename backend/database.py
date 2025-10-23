@@ -500,7 +500,14 @@ class DatabaseManager:
                 except sqlite3.OperationalError as e:
                     if "duplicate column name" not in str(e).lower():
                         logger.warning("Could not add tags column", error=str(e))
-                
+
+                try:
+                    conn.execute("ALTER TABLE applications ADD COLUMN working_dir TEXT DEFAULT '/cmbagent'")
+                    logger.info("Added working_dir column to applications table")
+                except sqlite3.OperationalError as e:
+                    if "duplicate column name" not in str(e).lower():
+                        logger.warning("Could not add working_dir column", error=str(e))
+
                 # Add application_id and image_path columns to environments table
                 try:
                     conn.execute("ALTER TABLE environments ADD COLUMN application_id TEXT")
@@ -1074,12 +1081,12 @@ class DatabaseManager:
             await asyncio.get_event_loop().run_in_executor(
                 None,
                 lambda: conn.execute(
-                    """INSERT INTO applications 
-                       (id, name, summary, image_path, port, icon_url, category, created_at, created_by, is_active, tags)
-                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                    """INSERT INTO applications
+                       (id, name, summary, image_path, port, working_dir, icon_url, category, created_at, created_by, is_active, tags)
+                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                     (application.id, application.name, application.summary, application.image_path,
-                     application.port or 8888, application.icon_url, application.category, 
-                     application.created_at.isoformat(), application.created_by, application.is_active, 
+                     application.port or 8888, application.working_dir or "/cmbagent", application.icon_url, application.category,
+                     application.created_at.isoformat(), application.created_by, application.is_active,
                      json.dumps(application.tags))
                 )
             )
@@ -1116,6 +1123,7 @@ class DatabaseManager:
                         summary=row['summary'] or "",
                         image_path=row['image_path'],
                         port=row_dict.get('port', 8888),
+                        working_dir=row_dict.get('working_dir', '/cmbagent'),
                         icon_url=row_dict.get('icon_url'),
                         category=row_dict.get('category', 'research'),
                         created_at=datetime.fromisoformat(row['created_at']),
@@ -1155,6 +1163,7 @@ class DatabaseManager:
                     summary=row['summary'],
                     image_path=row['image_path'],
                     port=row_dict.get('port', 8888),
+                    working_dir=row_dict.get('working_dir', '/cmbagent'),
                     icon_url=row['icon_url'],
                     category=row['category'],
                     created_at=datetime.fromisoformat(row['created_at']),
@@ -1170,11 +1179,11 @@ class DatabaseManager:
             await asyncio.get_event_loop().run_in_executor(
                 None,
                 lambda: conn.execute(
-                    """UPDATE applications 
-                       SET name=?, summary=?, image_path=?, port=?, icon_url=?, category=?, tags=?
+                    """UPDATE applications
+                       SET name=?, summary=?, image_path=?, port=?, working_dir=?, icon_url=?, category=?, tags=?
                        WHERE id=?""",
                     (application.name, application.summary, application.image_path,
-                     application.port or 8888, application.icon_url, application.category, 
+                     application.port or 8888, application.working_dir or '/cmbagent', application.icon_url, application.category,
                      json.dumps(application.tags), application.id)
                 )
             )

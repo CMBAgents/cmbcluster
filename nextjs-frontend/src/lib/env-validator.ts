@@ -79,11 +79,9 @@ class EnvironmentValidator {
     try {
       // Only fetch on client side
       if (typeof window !== 'undefined') {
-        console.log('Fetching runtime config from /api/config...');
         const response = await fetch('/api/config');
         if (response.ok) {
           this.runtimeConfig = await response.json();
-          console.log('Runtime config loaded:', this.runtimeConfig);
           return this.runtimeConfig;
         } else {
           console.warn('Failed to fetch runtime config, response not ok:', response.status, response.statusText);
@@ -96,7 +94,6 @@ class EnvironmentValidator {
           apiDomain: process.env.NEXT_PUBLIC_API_DOMAIN || 'api.35.188.79.156.nip.io',
           nextAuthUrl: process.env.NEXTAUTH_URL || 'https://35.188.79.156.nip.io'
         };
-        console.log('Server-side config loaded:', this.runtimeConfig);
         return this.runtimeConfig;
       }
     } catch (error) {
@@ -184,14 +181,7 @@ class EnvironmentValidator {
     
     // Log configuration in development
     if (this.config.isDevelopment && this.config.debug) {
-      console.log('🔧 Environment Configuration:', {
-        apiUrl: this.config.apiUrl,
-        nextAuthUrl: this.config.nextAuthUrl,
-        domain: this.config.domain,
-        apiDomain: this.config.apiDomain,
-        isDevelopment: this.config.isDevelopment,
-        debug: this.config.debug
-      });
+  
     }
     
     return this.config;

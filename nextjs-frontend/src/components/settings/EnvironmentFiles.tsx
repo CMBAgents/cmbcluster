@@ -78,12 +78,7 @@ export default function EnvironmentFiles() {
         throw new Error('File size exceeds 1MB limit');
       }
 
-      console.log('Environment file upload starting:', {
-        fileName: values.file.name,
-        fileType: values.file_type,
-        envVar: values.environment_variable_name,
-        containerPath: values.container_path
-      });
+  
 
       const response = await apiClient.uploadUserFile(
         values.file,
@@ -92,7 +87,6 @@ export default function EnvironmentFiles() {
         values.container_path
       );
       
-      console.log('API upload response:', response);
       
       return response;
     },
@@ -234,26 +228,15 @@ export default function EnvironmentFiles() {
             requiredGcpFields.every(field => field in jsonContent && jsonContent[field])
           );
           
-          console.log('GCP detection result:', {
-            hasTypeField: 'type' in jsonContent,
-            typeValue: jsonContent.type,
-            missingFields: requiredGcpFields.filter(field => !(field in jsonContent) || !jsonContent[field]),
-            isDetectedAsGcp: isGcp
-          });
+         
           
           setIsGcpKey(isGcp);
           setFilePreview(JSON.stringify(jsonContent, null, 2));
           
           // Auto-update form if GCP key is detected
           if (isGcp) {
-            console.log('Auto-setting GCP service account type');
-            form.setFieldsValue({
-              file_type: 'gcp_service_account',
-              environment_variable_name: 'GOOGLE_APPLICATION_CREDENTIALS',
-              container_path: '/app/secrets/gcp_service_account.json'
-            });
+           
           } else {
-            console.log('Setting as custom JSON type');
             form.setFieldsValue({
               file_type: 'custom_json',
               container_path: `/mnt/user-files/${file.name}`
@@ -280,9 +263,7 @@ export default function EnvironmentFiles() {
     environment_variable_name: string;
     container_path?: string;
   }) => {
-    console.log('=== ENVIRONMENT FILES FRONTEND DEBUG ===');
-    console.log('handleUpload called with values:', values);
-    console.log('Current fileList:', fileList);
+   
 
     if (fileList.length === 0) {
       console.error('No files selected');
@@ -291,13 +272,7 @@ export default function EnvironmentFiles() {
     }
 
     const file = fileList[0].originFileObj as File;
-    console.log('Selected file details:', {
-      name: file?.name,
-      size: file?.size,
-      type: file?.type,
-      lastModified: file?.lastModified,
-      exists: !!file
-    });
+  
 
     if (!file) {
       console.error('File object is null or undefined');
@@ -306,7 +281,6 @@ export default function EnvironmentFiles() {
     }
     
     const trimmedEnvVar = values.environment_variable_name?.trim();
-    console.log('Environment variable (trimmed):', trimmedEnvVar);
     
     // Environment variable name is required
     if (!trimmedEnvVar) {
@@ -332,7 +306,6 @@ export default function EnvironmentFiles() {
     }
 
     const finalContainerPath = autoContainerPath || values.container_path;
-    console.log('Final container path:', finalContainerPath);
 
     // Check for duplicate container paths
     if (finalContainerPath) {
@@ -351,17 +324,9 @@ export default function EnvironmentFiles() {
       container_path: finalContainerPath,
     };
 
-    console.log('Final upload data prepared:', {
-      fileName: file.name,
-      fileSize: file.size,
-      fileType: uploadData.file_type,
-      environmentVariable: uploadData.environment_variable_name,
-      containerPath: uploadData.container_path,
-    });
+ 
 
-    console.log('Calling uploadMutation.mutate...');
     uploadMutation.mutate(uploadData);
-    console.log('=== END ENVIRONMENT FILES FRONTEND DEBUG ===');
   };
 
   const handleEdit = (record: UserFile) => {

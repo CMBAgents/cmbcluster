@@ -9,11 +9,6 @@ export const metadata = {
   description: 'CMBAgent Cloud - Enterprise research platform for autonomous discovery',
   keywords: 'research, AI, cloud computing, Cambridge, Infosys, data analysis',
   author: 'Cambridge-Infosys',
-  icons: {
-    icon: '/logos/cmbagent-logo.png',
-    shortcut: '/logos/cmbagent-logo.png',
-    apple: '/logos/cmbagent-logo.png',
-  },
 };
 
 // Force dynamic rendering for all pages

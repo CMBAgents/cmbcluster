@@ -2,14 +2,14 @@
 
 import React, { useState, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { 
-  Card, 
-  Button, 
-  Space, 
-  Typography, 
-  Row, 
-  Col, 
-  Statistic, 
+import {
+  Card,
+  Button,
+  Space,
+  Typography,
+  Row,
+  Col,
+  Statistic,
   Alert,
   Table,
   Tag,
@@ -18,7 +18,6 @@ import {
   Modal,
   Form,
   InputNumber,
-  Tabs,
   Input,
   Switch,
   Divider,
@@ -27,8 +26,8 @@ import {
   Badge,
   Radio
 } from 'antd';
-import { 
-  RocketOutlined, 
+import {
+  RocketOutlined,
   ReloadOutlined,
   PlayCircleOutlined,
   StopOutlined,
@@ -43,6 +42,7 @@ import {
   PlusCircleOutlined,
   DatabaseOutlined,
   MonitorOutlined,
+  ClockCircleOutlined,
 } from '@ant-design/icons';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import type { Environment, StorageSelection, StorageItem, ApplicationImage } from '@/types';
@@ -54,7 +54,6 @@ import MonitoringDashboard from '@/components/monitoring/MonitoringDashboard';
 
 const { Title, Text } = Typography;
 const { Option } = Select;
-const { Search } = Input;
 
 interface EnvironmentTableRecord extends Environment {
   key: string;
@@ -91,7 +90,6 @@ const PRESET_CONFIGS = {
 export default function EnvironmentManagement() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const [activeTab, setActiveTab] = useState('environments');
   const [launchModalVisible, setLaunchModalVisible] = useState(false);
   const [selectedPreset, setSelectedPreset] = useState<keyof typeof PRESET_CONFIGS>('standard');
   const [customMode, setCustomMode] = useState(false);
@@ -120,18 +118,18 @@ export default function EnvironmentManagement() {
     queryFn: async () => {
       try {
         const response = await apiClient.listEnvironments();
-        console.log('Environments API response:', response);
+
         
         // Debug pending environments
         const envs = response.environments || [];
         const pendingEnvs = envs.filter(env => env.status === 'pending');
         if (pendingEnvs.length > 0) {
-          console.log('Pending environments detected:', pendingEnvs.map(env => ({
+          pendingEnvs.map(env => ({
             id: env.id,
             env_id: env.env_id,
             status: env.status,
             created_at: env.created_at
-          })));
+          }));
           
           // Check for environments stuck in pending for more than 5 minutes
           const now = new Date();
@@ -176,22 +174,16 @@ export default function EnvironmentManagement() {
   const { data: applications } = useQuery({
     queryKey: ['applications'],
     queryFn: async () => {
-      console.log('Fetching applications for environment launch...');
       const response = await apiClient.listApplications();
-      console.log('Environment applications API response:', response);
       
       // Handle different response formats
       if (response.status === 'success' && response.data) {
-        console.log('Using response.data for environment launch:', response.data);
         return response.data;
       } else if (Array.isArray(response)) {
-        console.log('Response is direct array for environment launch:', response);
         return response;
       } else if (response.applications) {
-        console.log('Using response.applications for environment launch:', response.applications);
         return response.applications;
       } else {
-        console.warn('Unexpected response format for environment launch:', response);
         return [];
       }
     }
@@ -214,16 +206,13 @@ export default function EnvironmentManagement() {
     mutationFn: async (config: any) => {
       setLaunchStep('Validating configuration...');
       setLaunchProgress(25);
-      console.log('Environment launch config:', config);
       
       await new Promise(resolve => setTimeout(resolve, 300));
       
       setLaunchStep('Launching environment...');
       setLaunchProgress(75);
       
-      console.log('Calling createEnvironment API...');
       const result = await apiClient.createEnvironment(config);
-      console.log('Environment creation result:', result);
       setLaunchProgress(100);
       
       return result;
@@ -654,23 +643,8 @@ export default function EnvironmentManagement() {
         </Space>
       </div>
 
-      {/* Environment Tabs */}
+      {/* Environment Content */}
       <Card className="glass-card" bodyStyle={{ padding: '16px' }}>
-        <Tabs 
-          activeKey={activeTab} 
-          onChange={setActiveTab}
-          size="large"
-          className="professional-tabs"
-        >
-          <Tabs.TabPane 
-            tab={
-              <span className="flex items-center space-x-2">
-                <RocketOutlined />
-                <span>Environments</span>
-              </span>
-            } 
-            key="environments"
-          >
           {/* Compact Statistics Row */}
           <div className="mb-4">
             <Row gutter={[12, 12]}>
@@ -712,7 +686,11 @@ export default function EnvironmentManagement() {
                 <Card className="glass-card" bodyStyle={{ padding: '16px' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                     <div className="icon-container warning" style={{ width: '36px', height: '36px', minWidth: '36px' }}>
-                      {pendingCount > 0 ? <LoadingOutlined spin style={{ fontSize: '18px' }} /> : <LoadingOutlined style={{ fontSize: '18px' }} />}
+                      {pendingCount > 0 ? (
+                        <LoadingOutlined spin style={{ fontSize: '18px' }} />
+                      ) : (
+                        <ClockCircleOutlined style={{ fontSize: '18px' }} />
+                      )}
                     </div>
                     <div>
                       <div style={{ fontSize: '20px', fontWeight: 'bold', color: pendingCount > 0 ? 'var(--warning-500)' : 'var(--text-disabled)', lineHeight: 1 }}>
@@ -747,11 +725,13 @@ export default function EnvironmentManagement() {
 
           {/* Compact Search and Filters */}
           <div className="mb-3" style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-            <Search
+            <Input
               placeholder="Search environments..."
               value={searchText}
               onChange={(e) => setSearchText(e.target.value)}
               allowClear
+              prefix={<SearchOutlined />}
+              className="simple-search-input"
               style={{ maxWidth: '280px' }}
               size="middle"
             />
@@ -881,32 +861,6 @@ export default function EnvironmentManagement() {
               </div>
             )}
           </Card>
-        </Tabs.TabPane>
-
-          <Tabs.TabPane 
-            tab={
-              <span className="flex items-center space-x-2">
-                <DatabaseOutlined />
-                <span>Storage</span>
-              </span>
-            } 
-            key="storage"
-          >
-            <StorageManagement hideCreateButton={true} />
-          </Tabs.TabPane>
-
-          <Tabs.TabPane 
-            tab={
-              <span className="flex items-center space-x-2">
-                <MonitorOutlined />
-                <span>Monitoring</span>
-              </span>
-            } 
-            key="monitoring"
-          >
-            <MonitoringDashboard />
-          </Tabs.TabPane>
-        </Tabs>
       </Card>
 
       {/* Launch Environment Modal */}

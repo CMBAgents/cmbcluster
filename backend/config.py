@@ -43,6 +43,7 @@ class Settings(BaseSettings):
     # Application settings
     namespace: str = "cmbcluster"
     registry_url: str = "gcr.io/cmbcluster-dev"
+    default_image: str = "borisbolliet/cmbagent-ui"  # Default container image
     max_user_pods: int = 1
     storage_class_name: str = "standard-rwo"
     user_pod_sa_name: str = "cmbcluster-user-sa"

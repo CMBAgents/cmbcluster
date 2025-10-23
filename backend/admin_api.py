@@ -25,6 +25,7 @@ class ApplicationImageRequest(BaseModel):
     summary: str
     image_path: str
     port: Optional[int] = 8888
+    working_dir: Optional[str] = "/cmbagent"
     icon_url: Optional[str] = None
     category: str = "research"
     tags: List[str] = []
@@ -165,6 +166,7 @@ async def create_application(
             summary=request.summary,
             image_path=request.image_path,
             port=request.port or 8888,
+            working_dir=request.working_dir or "/cmbagent",
             icon_url=request.icon_url,
             category=request.category,
             created_at=datetime.utcnow(),
@@ -214,6 +216,7 @@ async def create_application_with_image(
     image_path: str = Form(...),
     category: str = Form("research"),
     port: int = Form(8888),
+    working_dir: str = Form("/cmbagent"),
     tags: str = Form(""),
     image_file: Optional[UploadFile] = File(None),
     current_user: Dict = Depends(require_admin_mode())
@@ -264,6 +267,7 @@ async def create_application_with_image(
             summary=summary,
             image_path=image_path,
             port=port,
+            working_dir=working_dir,
             icon_url=icon_url,
             category=category,
             created_at=datetime.utcnow(),
@@ -340,6 +344,7 @@ async def update_application(
             summary=request.summary,
             image_path=request.image_path,
             port=request.port or 8888,
+            working_dir=request.working_dir or "/cmbagent",
             icon_url=request.icon_url,
             category=request.category,
             created_at=existing_app.created_at,
@@ -377,6 +382,7 @@ async def update_application_with_image(
     image_path: str = Form(...),
     category: str = Form("research"),
     port: int = Form(8888),
+    working_dir: str = Form("/cmbagent"),
     tags: str = Form(""),
     image_file: Optional[UploadFile] = File(None),
     current_user: Dict = Depends(require_admin_mode())
@@ -434,6 +440,7 @@ async def update_application_with_image(
             summary=summary,
             image_path=image_path,
             port=port,
+            working_dir=working_dir,
             icon_url=icon_url,
             category=category,
             created_at=existing_app.created_at,

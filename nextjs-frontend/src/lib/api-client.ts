@@ -45,7 +45,6 @@ class CMBClusterAPIClient {
         try {
           // Dynamically set the baseURL from runtime configuration to solve build-time env var issues
           config.baseURL = await getApiUrlAsync();
-          console.log('API Client: Using baseURL:', config.baseURL);
 
           // Get backend token (either from session or throw error)
           const backendToken = await this.getBackendToken();
@@ -99,23 +98,17 @@ class CMBClusterAPIClient {
         
         if (error.response?.status === 401) {
           // Authentication failed - sign out and redirect to login
-          console.log('Authentication failed (401), signing out');
           signOut({ callbackUrl: '/auth/signin' });
           
         } else if (error.response?.status === 403) {
-          console.error('Access denied. Insufficient permissions.');
           
         } else if (error.response?.status === 429) {
-          console.error('Rate limit exceeded. Please try again later.');
           
         } else if (error.response && error.response.status >= 500) {
-          console.error('Server error:', error.response.data);
           
         } else if (error.code === 'ECONNABORTED') {
-          console.error('Request timeout');
           
         } else if (error.code === 'ERR_NETWORK') {
-          console.error('Network error - please check your connection');
         }
         
         return Promise.reject(error);
@@ -128,37 +121,24 @@ class CMBClusterAPIClient {
    */
   private async getBackendToken(): Promise<string | null> {
     try {
-      console.log('=== API CLIENT TOKEN DEBUG ===');
       const session = await getSession();
       
       // If no session, can't get token
       if (!session) {
-        console.log('❌ No session found - user not logged in');
         return null;
       }
       
-      console.log('✅ Session found for user:', session.user?.email);
-      console.log('Session has accessToken:', !!session.accessToken);
-      
+   
       // If session has backend token, use it
       if (session.accessToken) {
-        console.log('✅ Using backend token from session');
-        console.log('==============================');
+   
         return session.accessToken;
       }
       
       // If session exists but no backend token, the initial token exchange probably failed
-      console.error('❌ Authentication incomplete: User is logged in but backend token exchange failed');
-      console.error('This usually means there was an issue connecting to the backend during login');
-      console.error('Session data:', { 
-        hasUser: !!session.user, 
-        userEmail: session.user?.email,
-        hasAccessToken: !!session.accessToken 
-      });
-      console.error('==============================');
+
       throw new Error('Authentication incomplete - please try logging out and logging in again');
     } catch (error) {
-      console.error('Error getting backend token:', error);
       throw error;
     }
   }
@@ -314,7 +294,6 @@ class CMBClusterAPIClient {
     try {
       const response = await this.api.get('/environments/list');
       const data = await this.handleResponse(response);
-      console.log('listEnvironments raw response:', data);
       
       // Backend returns { environments: [...] }
       if (data && typeof data === 'object' && 'environments' in data) {
@@ -356,13 +335,11 @@ class CMBClusterAPIClient {
 
   async getEnvironmentById(envId: string): Promise<ApiResponse<Environment>> {
     try {
-      console.log('Getting environment by ID:', envId);
       
       // Try direct API endpoint first
       try {
         const response = await this.api.get(`/environments/${envId}/info`);
         const data = await this.handleResponse(response);
-        console.log('Direct environment API response:', data);
         
         if (data && data.environment) {
           return {
@@ -372,7 +349,6 @@ class CMBClusterAPIClient {
           };
         }
       } catch (directError) {
-        console.log('Direct endpoint failed, trying list approach:', directError);
       }
 
       // Fallback to list approach
@@ -402,7 +378,6 @@ class CMBClusterAPIClient {
 
   async restartEnvironment(envId?: string, config?: EnvironmentConfig): Promise<ApiResponse> {
     try {
-      console.log('Restarting environment with ID:', envId);
       
       // Get current environment configuration before deleting
       let currentConfig = config;
@@ -415,30 +390,23 @@ class CMBClusterAPIClient {
               memory_limit: envResponse.environment.resource_config.memory_limit,
               storage_size: envResponse.environment.resource_config.storage_size
             };
-            console.log('Using existing config for restart:', currentConfig);
           }
         } catch (e) {
-          console.log('Could not get current config, using defaults');
         }
       }
 
       // Stop environment first
-      console.log('Stopping environment before restart...');
       const deleteResponse = await this.deleteEnvironment(envId);
-      console.log('Delete response:', deleteResponse);
       
       if (deleteResponse.status !== 'deleted' && deleteResponse.status !== 'success') {
         throw new Error(`Failed to stop environment: ${deleteResponse.message}`);
       }
 
       // Wait a moment for cleanup
-      console.log('Waiting for cleanup...');
       await new Promise(resolve => setTimeout(resolve, 3000));
 
       // Create new environment with previous config
-      console.log('Creating new environment with config:', currentConfig);
       const createResponse = await this.createEnvironment(currentConfig);
-      console.log('Create response:', createResponse);
       
       if (createResponse.status === 'created' || createResponse.status === 'existing') {
         return {
@@ -457,9 +425,7 @@ class CMBClusterAPIClient {
 
   async stopEnvironment(envId?: string): Promise<ApiResponse> {
     try {
-      console.log('Stopping environment with ID:', envId);
       const result = await this.deleteEnvironment(envId);
-      console.log('Stop environment result:', result);
       if (result.status === 'deleted' || result.status === 'success') {
         return {
           status: 'success',
@@ -497,7 +463,6 @@ class CMBClusterAPIClient {
     try {
       const response = await this.api.get('/storage');
       const data = await this.handleResponse(response);
-      console.log('listUserStorages raw response:', data);
       
       // Backend returns { storages: [...], total_count: number, usage_stats: {...} }
       if (data && typeof data === 'object' && 'storages' in data) {
@@ -609,17 +574,7 @@ class CMBClusterAPIClient {
     containerPath?: string
   ): Promise<any> {
     try {
-      console.log('=== ENVIRONMENT FILE UPLOAD DEBUG ===');
-      console.log('uploadUserFile called:', { 
-        fileName: file.name, 
-        fileSize: file.size, 
-        fileType, 
-        envVarName, 
-        containerPath,
-        fileLastModified: file.lastModified,
-        fileWebkitRelativePath: (file as any).webkitRelativePath
-      });
-
+ 
       // Validate file is JSON
       if (!file.name.toLowerCase().endsWith('.json')) {
         throw new Error('Only JSON files are allowed');
@@ -638,7 +593,6 @@ class CMBClusterAPIClient {
         throw new Error('Environment variable name is required');
       }
 
-      console.log('Validations passed. Creating FormData...');
       
       const formData = new FormData();
       formData.append('file', file, file.name);
@@ -649,16 +603,12 @@ class CMBClusterAPIClient {
         formData.append('container_path', containerPath.trim());
       }
 
-      console.log('FormData created. Contents:');
       for (let [key, value] of formData.entries()) {
         if (value instanceof File) {
-          console.log(`  ${key}: [File] ${value.name} (${value.size} bytes, type: ${value.type})`);
         } else {
-          console.log(`  ${key}: "${value}"`);
         }
       }
 
-      console.log('Making POST request to /user-files/upload...');
       
       const response = await this.api.post('/user-files/upload', formData, {
         headers: {
@@ -666,25 +616,18 @@ class CMBClusterAPIClient {
         },
       });
       
-      console.log('Upload successful! Response:', response.status, response.statusText);
-      console.log('Response data:', response.data);
+    
       const result = await this.handleResponse(response);
-      console.log('Final processed result:', result);
-      console.log('=== ENVIRONMENT FILE UPLOAD SUCCESS ===');
-      
+   
       return result;
     } catch (error) {
-      console.error('=== ENVIRONMENT FILE UPLOAD ERROR ===');
-      console.error('Error caught:', error);
+
       if ((error as any)?.response) {
-        console.error('Response status:', (error as any).response.status);
-        console.error('Response data:', (error as any).response.data);
-        console.error('Response headers:', (error as any).response.headers);
+       
       }
       if ((error as any)?.request) {
-        console.error('Request details:', (error as any).request);
+       
       }
-      console.error('=== END ENVIRONMENT FILE UPLOAD ERROR ===');
       throw error;
     }
   }
@@ -739,15 +682,7 @@ class CMBClusterAPIClient {
 
   async uploadFileToStorage(storageId: string, file: File, path?: string): Promise<any> {
     try {
-      console.log('=== STORAGE FILE UPLOAD DEBUG ===');
-      console.log('uploadFileToStorage called:', { 
-        storageId, 
-        fileName: file.name, 
-        fileSize: file.size, 
-        filePath: path,
-        fileType: file.type,
-        fileLastModified: file.lastModified
-      });
+     
 
       // Validate inputs
       if (!storageId) {
@@ -757,7 +692,6 @@ class CMBClusterAPIClient {
         throw new Error('File is required');
       }
 
-      console.log('Creating FormData for storage upload...');
       
       const formData = new FormData();
       formData.append('file', file, file.name);
@@ -767,16 +701,12 @@ class CMBClusterAPIClient {
         params.path = path;
       }
 
-      console.log('FormData contents:');
       for (let [key, value] of formData.entries()) {
         if (value instanceof File) {
-          console.log(`  ${key}: [File] ${value.name} (${value.size} bytes, type: ${value.type})`);
         } else {
-          console.log(`  ${key}: "${value}"`);
         }
       }
-      console.log('URL params:', params);
-      console.log('Making POST request to:', `/storage/${storageId}/upload`);
+     
       
       const response = await this.api.post(`/storage/${storageId}/upload`, formData, {
         params: params,
@@ -785,12 +715,9 @@ class CMBClusterAPIClient {
         },
       });
       
-      console.log('Storage upload successful! Response:', response.status, response.statusText);
-      console.log('Response data:', response.data);
+   
       const result = await this.handleResponse(response);
-      console.log('Final processed result:', result);
-      console.log('=== STORAGE FILE UPLOAD SUCCESS ===');
-      
+     
       return result;
     } catch (error) {
       console.error('=== STORAGE FILE UPLOAD ERROR ===');
@@ -810,22 +737,19 @@ class CMBClusterAPIClient {
 
   async downloadFileFromStorage(storageId: string, fileName: string): Promise<any> {
     try {
-      console.log('API Client downloading:', { storageId, fileName });
       
       // For path parameters, we need to encode each segment separately
       // to preserve slashes between folders but encode special characters
       const pathSegments = fileName.split('/').map(segment => encodeURIComponent(segment));
       const encodedPath = pathSegments.join('/');
       const url = `/storage/${storageId}/download/${encodedPath}`;
-      console.log('Download URL:', url);
       
       const response = await this.api.get(url, {
         responseType: 'blob',
         timeout: 30000, // 30 second timeout for downloads
       });
       
-      console.log('API download response status:', response.status);
-      console.log('API download response headers:', response.headers);
+     
       
       return response;
     } catch (error) {
@@ -908,7 +832,6 @@ class CMBClusterAPIClient {
   // Application creation/update with image upload
   async createApplicationWithImage(formData: FormData): Promise<ApiResponse<ApplicationImage>> {
     try {
-      console.log('Creating application with image via apiClient');
       
       // Use axios to post FormData with proper headers
       const response = await this.api.post('/admin/applications-with-image', formData, {
@@ -926,7 +849,6 @@ class CMBClusterAPIClient {
 
   async updateApplicationWithImage(id: string, formData: FormData): Promise<ApiResponse<ApplicationImage>> {
     try {
-      console.log('Updating application with image via apiClient', { id });
       
       // Use axios to put FormData with proper headers  
       const response = await this.api.put(`/admin/applications-with-image/${id}`, formData, {

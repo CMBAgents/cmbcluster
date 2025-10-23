@@ -18,53 +18,77 @@ function SettingsContent() {
   return (
     <MainLayout>
       <div className="space-y-4">
-        {/* Compact Header */}
-        <div className="flex justify-between items-center">
-          <div>
-            <Title level={2} style={{ margin: '0 0 4px 0', fontSize: '24px' }}>Settings</Title>
-            <Text style={{ color: 'var(--text-secondary)', fontSize: '14px' }}>
-              Manage your profile, environment variables, and configuration files
-            </Text>
-          </div>
-        </div>
-
-        {/* Compact Settings Interface */}
-        <Card className="glass-card" bodyStyle={{ padding: '16px' }}>
+        {/* Settings Interface with Minimalistic Tabs */}
+        <Card className="glass-card" bodyStyle={{ padding: '0' }}>
           <Tabs
             activeKey={activeTab}
             onChange={setActiveTab}
-            size="default"
-            className="professional-tabs"
+            size="large"
+            className="settings-tabs"
+            tabBarStyle={{
+              margin: 0,
+              padding: '0 24px',
+            }}
             items={[
               {
                 key: 'profile',
                 label: (
-                  <span style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <UserOutlined />
+                  <span style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                    fontSize: '14px',
+                    fontWeight: '500'
+                  }}>
+                    <UserOutlined style={{ fontSize: '16px' }} />
                     <span>Profile</span>
                   </span>
                 ),
-                children: <ProfileSettings />,
+                children: (
+                  <div style={{ padding: '24px' }}>
+                    <ProfileSettings />
+                  </div>
+                ),
               },
               {
                 key: 'environment-variables',
                 label: (
-                  <span style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <CodeOutlined />
+                  <span style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                    fontSize: '14px',
+                    fontWeight: '500'
+                  }}>
+                    <CodeOutlined style={{ fontSize: '16px' }} />
                     <span>Environment Variables</span>
                   </span>
                 ),
-                children: <EnvironmentVariables />,
+                children: (
+                  <div style={{ padding: '24px' }}>
+                    <EnvironmentVariables />
+                  </div>
+                ),
               },
               {
                 key: 'environment-files',
                 label: (
-                  <span style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <FileOutlined />
+                  <span style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                    fontSize: '14px',
+                    fontWeight: '500'
+                  }}>
+                    <FileOutlined style={{ fontSize: '16px' }} />
                     <span>Environment Files</span>
                   </span>
                 ),
-                children: <EnvironmentFiles />,
+                children: (
+                  <div style={{ padding: '24px' }}>
+                    <EnvironmentFiles />
+                  </div>
+                ),
               },
             ]}
           />

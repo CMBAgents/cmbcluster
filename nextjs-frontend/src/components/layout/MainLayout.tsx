@@ -3,9 +3,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useSession, signOut } from 'next-auth/react';
 import { useRouter, usePathname } from 'next/navigation';
-import { useQuery } from '@tanstack/react-query';
-import { apiClient } from '@/lib/api-client';
-import type { Environment } from '@/types';
 import { useAdmin } from '@/contexts/AdminContext';
 import {
   Layout,
@@ -17,10 +14,6 @@ import {
   Space,
   Image,
   Switch,
-  Badge,
-  Popover,
-  Alert,
-  Empty,
 } from 'antd';
 import {
   MenuFoldOutlined,
@@ -32,13 +25,7 @@ import {
   LogoutOutlined,
   SunOutlined,
   MoonOutlined,
-  BellOutlined,
-  ExclamationCircleOutlined,
   DatabaseOutlined,
-  MonitorOutlined,
-  CloudServerOutlined,
-  FolderOutlined,
-  BarChartOutlined,
   ShopOutlined,
   CrownOutlined,
   UsergroupAddOutlined,
@@ -61,40 +48,6 @@ export default function MainLayout({ children }: MainLayoutProps) {
   const { theme, toggleTheme } = useTheme();
   const { canSwitchToAdmin, currentRole, switchToAdmin, switchToUser } = useAdmin();
 
-  // Static logo element - no dependencies to prevent refreshing
-  const logoElement = useMemo(() => {
-    const logoImage = document.createElement('img');
-    logoImage.src = '/logos/cmbagent-logo.png';
-    logoImage.alt = 'CMBAgent';
-    logoImage.width = 24;
-    logoImage.height = 24;
-    logoImage.style.filter = 'brightness(1.1)';
-    logoImage.style.display = 'block';
-    logoImage.style.objectFit = 'contain';
-    logoImage.style.pointerEvents = 'none';
-    logoImage.style.userSelect = 'none';
-    logoImage.loading = 'eager';
-    logoImage.decoding = 'sync';
-    
-    return (
-      <img
-        src="/logos/cmbagent-logo.png"
-        alt="CMBAgent"
-        width={24}
-        height={24}
-        style={{ 
-          filter: 'brightness(1.1)',
-          display: 'block',
-          objectFit: 'contain',
-          pointerEvents: 'none',
-          userSelect: 'none'
-        }}
-        loading="eager"
-        decoding="sync"
-        key="sidebar-logo" // Add key to prevent re-mounting
-      />
-    );
-  }, []); // No dependencies to prevent refreshing
 
   // Static menu items to prevent icon reloading
   const menuItems: MenuProps['items'] = [
@@ -106,12 +59,17 @@ export default function MainLayout({ children }: MainLayoutProps) {
     {
       key: '/store',
       icon: <ShopOutlined className="text-primary" />,
-      label: 'Research Store',
+      label: 'Research Environments',
     },
     {
       key: '/environments',
       icon: <RocketOutlined className="text-primary" />,
       label: 'Environments',
+    },
+    {
+      key: '/storage',
+      icon: <DatabaseOutlined className="text-primary" />,
+      label: 'Storage',
     },
     ...(currentRole === 'admin' ? [
       {
@@ -131,18 +89,6 @@ export default function MainLayout({ children }: MainLayoutProps) {
       label: 'Settings',
     },
   ];
-
-  // Fetch environments for system alerts
-  const { data: environmentsResponse } = useQuery({
-    queryKey: ['environments-alerts'],
-    queryFn: () => apiClient.listEnvironments(),
-    refetchInterval: 30000, // Check every 30 seconds
-    enabled: !!session,
-    retry: 1,
-  });
-
-  const environments = environmentsResponse?.environments || [];
-  const failedEnvironments = environments.filter(env => env.status === 'failed');
 
   // Simple navigation handler using Next.js router
   const navigateTo = (path: string) => {
@@ -232,38 +178,52 @@ export default function MainLayout({ children }: MainLayoutProps) {
         }}
       >
         <div className="p-4">
-          {/* Optimized Professional Logo Section - No Image Reloading */}
-          <div className="flex items-center justify-center mb-8">
-            <div className="flex items-center space-x-3" style={{
-              transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-              justifyContent: collapsed ? 'center' : 'flex-start'
-            }}>
-              <div className="icon-container primary p-2" style={{
-                background: 'var(--glass-bg-secondary)',
-                backdropFilter: 'blur(var(--glass-blur-light))',
-                border: '1px solid var(--glass-border)',
+          {/* Sidebar Header with Expand/Collapse Button */}
+          <div className="mb-8" style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: collapsed ? '0' : '12px',
+            justifyContent: collapsed ? 'center' : 'flex-start',
+            transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)'
+          }}>
+            {/* Collapse/Expand Button */}
+            <Button
+              type="text"
+              icon={collapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />}
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                setCollapsed(!collapsed);
+              }}
+              className="glass-button"
+              style={{
+                width: '40px',
+                height: '40px',
                 borderRadius: 'var(--radius-xl)',
+                color: 'var(--text-primary)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
                 flexShrink: 0
-              }}>
-                {logoElement}
-              </div>
+              }}
+            />
+
+            {/* Logo Text - Only visible when expanded */}
+            {!collapsed && (
               <div style={{
-                opacity: collapsed ? 0 : 1,
-                transform: collapsed ? 'translateX(-10px)' : 'translateX(0)',
-                transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+                flex: 1,
                 overflow: 'hidden',
-                width: collapsed ? 0 : 'auto',
                 whiteSpace: 'nowrap'
               }}>
-                <Text style={{ 
-                  color: 'var(--text-primary)', 
+                <Text style={{
+                  color: 'var(--text-primary)',
                   fontWeight: 'var(--font-semibold)',
                   fontSize: 'var(--text-lg)',
                   display: 'block',
                   lineHeight: 1.2
                 }}>
-                  CMBAgent 
-                  <span style={{ 
+                  CMBAgent
+                  <span style={{
                     fontWeight: 'var(--font-normal)',
                     background: `linear-gradient(135deg, var(--interactive-primary), var(--primary-300))`,
                     backgroundClip: 'text',
@@ -273,8 +233,8 @@ export default function MainLayout({ children }: MainLayoutProps) {
                     Cloud
                   </span>
                 </Text>
-                <Text style={{ 
-                  color: 'var(--text-muted)', 
+                <Text style={{
+                  color: 'var(--text-muted)',
                   fontSize: 'var(--text-xs)',
                   display: 'block',
                   lineHeight: 1.2
@@ -282,7 +242,7 @@ export default function MainLayout({ children }: MainLayoutProps) {
                   Autonomous Research
                 </Text>
               </div>
-            </div>
+            )}
           </div>
 
           {/* Navigation Menu */}
@@ -353,106 +313,22 @@ export default function MainLayout({ children }: MainLayoutProps) {
           height: '64px'
         }}>
           <div className="flex items-center space-x-4">
-            {/* Enhanced Glass Collapse Toggle - maintains state */}
-            <Button
-              type="text"
-              icon={collapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />}
-              onClick={(e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                setCollapsed(!collapsed);
-              }}
-              className="glass-button"
-              style={{
-                width: '40px',
-                height: '40px',
-                borderRadius: 'var(--radius-xl)',
-                color: 'var(--text-primary)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center'
-              }}
-            />
-
             {/* Page Title */}
-            <Title level={4} style={{ 
-              color: 'var(--text-primary)', 
+            <Title level={4} style={{
+              color: 'var(--text-primary)',
               margin: 0,
               fontWeight: 'var(--font-semibold)'
             }}>
               {pathname === '/' ? 'Dashboard' :
+               pathname === '/store' ? 'Research Environments' :
                pathname === '/environments' ? 'Environments' :
+               pathname === '/storage' ? 'Storage' :
                pathname === '/settings' ? 'Settings' :
                'CMBAgent Cloud'}
             </Title>
           </div>
 
           <div className="flex items-center space-x-4">
-            {/* Professional System Alerts Notification */}
-            <Popover
-              content={
-                <div style={{ width: 300 }}>
-                  <div className="mb-3">
-                    <Text strong>System Alerts</Text>
-                  </div>
-                  {failedEnvironments.length > 0 ? (
-                    <div className="space-y-2">
-                      {failedEnvironments.slice(0, 5).map((env: Environment) => (
-                        <Alert
-                          key={env.id}
-                          message={`Environment ${env.env_id?.substring(0, 8) || env.id?.substring(0, 8)} has failed`}
-                          type="error"
-                          size="small"
-                          showIcon
-                          icon={<ExclamationCircleOutlined />}
-                          action={
-                            <Button 
-                              size="small" 
-                              type="link"
-                              onClick={() => navigateTo('/environments')}
-                            >
-                              Fix
-                            </Button>
-                          }
-                        />
-                      ))}
-                      {failedEnvironments.length > 5 && (
-                        <Text type="secondary" className="block text-center">
-                          +{failedEnvironments.length - 5} more alerts
-                        </Text>
-                      )}
-                    </div>
-                  ) : (
-                    <Empty 
-                      image={Empty.PRESENTED_IMAGE_SIMPLE} 
-                      description="No system alerts"
-                      className="my-4"
-                    />
-                  )}
-                </div>
-              }
-              title={null}
-              trigger="click"
-              placement="bottomRight"
-            >
-              <Badge count={failedEnvironments.length} size="small">
-                <Button
-                  type="text"
-                  icon={<BellOutlined />}
-                  className="glass-button"
-                  style={{
-                    width: '40px',
-                    height: '40px',
-                    borderRadius: 'var(--radius-xl)',
-                    color: 'var(--text-primary)',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center'
-                  }}
-                />
-              </Badge>
-            </Popover>
-
             {/* Enhanced Glass Theme Toggle */}
             <button 
               onClick={toggleTheme}

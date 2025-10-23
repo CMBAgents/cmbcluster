@@ -27,10 +27,8 @@ const BACKEND_API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:800
  */
 async function exchangeTokenWithBackend(googleToken: string, userInfo: any): Promise<string | null> {
   try {
-    console.log('=== TOKEN EXCHANGE DEBUG ===');
-    console.log('Backend API URL:', BACKEND_API_URL);
-    console.log('User Info:', { email: userInfo.email, sub: userInfo.sub });
-    console.log('Token length:', googleToken?.length);
+   
+
     
     const response = await fetch(`${BACKEND_API_URL}/auth/exchange`, {
       method: 'POST',
@@ -44,27 +42,18 @@ async function exchangeTokenWithBackend(googleToken: string, userInfo: any): Pro
       }),
     });
 
-    console.log('Response status:', response.status);
-    console.log('Response headers:', Object.fromEntries(response.headers.entries()));
-
+   
     if (!response.ok) {
       const errorText = await response.text().catch(() => 'Unknown error');
-      console.error('=== TOKEN EXCHANGE FAILED ===');
-      console.error('Status:', response.status, response.statusText);
-      console.error('Error:', errorText);
-      console.error('============================');
+   
       return null;
     }
 
     const data = await response.json();
-    console.log('=== TOKEN EXCHANGE SUCCESS ===');
-    console.log('Received backend token length:', data.access_token?.length);
-    console.log('==============================');
+
     return data.access_token;
   } catch (error) {
-    console.error('=== TOKEN EXCHANGE ERROR ===');
-    console.error('Error:', error);
-    console.error('============================');
+
     return null;
   }
 }
@@ -123,7 +112,7 @@ function getAuthOptions(): NextAuthOptions {
       // Initial OAuth callback - exchange Google token for backend JWT
       if (account?.provider === 'google') {
         try {
-          console.log('Processing Google OAuth callback...');
+         
           
           const userInfo = {
             sub: profile?.sub,
@@ -136,13 +125,11 @@ function getAuthOptions(): NextAuthOptions {
 
           // Try ID token first (preferred for backend validation)
           if (account.id_token) {
-            console.log('Trying token exchange with ID token...');
             backendToken = await exchangeTokenWithBackend(account.id_token, userInfo);
           }
 
           // If ID token exchange failed, try access token
           if (!backendToken && account.access_token) {
-            console.log('Trying token exchange with access token...');
             backendToken = await exchangeTokenWithBackend(account.access_token, userInfo);
           }
 
@@ -152,15 +139,10 @@ function getAuthOptions(): NextAuthOptions {
             token.email = profile?.email;
             token.name = profile?.name;
             token.picture = profile?.picture;
-            console.log('Successfully obtained backend token for user:', profile?.email);
             return token;
           } else {
             // Token exchange failed - this will result in a session without API access
-            console.error('Backend token exchange failed for user:', profile?.email);
-            console.error('Available tokens:', {
-              hasIdToken: !!account.id_token,
-              hasAccessToken: !!account.access_token,
-            });
+        
             return token;
           }
         } catch (error) {
@@ -176,28 +158,22 @@ function getAuthOptions(): NextAuthOptions {
     
     async session({ session, token }) {
       // Debug session creation
-      console.log('=== SESSION CALLBACK DEBUG ===');
-      console.log('Token has backendAccessToken:', !!token.backendAccessToken);
-      console.log('User email:', token.email);
+    
       
       // Only send backend JWT to client, never Google tokens
       if (token.backendAccessToken) {
         session.accessToken = token.backendAccessToken as string;
-        console.log('✅ Session has backend token');
         
         // Decode backend token to extract role
         const decodedToken = decodeBackendToken(token.backendAccessToken as string);
         if (decodedToken && decodedToken.role) {
           session.user.role = decodedToken.role as 'user' | 'admin' | 'researcher';
-          console.log('✅ Extracted role from token:', decodedToken.role);
         } else {
           session.user.role = 'user'; // Default role
-          console.log('⚠️ No role found in token, defaulting to user');
         }
       } else {
         // No backend token available - user will have limited access
-        console.warn('❌ Session created without backend token for user:', token.email);
-        console.warn('User will not be able to access protected API endpoints');
+    
         session.user.role = 'user'; // Default role
       }
       
@@ -210,12 +186,8 @@ function getAuthOptions(): NextAuthOptions {
         role: session.user.role, // Add the extracted role
       };
       
-      console.log('Final session:', { 
-        hasAccessToken: !!session.accessToken, 
-        userEmail: session.user.email,
-        userRole: session.user.role
-      });
-      console.log('==============================');
+
+
       
       return session;
     },
@@ -291,15 +263,12 @@ function getAuthOptions(): NextAuthOptions {
   // Additional security
   events: {
     async signIn({ user, account, profile, isNewUser }) {
-      console.log(`User signed in: ${user.email} (New user: ${isNewUser})`);
     },
     async signOut({ session, token }) {
-      console.log(`User signed out: ${session?.user?.email}`);
     },
     async session({ session, token }) {
       // Log session access for security monitoring
       if (process.env.NODE_ENV === 'development') {
-        console.log(`Session accessed: ${session?.user?.email}`);
       }
     },
   },

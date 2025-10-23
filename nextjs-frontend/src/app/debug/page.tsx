@@ -9,13 +9,10 @@ export default function DebugPage() {
   useEffect(() => {
     const fetchConfig = async () => {
       try {
-        console.log('Fetching /api/config...');
         const response = await fetch('/api/config');
-        console.log('Response status:', response.status);
         
         if (response.ok) {
           const data = await response.json();
-          console.log('Config data:', data);
           setConfig(data);
         } else {
           const errorText = await response.text();
@@ -54,7 +51,6 @@ export default function DebugPage() {
         try {
           const { envValidator } = await import('@/lib/env-validator');
           const apiUrl = await envValidator.getApiUrlAsync();
-          console.log('API URL from envValidator:', apiUrl);
           alert(`API URL: ${apiUrl}`);
         } catch (err) {
           console.error('envValidator error:', err);

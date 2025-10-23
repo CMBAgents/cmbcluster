@@ -1,35 +1,15 @@
 'use client';
 
 import React from 'react';
-import { Card, Col, Row, Input, Button, message, Typography, Avatar, Badge, Statistic, Tooltip } from 'antd';
-import { LogoutOutlined, ReloadOutlined, UserOutlined, CheckCircleOutlined, SafetyOutlined, CrownOutlined } from '@ant-design/icons';
-import { useSession, signOut } from 'next-auth/react';
+import { Card, Col, Row, Input, Typography, Avatar, Badge } from 'antd';
+import { UserOutlined } from '@ant-design/icons';
+import { useSession } from 'next-auth/react';
 
 const { Title, Text, Paragraph } = Typography;
 
 export default function ProfileSettings() {
   const { data: session } = useSession();
   const user = session?.user;
-
-  const handleRefreshProfile = async () => {
-    try {
-      message.success('Profile information refreshed!');
-      window.location.reload();
-    } catch (error) {
-      message.error('Failed to refresh profile');
-    }
-  };
-
-  const handleSignOut = async () => {
-    try {
-      await signOut({
-        callbackUrl: '/auth/signin',
-        redirect: true,
-      });
-    } catch (error) {
-      message.error('Failed to sign out');
-    }
-  };
 
   return (
     <div className="space-y-4">
@@ -65,46 +45,6 @@ export default function ProfileSettings() {
           Your profile information is automatically synchronized with your Google account.
         </Paragraph>
       </Card>
-
-      {/* Account Statistics */}
-      <Row gutter={[16, 16]}>
-        <Col xs={24} sm={8}>
-          <Card className="glass-card text-center">
-            <div className="icon-container success mb-3" style={{ width: '48px', height: '48px', margin: '0 auto' }}>
-              <CheckCircleOutlined style={{ fontSize: '24px' }} />
-            </div>
-            <Statistic
-              title="Account Status"
-              value="Active"
-              valueStyle={{ color: 'var(--success-600)', fontSize: '18px', fontWeight: 'bold' }}
-            />
-          </Card>
-        </Col>
-        <Col xs={24} sm={8}>
-          <Card className="glass-card text-center">
-            <div className="icon-container primary mb-3" style={{ width: '48px', height: '48px', margin: '0 auto' }}>
-              <SafetyOutlined style={{ fontSize: '24px' }} />
-            </div>
-            <Statistic
-              title="Authentication"
-              value="Google OAuth"
-              valueStyle={{ color: 'var(--primary-600)', fontSize: '18px', fontWeight: 'bold' }}
-            />
-          </Card>
-        </Col>
-        <Col xs={24} sm={8}>
-          <Card className="glass-card text-center">
-            <div className="icon-container warning mb-3" style={{ width: '48px', height: '48px', margin: '0 auto' }}>
-              <CrownOutlined style={{ fontSize: '24px' }} />
-            </div>
-            <Statistic
-              title="Access Level"
-              value={user?.role ? user.role.charAt(0).toUpperCase() + user.role.slice(1) : 'User'}
-              valueStyle={{ color: 'var(--warning-600)', fontSize: '18px', fontWeight: 'bold' }}
-            />
-          </Card>
-        </Col>
-      </Row>
 
       {/* Account Information */}
       <Row gutter={[16, 16]}>
@@ -162,46 +102,6 @@ export default function ProfileSettings() {
           </Card>
         </Col>
       </Row>
-
-      {/* Account Actions */}
-      <Card title="Account Actions" className="glass-card">
-        <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
-          <Tooltip title="Refresh profile information">
-            <Button
-              type="default"
-              icon={<ReloadOutlined />}
-              onClick={handleRefreshProfile}
-              size="large"
-              className="glass-button"
-              shape="circle"
-              style={{
-                width: '48px',
-                height: '48px',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center'
-              }}
-            />
-          </Tooltip>
-          <Tooltip title="Sign out of your account">
-            <Button
-              type="primary"
-              danger
-              icon={<LogoutOutlined />}
-              onClick={handleSignOut}
-              size="large"
-              shape="circle"
-              style={{
-                width: '48px',
-                height: '48px',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center'
-              }}
-            />
-          </Tooltip>
-        </div>
-      </Card>
     </div>
   );
 }

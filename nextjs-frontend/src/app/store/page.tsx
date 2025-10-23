@@ -14,7 +14,7 @@ import {
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '@/lib/api-client';
 import type { ApplicationImage, StorageItem, StorageSelection } from '@/types';
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useCommonNotifications } from '@/contexts/NotificationContext';
 import { getImageUrlSync } from '@/lib/image-utils';
@@ -56,24 +56,41 @@ const PRESET_CONFIGS = {
 
 function ApplicationStoreContent() {
   const router = useRouter();
-  
+  const [imageKey, setImageKey] = useState(0); // Key to force image re-render
+
+  // Pre-fetch API config to ensure images load correctly
+  useEffect(() => {
+    const preloadApiConfig = async () => {
+      try {
+        const response = await fetch('/api/config');
+        if (response.ok) {
+          const config = await response.json();
+          // Store in window for immediate access
+          if (typeof window !== 'undefined') {
+            (window as any).__RUNTIME_CONFIG__ = config;
+          }
+          // Trigger image re-render after config is loaded
+          setImageKey(prev => prev + 1);
+        }
+      } catch (error) {
+        console.warn('Failed to preload API config:', error);
+      }
+    };
+    preloadApiConfig();
+  }, []);
+
   // Fetch real applications from API
   const { data: applications, isLoading, error } = useQuery({
     queryKey: ['applications'],
     queryFn: async () => {
-      console.log('Fetching applications for store...');
       const response = await apiClient.listApplications();
-      console.log('Applications API response:', response);
-      
+
       // Handle different response formats
       if (response.status === 'success' && response.data) {
-        console.log('Using response.data:', response.data);
         return response.data;
       } else if (Array.isArray(response)) {
-        console.log('Response is direct array:', response);
         return response;
       } else if (response.applications) {
-        console.log('Using response.applications:', response.applications);
         return response.applications;
       } else {
         console.warn('Unexpected response format:', response);
@@ -128,16 +145,13 @@ function ApplicationStoreContent() {
     mutationFn: async (config: any) => {
       setLaunchStep('Validating configuration...');
       setLaunchProgress(25);
-      console.log('Store environment launch config:', config);
       
       await new Promise(resolve => setTimeout(resolve, 300));
       
       setLaunchStep('Launching environment...');
       setLaunchProgress(75);
       
-      console.log('Calling createEnvironment API from store...');
       const result = await apiClient.createEnvironment(config);
-      console.log('Store environment creation result:', result);
       setLaunchProgress(100);
       
       return result;
@@ -286,23 +300,6 @@ function ApplicationStoreContent() {
   return (
     <MainLayout>
       <div className="space-y-6">
-        {/* Store Header */}
-        <div className="glass-card p-6">
-          <div className="flex items-center space-x-3 mb-4">
-            <div className="icon-container primary p-3">
-              <ShopOutlined className="text-2xl text-primary" />
-            </div>
-            <div>
-              <Title level={2} className="text-primary m-0">
-                Welcome to Research Store
-              </Title>
-              <Paragraph className="text-secondary text-lg m-0">
-                Discover and launch research environments tailored for your computational needs
-              </Paragraph>
-            </div>
-          </div>
-        </div>
-
         {/* Loading State */}
         {isLoading && (
           <Card className="glass-card">
@@ -357,10 +354,11 @@ function ApplicationStoreContent() {
                       <div className="relative" style={{ height: '180px', overflow: 'hidden', borderRadius: '8px' }}>
                         {app.icon_url ? (
                           <Image
+                            key={`${app.id}-${imageKey}`}
                             src={getImageUrlSync(app.icon_url)}
                             alt={app.name}
                             className="w-full h-full store-app-image"
-                            style={{ 
+                            style={{
                               objectFit: 'cover',
                               objectPosition: 'center',
                               backgroundColor: '#f8f9fa',
