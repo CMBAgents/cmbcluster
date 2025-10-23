@@ -33,6 +33,45 @@ def _sanitize_for_dns(name: str) -> str:
 
 
 class PodManager:
+    def _get_pod_annotations(self, user_email: str, env_id: str, storage, app_name: str) -> dict:
+        """
+        Get cloud-specific pod annotations for FUSE mount and IAM bindings.
+
+        Args:
+            user_email: User's email address
+            env_id: Environment ID
+            storage: UserStorage object with bucket information
+            app_name: Application name
+
+        Returns:
+            Dictionary of pod annotations specific to the cloud provider
+        """
+        # Base annotations (cloud-agnostic)
+        annotations = {
+            "user.email": user_email,
+            "env.id": env_id,
+            "storage.id": storage.id,
+            "storage.bucket": storage.bucket_name,
+            "created.at": datetime.utcnow().isoformat(),
+            "managed.by": "cmbcluster",
+            "app.name": app_name
+        }
+
+        # Add cloud-specific annotations
+        if settings.cloud_provider == "gcp":
+            # GCP: Enable GCS FUSE and bind to Workload Identity
+            annotations.update({
+                "gke-gcsfuse/volumes": "true",
+                "iam.gke.io/gcp-service-account": f"{settings.cluster_name}-workload-sa@{settings.project_id}.iam.gserviceaccount.com"
+            })
+        elif settings.cloud_provider == "aws":
+            # AWS: Bind to IRSA role for S3 access
+            # The role ARN should be configured via Kubernetes ServiceAccount annotation
+            # No additional pod annotations needed for AWS S3 CSI driver
+            pass
+
+        return annotations
+
     async def _create_env_secret(self, safe_user_id: str, env_id: str, env_vars: dict):
         """Create a Kubernetes Secret for user environment variables"""
         from kubernetes.client import V1Secret
@@ -693,15 +732,15 @@ class PodManager:
         }]
 
         # Build volumes - start with workspace volume using dynamic working_dir
+        # Cloud-agnostic storage configuration
+        volume_spec = self.storage_manager.provider.get_fuse_volume_spec(
+            bucket_name=storage.bucket_name,
+            mount_path=working_dir
+        )
+
         volumes = [{
             "name": "user-workspace",
-            "csi": {
-                "driver": "gcsfuse.csi.storage.gke.io",
-                "volumeAttributes": {
-                    "bucketName": storage.bucket_name,
-                    "mountOptions": "implicit-dirs,uid=1000,gid=1000,file-mode=644,dir-mode=755,metadata-cache-ttl-secs=3600"
-                }
-            }
+            **volume_spec
         }]
 
         # Add file secret volume and mounts if files exist
@@ -734,17 +773,12 @@ class PodManager:
                     "env-id": env_id,
                     "component": "user-pod"
                 },
-                "annotations": {
-                    "user.email": user_email,
-                    "env.id": env_id,
-                    "storage.id": storage.id,
-                    "storage.bucket": storage.bucket_name,
-                    "created.at": datetime.utcnow().isoformat(),
-                    "managed.by": "cmbcluster",
-                    "app.name": app_name,
-                    "gke-gcsfuse/volumes": "true",  # Enable GCS FUSE
-                    "iam.gke.io/gcp-service-account": f"{settings.cluster_name}-workload-sa@{settings.project_id}.iam.gserviceaccount.com"
-                }
+                "annotations": self._get_pod_annotations(
+                    user_email=user_email,
+                    env_id=env_id,
+                    storage=storage,
+                    app_name=app_name
+                )
             },
             "spec": {
                 "initContainers": [{

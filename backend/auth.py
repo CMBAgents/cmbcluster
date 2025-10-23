@@ -15,31 +15,44 @@ from config import settings
 from models import User, UserRole
 from database import get_database
 from auth_security import (
-    jwt_handler, 
-    google_validator, 
-    secure_bearer, 
+    jwt_handler,
+    google_validator,
+    secure_bearer,
     check_rate_limit,
     get_client_ip,
     validate_csrf_token
 )
+from auth_providers import AuthProviderFactory
 
 logger = structlog.get_logger()
 oauth_router = APIRouter()
 
+# Initialize authentication provider (Google OAuth or AWS Cognito)
+try:
+    auth_provider = AuthProviderFactory.create_from_config(settings)
+    logger.info(f"Authentication provider initialized: {auth_provider.get_provider_name()}")
+except Exception as e:
+    logger.error(f"Failed to initialize authentication provider: {e}")
+    # Fallback to None - will be checked in endpoints
+    auth_provider = None
+
 # OAuth setup (for legacy support if needed)
 oauth = OAuth()
-oauth.register(
-    name='google',
-    client_id=settings.google_client_id,
-    client_secret=settings.google_client_secret,
-    server_metadata_url='https://accounts.google.com/.well-known/openid-configuration',
-    client_kwargs={'scope': 'openid email profile'}
-)
+if settings.google_client_id and settings.google_client_id != "build-time-placeholder":
+    oauth.register(
+        name='google',
+        client_id=settings.google_client_id,
+        client_secret=settings.google_client_secret,
+        server_metadata_url='https://accounts.google.com/.well-known/openid-configuration',
+        client_kwargs={'scope': 'openid email profile'}
+    )
 
 # Pydantic models for requests
 class TokenExchangeRequest(BaseModel):
-    google_token: str
+    google_token: str  # Deprecated - use 'oauth_token' instead
+    oauth_token: Optional[str] = None  # Generic OAuth token (Google ID token, Cognito ID token, etc.)
     user_info: Dict[str, Any]
+    provider: Optional[str] = None  # "google" or "cognito"
 
 class TokenVerifyResponse(BaseModel):
     valid: bool
@@ -47,53 +60,79 @@ class TokenVerifyResponse(BaseModel):
     expires_at: Optional[datetime] = None
 
 @oauth_router.post("/exchange")
-async def exchange_google_token(
+async def exchange_oauth_token(
     request: Request,
     token_request: TokenExchangeRequest
 ):
     """
-    Exchange Google OAuth token for backend JWT token
+    Exchange OAuth token (Google or Cognito) for backend JWT token
     This is the secure token exchange endpoint called by NextAuth
+
+    Supports both Google OAuth and AWS Cognito authentication
     """
     try:
         # Rate limiting
         await check_rate_limit(request, "token_exchange")
-        
+
         client_ip = get_client_ip(request)
-        logger.info("Token exchange request", client_ip=client_ip)
-        
-        # Validate Google token
-        user_info = await google_validator.validate_google_token(token_request.google_token)
-        
+
+        # Check if auth provider is initialized
+        if not auth_provider:
+            logger.error("Authentication provider not initialized")
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Authentication service not available"
+            )
+
+        # Support both old 'google_token' and new 'oauth_token' fields for backward compatibility
+        oauth_token = token_request.oauth_token or token_request.google_token
+
+        if not oauth_token:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="OAuth token is required"
+            )
+
+        provider_name = auth_provider.get_provider_name()
+        logger.info("Token exchange request",
+                   provider=provider_name,
+                   client_ip=client_ip)
+
+        # Validate OAuth token using the configured provider
+        user_info = await auth_provider.validate_token(oauth_token)
+
         # Additional security checks
         if not user_info.get("email_verified", False):
-            logger.warning("Unverified email attempted login", 
+            logger.warning("Unverified email attempted login",
                          email=user_info.get("email"),
+                         provider=provider_name,
                          client_ip=client_ip)
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Email address not verified"
             )
-        
+
         # Create or update user in database
         user = await create_or_update_user(user_info)
-        
+
         # Create secure JWT token
         token_data = {
             "sub": user.id,
             "email": user.email,
             "name": user.name,
             "role": user.role.value,
-            "email_verified": True
+            "email_verified": True,
+            "provider": provider_name
         }
-        
+
         access_token = jwt_handler.create_access_token(token_data)
-        
-        logger.info("Token exchange successful", 
+
+        logger.info("Token exchange successful",
                    user_id=user.id,
                    user_email=user.email,
+                   provider=provider_name,
                    client_ip=client_ip)
-        
+
         return {
             "access_token": access_token,
             "token_type": "bearer",
@@ -102,14 +141,15 @@ async def exchange_google_token(
                 "id": user.id,
                 "email": user.email,
                 "name": user.name,
-                "role": user.role.value
+                "role": user.role.value,
+                "provider": provider_name
             }
         }
-        
+
     except HTTPException:
         raise
     except Exception as e:
-        logger.error("Token exchange failed", 
+        logger.error("Token exchange failed",
                     error=str(e),
                     client_ip=get_client_ip(request))
         raise HTTPException(

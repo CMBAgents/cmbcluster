@@ -66,32 +66,39 @@ spec:
           value: {{ .Values.frontend.config.appTitle | default "CMBAgent Cloud" | quote }}
         - name: NEXT_PUBLIC_APP_TAGLINE
           value: {{ .Values.frontend.config.appTagline | default "Your gateway to autonomous research" | quote }}
-        # OAuth and Authentication secrets
+        # OAuth and Authentication configuration (deployment-agnostic)
+        # NEXTAUTH_SECRET - always required
         - name: NEXTAUTH_SECRET
           valueFrom:
             secretKeyRef:
               name: cmbcluster-frontend-secrets
               key: NEXTAUTH_SECRET
+
+        # Google OAuth credentials (if configured)
+        {{- if .Values.frontend.config.googleClientId }}
         - name: GOOGLE_CLIENT_ID
-          valueFrom:
-            secretKeyRef:
-              name: cmbcluster-frontend-secrets
-              key: GOOGLE_CLIENT_ID
+          value: {{ .Values.frontend.config.googleClientId | quote }}
         - name: GOOGLE_CLIENT_SECRET
           valueFrom:
             secretKeyRef:
               name: cmbcluster-frontend-secrets
               key: GOOGLE_CLIENT_SECRET
-        - name: NEXTAUTH_URL
+        {{- end }}
+
+        # AWS Cognito credentials (if configured)
+        {{- if .Values.frontend.config.cognitoClientId }}
+        - name: COGNITO_CLIENT_ID
+          value: {{ .Values.frontend.config.cognitoClientId | quote }}
+        - name: COGNITO_CLIENT_SECRET
           valueFrom:
             secretKeyRef:
               name: cmbcluster-frontend-secrets
-              key: NEXTAUTH_URL
-        - name: NEXT_PUBLIC_API_URL
-          valueFrom:
-            secretKeyRef:
-              name: cmbcluster-frontend-secrets
-              key: NEXT_PUBLIC_API_URL
+              key: COGNITO_CLIENT_SECRET
+        {{- end }}
+        {{- if .Values.frontend.config.cognitoIssuer }}
+        - name: COGNITO_ISSUER
+          value: {{ .Values.frontend.config.cognitoIssuer | quote }}
+        {{- end }}
         # Security Configuration
         - name: ENABLE_SECURITY_HEADERS
           value: {{ .Values.security.enableSecurityHeaders | default "true" | quote }}

@@ -1,5 +1,6 @@
 from pydantic_settings import BaseSettings
-from typing import Optional, List
+from pydantic import field_validator, model_validator
+from typing import Optional, List, Literal
 import os
 import secrets
 import logging
@@ -7,20 +8,45 @@ import logging
 logger = logging.getLogger(__name__)
 
 class Settings(BaseSettings):
-    # Project settings
-    project_id: str = "cmbcluster-dev"
+    # === Cloud Provider Selection ===
+    cloud_provider: Literal["gcp", "aws"] = "gcp"  # "gcp" or "aws"
+
+    # === GCP Settings ===
+    project_id: str = "cmbcluster"
     cluster_name: str = "cmbcluster"
     region: str = "us-central1"
     zone: str = "us-central1-a"
-    
+
+    # === AWS Settings ===
+    aws_account_id: Optional[str] = None
+    aws_region: Optional[str] = None
+    eks_cluster_name: Optional[str] = None
+    ecr_registry_url: Optional[str] = None
+    s3_database_bucket: Optional[str] = None
+    s3_user_bucket_prefix: Optional[str] = None
+
     # Domain settings
     base_domain: str = "cmbcluster.local"
     api_url: str = "http://localhost:8000"
     frontend_url: str = "http://localhost:3000"  # Updated for Next.js default port
-    
-    # OAuth settings (required in production)
+
+    # === Authentication Provider Selection ===
+    # Explicit auth provider selection (deployment-agnostic)
+    # Options: "google", "cognito", or "auto"
+    # "auto" = automatically detect based on available credentials
+    # This allows you to use Google OAuth on AWS or Cognito on GCP if desired
+    auth_provider: str = "auto"
+
+    # === OAuth settings ===
+    # Google OAuth (can be used on any cloud platform)
     google_client_id: str = ""
     google_client_secret: str = ""
+
+    # AWS Cognito (can be used on any cloud platform)
+    cognito_user_pool_id: Optional[str] = None
+    cognito_client_id: Optional[str] = None
+    cognito_client_secret: Optional[str] = None
+    cognito_issuer: Optional[str] = None
     
     # Security settings - CRITICAL FOR PRODUCTION
     secret_key: str = "dev-secret-key-change-in-production"
@@ -93,13 +119,141 @@ class Settings(BaseSettings):
     redis_url: Optional[str] = None
     redis_enabled: bool = False
     
-    # Admin user configuration  
+    # Admin user configuration
     admin_emails: List[str] = [
-        "g22yash.tiwari@gmail.com", 
+        "g22yash.tiwari@gmail.com",
         "22yash.tiwari@gmail.com"  # Both variations of the email
     ]
     first_user_is_admin: bool = True  # First user automatically becomes admin
-    
+
+    # === Pydantic Validators ===
+
+    @field_validator('cloud_provider')
+    @classmethod
+    def validate_cloud_provider(cls, v: str) -> str:
+        """Validate cloud provider selection"""
+        if v not in ['gcp', 'aws']:
+            raise ValueError(f"cloud_provider must be 'gcp' or 'aws', got '{v}'")
+        return v
+
+    @field_validator('auth_provider')
+    @classmethod
+    def validate_auth_provider(cls, v: str) -> str:
+        """Validate authentication provider selection"""
+        if v not in ['auto', 'google', 'cognito']:
+            raise ValueError(f"auth_provider must be 'auto', 'google', or 'cognito', got '{v}'")
+        return v
+
+    @model_validator(mode='after')
+    def validate_cloud_config(self) -> 'Settings':
+        """Validate cloud-specific configuration based on cloud_provider"""
+        if self.cloud_provider == 'gcp':
+            # GCP-specific validation
+            if not self.project_id or self.project_id == "cmbcluster":
+                logger.warning("GCP PROJECT_ID not configured or using default value")
+
+            if not self.region or self.region == "us-central1":
+                logger.info("Using default GCP region: us-central1")
+
+        elif self.cloud_provider == 'aws':
+            # AWS-specific validation
+            if not self.aws_account_id:
+                raise ValueError("AWS_ACCOUNT_ID required when CLOUD_PROVIDER=aws")
+
+            if not self.aws_region:
+                raise ValueError("AWS_REGION required when CLOUD_PROVIDER=aws")
+
+            if not self.eks_cluster_name:
+                raise ValueError("EKS_CLUSTER_NAME required when CLOUD_PROVIDER=aws")
+
+            # Validate AWS account ID format (12 digits)
+            if not (self.aws_account_id.isdigit() and len(self.aws_account_id) == 12):
+                raise ValueError(f"Invalid AWS_ACCOUNT_ID format: {self.aws_account_id} (must be 12 digits)")
+
+        return self
+
+    @model_validator(mode='after')
+    def validate_auth_config(self) -> 'Settings':
+        """Validate authentication provider configuration"""
+        has_google = bool(self.google_client_id and self.google_client_secret)
+        has_cognito = bool(
+            self.cognito_user_pool_id and
+            self.cognito_client_id and
+            self.cognito_client_secret and
+            self.cognito_issuer
+        )
+
+        # If explicit auth provider is set, validate required credentials
+        if self.auth_provider == 'google':
+            if not has_google:
+                raise ValueError(
+                    "AUTH_PROVIDER=google requires GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET"
+                )
+
+        elif self.auth_provider == 'cognito':
+            if not has_cognito:
+                raise ValueError(
+                    "AUTH_PROVIDER=cognito requires COGNITO_USER_POOL_ID, "
+                    "COGNITO_CLIENT_ID, COGNITO_CLIENT_SECRET, and COGNITO_ISSUER"
+                )
+
+        elif self.auth_provider == 'auto':
+            # Auto mode: at least one provider must be configured
+            if not has_google and not has_cognito:
+                # Fall back to cloud provider default
+                if self.cloud_provider == 'gcp':
+                    logger.warning(
+                        "No authentication provider configured. "
+                        "Please configure Google OAuth credentials for GCP deployment."
+                    )
+                elif self.cloud_provider == 'aws':
+                    logger.warning(
+                        "No authentication provider configured. "
+                        "Please configure AWS Cognito credentials for AWS deployment."
+                    )
+
+        return self
+
+    @model_validator(mode='after')
+    def validate_production_security(self) -> 'Settings':
+        """Validate production security settings"""
+        if not self.dev_mode:
+            issues = []
+
+            # Check critical security settings
+            if self.secret_key == "dev-secret-key-change-in-production":
+                issues.append("Production SECRET_KEY not set (generate with: openssl rand -hex 32)")
+
+            if len(self.secret_key) < 32:
+                issues.append(f"SECRET_KEY too short ({len(self.secret_key)} chars, minimum 32)")
+
+            # Check authentication is configured
+            has_google = bool(self.google_client_id and self.google_client_secret)
+            has_cognito = bool(
+                self.cognito_user_pool_id and
+                self.cognito_client_id and
+                self.cognito_client_secret
+            )
+
+            if not has_google and not has_cognito:
+                issues.append("No authentication provider configured (Google OAuth or AWS Cognito)")
+
+            if not self.tls_enabled:
+                issues.append("TLS_ENABLED=false in production (must be true)")
+
+            if not self.session_secure_cookies:
+                issues.append("SESSION_SECURE_COOKIES=false in production (must be true)")
+
+            if self.debug:
+                issues.append("DEBUG=true in production (must be false)")
+
+            if issues:
+                error_msg = "Production security configuration issues:\n" + "\n".join(f"  - {issue}" for issue in issues)
+                logger.error(error_msg)
+                raise ValueError(error_msg)
+
+        return self
+
     def get_admin_emails(self) -> List[str]:
         """Get admin emails from config and environment variables"""
         emails = list(self.admin_emails)  # Start with configured emails
@@ -196,36 +350,7 @@ class Settings(BaseSettings):
             unique_origins = list(set(origins))
             logger.info(f"Production CORS origins: {unique_origins}")
             return unique_origins
-    
-    def validate_production_config(self) -> bool:
-        """Validate that production configuration is secure"""
-        if not self.dev_mode:
-            issues = []
-            
-            # Check critical security settings
-            if self.secret_key == "dev-secret-key-change-in-production":
-                issues.append("Production secret key not set")
-            
-            if len(self.secret_key) < 32:
-                issues.append("Secret key too short (minimum 32 characters)")
-            
-            if not self.google_client_id or not self.google_client_secret:
-                issues.append("Google OAuth credentials not configured")
-            
-            if not self.tls_enabled:
-                issues.append("TLS not enabled in production")
-            
-            if not self.session_secure_cookies:
-                issues.append("Secure cookies not enabled")
-            
-            if self.debug:
-                issues.append("Debug mode enabled in production")
-            
-            if issues:
-                raise ValueError(f"Production security issues: {', '.join(issues)}")
-        
-        return True
-    
+
     class Config:
         env_file = ".env"
         case_sensitive = False
@@ -233,6 +358,4 @@ class Settings(BaseSettings):
 
 settings = Settings()
 
-# Validate production configuration on import
-if not settings.dev_mode:
-    settings.validate_production_config()
+# Configuration is automatically validated on instantiation via Pydantic validators

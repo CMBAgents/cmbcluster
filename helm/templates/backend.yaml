@@ -1,3 +1,14 @@
+{{- $cloudProvider := .Values.global.cloudProvider | default "gcp" -}}
+{{- $projectId := .Values.global.gcp.projectId -}}
+{{- $awsAccountId := .Values.global.aws.accountId -}}
+{{- $awsRegion := .Values.global.aws.region | default "us-east-1" -}}
+{{- $clusterName := .Values.global.clusterName -}}
+{{- $databaseBucket := "" -}}
+{{- if eq $cloudProvider "gcp" -}}
+  {{- $databaseBucket = printf "%s-%s-db" $projectId $clusterName -}}
+{{- else if eq $cloudProvider "aws" -}}
+  {{- $databaseBucket = printf "%s-db-%s" $clusterName $awsAccountId -}}
+{{- end -}}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -18,7 +29,10 @@ spec:
         {{- include "cmbcluster.selectorLabels" . | nindent 8 }}
         app.kubernetes.io/component: backend
       annotations:
+        {{- if eq $cloudProvider "gcp" }}
         gke-gcsfuse/volumes: "true"
+        {{- end }}
+        checksum/config: {{ include (print $.Template.BasePath "/backend.yaml") . | sha256sum }}
     spec:
       serviceAccountName: {{ .Values.serviceAccount.name }}
       securityContext:
@@ -33,26 +47,44 @@ spec:
         - name: http
           containerPort: 8000
           protocol: TCP
-        # Add a postStart lifecycle hook to wait for the GCS FUSE mount to be ready.
-        # This prevents a race condition where the container starts before the
-        # volume is fully connected, causing a "transport endpoint is not connected" error.
+        # Add a postStart lifecycle hook to wait for storage mount to be ready.
+        # This prevents race condition where container starts before volume is fully connected.
         lifecycle:
           postStart:
             exec:
               command:
               - "/bin/sh"
               - "-c"
-              - "echo 'Waiting for GCS FUSE mount...' && sleep 5 && echo 'Checking mount readiness...' && touch /app/data/.mount_check && rm /app/data/.mount_check && echo 'Creating uploads directory...' && mkdir -p /app/data/uploads/applications && echo 'GCS FUSE mount is ready.'"
-        # Mount the database storage via Cloud Storage FUSE CSI driver
+              - "echo 'Waiting for storage mount...' && sleep 5 && echo 'Checking mount readiness...' && touch /app/data/.mount_check && rm /app/data/.mount_check && echo 'Creating uploads directory...' && mkdir -p /app/data/uploads/applications && echo 'Storage mount is ready.'"
+        # Mount the database storage
         volumeMounts:
-        - name: gcs-fuse-volume
+        - name: database-storage
           mountPath: /app/data
         - name: tmp-storage
           mountPath: /tmp
-        # Mounts non-sensitive configuration from values passed by deploy.sh
+        # Environment variables from values and configmap
         env:
+        # === Cloud Provider Configuration ===
+        - name: CLOUD_PROVIDER
+          value: {{ $cloudProvider | quote }}
+
+        {{- if eq $cloudProvider "gcp" }}
+        # === GCP Configuration ===
         - name: PROJECT_ID
-          value: {{ .Values.global.projectId | quote }}
+          value: {{ $projectId | quote }}
+        - name: REGION
+          value: {{ .Values.global.gcp.region | quote }}
+        {{- else if eq $cloudProvider "aws" }}
+        # === AWS Configuration ===
+        - name: AWS_ACCOUNT_ID
+          value: {{ $awsAccountId | quote }}
+        - name: AWS_REGION
+          value: {{ $awsRegion | quote }}
+        - name: EKS_CLUSTER_NAME
+          value: {{ $clusterName | quote }}
+        {{- end }}
+
+        # === Common Configuration ===
         - name: API_URL
           value: "https://api.{{ .Values.ingress.baseDomain }}"
         - name: FRONTEND_URL
@@ -63,44 +95,99 @@ spec:
           value: {{ .Values.global.registryUrl | quote }}
         - name: NAMESPACE
           value: {{ .Release.Namespace | quote }}
+        - name: CLUSTER_NAME
+          value: {{ $clusterName | quote }}
+
+        # === Authentication Configuration (Deployment-Agnostic) ===
+        - name: AUTH_PROVIDER
+          value: {{ .Values.backend.config.authProvider | default "auto" | quote }}
+
+        # Google OAuth credentials
+        {{- if .Values.backend.config.googleClientId }}
+        - name: GOOGLE_CLIENT_ID
+          value: {{ .Values.backend.config.googleClientId | quote }}
+        {{- end }}
+
+        # AWS Cognito credentials (non-sensitive)
+        {{- if .Values.backend.config.cognitoUserPoolId }}
+        - name: COGNITO_USER_POOL_ID
+          value: {{ .Values.backend.config.cognitoUserPoolId | quote }}
+        {{- end }}
+        {{- if .Values.backend.config.cognitoClientId }}
+        - name: COGNITO_CLIENT_ID
+          value: {{ .Values.backend.config.cognitoClientId | quote }}
+        {{- end }}
+        {{- if .Values.backend.config.cognitoIssuer }}
+        - name: COGNITO_ISSUER
+          value: {{ .Values.backend.config.cognitoIssuer | quote }}
+        {{- end }}
+
+        # === JWT Configuration ===
         - name: JWT_ALGORITHM
           value: {{ .Values.backend.config.jwtAlgorithm | quote }}
         - name: TOKEN_EXPIRE_HOURS
           value: {{ .Values.backend.config.tokenExpireHours | quote }}
+
+        # === Resource Limits ===
         - name: MAX_INACTIVE_HOURS
           value: {{ .Values.backend.config.maxInactiveHours | quote }}
         - name: MAX_USER_PODS
           value: {{ .Values.backend.config.maxUserPods | quote }}
+
+        # === Environment Settings ===
         - name: DEV_MODE
           value: {{ .Values.backend.config.devMode | quote }}
         - name: DEBUG
           value: {{ .Values.backend.config.debug | quote }}
+
+        # === Service Account Configuration ===
         - name: USER_POD_SA_NAME
           value: {{ .Values.userEnvironment.serviceAccount.name | quote }}
+
+        # === Database Configuration ===
         - name: DATABASE_PATH
           value: "/app/data/cmbcluster.db"
         - name: DATABASE_BUCKET
-          value: "{{ .Values.global.projectId }}-{{ .Values.global.clusterName }}-db"
-        # Enhanced security configuration
+          value: {{ $databaseBucket | quote }}
+
+        # === Security Configuration ===
         - name: TLS_ENABLED
-          value: {{ .Values.backend.config.tlsEnabled | default "true" | quote }}
+          value: {{ .Values.security.tlsEnabled | default "true" | quote }}
         - name: RATE_LIMIT_ENABLED
-          value: {{ .Values.backend.config.rateLimitEnabled | default "true" | quote }}
+          value: {{ .Values.security.rateLimitEnabled | default "true" | quote }}
         - name: ENABLE_SECURITY_HEADERS
-          value: {{ .Values.backend.config.enableSecurityHeaders | default "true" | quote }}
+          value: {{ .Values.security.enableSecurityHeaders | default "true" | quote }}
         - name: CSP_ENABLED
-          value: {{ .Values.backend.config.cspEnabled | default "true" | quote }}
+          value: {{ .Values.security.cspEnabled | default "true" | quote }}
+
         {{- if .Values.backend.config.redisEnabled }}
+        # === Redis Configuration ===
         - name: REDIS_ENABLED
           value: {{ .Values.backend.config.redisEnabled | quote }}
         - name: REDIS_URL
           value: {{ .Values.backend.config.redisUrl | quote }}
         {{- end }}
-        # Mounts sensitive values (SECRET_KEY, GOOGLE_CLIENT_ID, etc.)
-        # from the Kubernetes secret created by deploy.sh.
+
+        # === Storage Configuration ===
+        {{- if eq $cloudProvider "gcp" }}
+        - name: S3_DATABASE_BUCKET
+          value: ""  # Not used on GCP
+        - name: S3_USER_BUCKET_PREFIX
+          value: ""  # Not used on GCP
+        {{- else if eq $cloudProvider "aws" }}
+        - name: S3_DATABASE_BUCKET
+          value: {{ $databaseBucket | quote }}
+        - name: S3_USER_BUCKET_PREFIX
+          value: "{{ $clusterName }}-user"
+        {{- end }}
+
+        # Sensitive environment variables from secret
+        # (SECRET_KEY, GOOGLE_CLIENT_SECRET, COGNITO_CLIENT_SECRET, etc.)
         envFrom:
         - secretRef:
             name: {{ .Values.backend.secretName }}
+
+        # Health probes
         livenessProbe:
           httpGet:
             path: /health
@@ -117,8 +204,10 @@ spec:
           periodSeconds: 5
           timeoutSeconds: 5
           failureThreshold: 3
+
         resources:
           {{- toYaml .Values.backend.resources | nindent 10 }}
+
         securityContext:
           allowPrivilegeEscalation: false
           capabilities:
@@ -127,17 +216,27 @@ spec:
           readOnlyRootFilesystem: false  # Allow database writes
           runAsNonRoot: true
           runAsUser: 1000
+
       volumes:
-      # Cloud Storage FUSE CSI volume for database storage
-      - name: gcs-fuse-volume
+      # Database storage volume (cloud-specific)
+      - name: database-storage
         csi:
-          driver: gcsfuse.csi.storage.gke.io
+          {{- if eq $cloudProvider "gcp" }}
+          driver: {{ .Values.storage.gcp.driver }}
           volumeAttributes:
-            bucketName: "{{ .Values.global.projectId }}-{{ .Values.global.clusterName }}-db"
-            # Optimized mountOptions for SQLite on GCS FUSE.
-            # This enables file/metadata caching, increases connections, and sets correct permissions for database workloads.
-            # The 'cache-file-for-range-read' flag was removed as it is not supported by the GKE CSI driver's gcsfuse version.
-            mountOptions: "implicit-dirs,uid=1000,gid=1000,file-mode=770,dir-mode=770,cache-dir=/tmp/gcs-cache,file-cache-max-size-mb=2048,metadata-cache-ttl-secs=600,stat-cache-max-size-mb=-1,max-conns-per-host=100,write-global-max-blocks=1000"
+            bucketName: {{ $databaseBucket }}
+            mountOptions: {{ .Values.storage.gcp.mountOptions | quote }}
+          {{- else if eq $cloudProvider "aws" }}
+          driver: {{ .Values.storage.aws.driver }}
+          volumeAttributes:
+            bucketName: {{ $databaseBucket }}
+            {{- if $awsRegion }}
+            region: {{ $awsRegion }}
+            {{- end }}
+            mountOptions: {{ .Values.storage.aws.mountOptions | quote }}
+          {{- end }}
+
+      # Temporary storage for cache
       - name: tmp-storage
         emptyDir: {}
 ---
@@ -153,7 +252,6 @@ spec:
   type: {{ .Values.backend.service.type }}
   ports:
   - port: {{ .Values.backend.service.port }}
-    # Reference the named port in the deployment for better maintainability
     targetPort: http
     protocol: TCP
     name: http

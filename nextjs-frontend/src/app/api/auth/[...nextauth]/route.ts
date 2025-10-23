@@ -1,5 +1,6 @@
 import NextAuth from 'next-auth';
 import GoogleProvider from 'next-auth/providers/google';
+import CognitoProvider from 'next-auth/providers/cognito';
 import type { NextAuthOptions } from 'next-auth';
 import { JWT } from 'next-auth/jwt';
 import jwt from 'jsonwebtoken';
@@ -11,49 +12,52 @@ export const dynamic = 'force-dynamic';
 const isRuntime = typeof window === 'undefined' && !process.env.SKIP_ENV_VALIDATION;
 
 // Validate required environment variables only at runtime
-if (isRuntime && (!process.env.GOOGLE_CLIENT_ID || !process.env.GOOGLE_CLIENT_SECRET)) {
-  throw new Error('Missing required OAuth environment variables');
-}
+// Note: At least one auth provider (Google OR Cognito) must be configured
+if (isRuntime) {
+  const hasGoogle = process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET;
+  const hasCognito = process.env.COGNITO_CLIENT_ID && process.env.COGNITO_CLIENT_SECRET && process.env.COGNITO_ISSUER;
 
-if (isRuntime && !process.env.NEXTAUTH_SECRET) {
-  throw new Error('NEXTAUTH_SECRET environment variable is required');
+  if (!hasGoogle && !hasCognito) {
+    throw new Error('At least one OAuth provider must be configured (Google or Cognito)');
+  }
+
+  if (!process.env.NEXTAUTH_SECRET) {
+    throw new Error('NEXTAUTH_SECRET environment variable is required');
+  }
 }
 
 // Backend API URL for token exchange
 const BACKEND_API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
 /**
- * Exchange Google OAuth token for backend JWT token
+ * Exchange OAuth token (Google or Cognito) for backend JWT token
  */
-async function exchangeTokenWithBackend(googleToken: string, userInfo: any): Promise<string | null> {
+async function exchangeTokenWithBackend(oauthToken: string, userInfo: any, provider: string): Promise<string | null> {
   try {
-   
-
-    
     const response = await fetch(`${BACKEND_API_URL}/auth/exchange`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${googleToken}`,
+        'Authorization': `Bearer ${oauthToken}`,
       },
       body: JSON.stringify({
-        google_token: googleToken,
-        user_info: userInfo
+        oauth_token: oauthToken,
+        google_token: oauthToken, // For backward compatibility
+        user_info: userInfo,
+        provider: provider
       }),
     });
 
-   
     if (!response.ok) {
       const errorText = await response.text().catch(() => 'Unknown error');
-   
+      console.error(`Token exchange failed for ${provider}:`, errorText);
       return null;
     }
 
     const data = await response.json();
-
     return data.access_token;
   } catch (error) {
-
+    console.error(`Token exchange error for ${provider}:`, error);
     return null;
   }
 }
@@ -76,44 +80,62 @@ function decodeBackendToken(token: string): { role?: string; [key: string]: any 
  * Get NextAuth configuration with runtime validation
  */
 function getAuthOptions(): NextAuthOptions {
-  // Only validate at runtime when actually handling requests
-  const isHandlingRequest = process.env.NODE_ENV === 'production' && !process.env.SKIP_ENV_VALIDATION;
-  
-  if (isHandlingRequest) {
-    if (!process.env.GOOGLE_CLIENT_ID || !process.env.GOOGLE_CLIENT_SECRET) {
-      throw new Error('Missing required OAuth environment variables at runtime');
-    }
-    if (!process.env.NEXTAUTH_SECRET) {
-      throw new Error('NEXTAUTH_SECRET environment variable is required at runtime');
-    }
-  }
+  // Build providers array dynamically based on available credentials
+  const providers: any[] = [];
 
-  return {
-    providers: [
+  // Add Google provider if configured
+  if (process.env.GOOGLE_CLIENT_ID &&
+      process.env.GOOGLE_CLIENT_SECRET &&
+      process.env.GOOGLE_CLIENT_ID !== 'build-time-placeholder') {
+    console.log('Adding Google OAuth provider');
+    providers.push(
       GoogleProvider({
-        clientId: process.env.GOOGLE_CLIENT_ID || 'build-time-placeholder',
-        clientSecret: process.env.GOOGLE_CLIENT_SECRET || 'build-time-placeholder',
+        clientId: process.env.GOOGLE_CLIENT_ID,
+        clientSecret: process.env.GOOGLE_CLIENT_SECRET,
         authorization: {
           params: {
             scope: 'openid email profile',
-            // Add security parameters
             prompt: 'consent',
             access_type: 'offline',
           },
         },
-      }),
-    ],
+      })
+    );
+  }
+
+  // Add Cognito provider if configured
+  if (process.env.COGNITO_CLIENT_ID &&
+      process.env.COGNITO_CLIENT_SECRET &&
+      process.env.COGNITO_ISSUER) {
+    console.log('Adding AWS Cognito provider');
+    providers.push(
+      CognitoProvider({
+        clientId: process.env.COGNITO_CLIENT_ID,
+        clientSecret: process.env.COGNITO_CLIENT_SECRET,
+        issuer: process.env.COGNITO_ISSUER,
+      })
+    );
+  }
+
+  // Validate at least one provider is configured
+  if (providers.length === 0) {
+    throw new Error('No authentication providers configured');
+  }
+
+  return {
+    providers,
   pages: {
     signIn: '/auth/signin',
     error: '/auth/error',
   },
   callbacks: {
     async jwt({ token, account, profile }) {
-      // Initial OAuth callback - exchange Google token for backend JWT
-      if (account?.provider === 'google') {
+      // Initial OAuth callback - exchange OAuth token (Google or Cognito) for backend JWT
+      if (account?.provider) {
         try {
-         
-          
+          const providerName = account.provider; // "google" or "cognito"
+          console.log(`Processing OAuth callback for provider: ${providerName}`);
+
           const userInfo = {
             sub: profile?.sub,
             email: profile?.email,
@@ -125,12 +147,12 @@ function getAuthOptions(): NextAuthOptions {
 
           // Try ID token first (preferred for backend validation)
           if (account.id_token) {
-            backendToken = await exchangeTokenWithBackend(account.id_token, userInfo);
+            backendToken = await exchangeTokenWithBackend(account.id_token, userInfo, providerName);
           }
 
           // If ID token exchange failed, try access token
           if (!backendToken && account.access_token) {
-            backendToken = await exchangeTokenWithBackend(account.access_token, userInfo);
+            backendToken = await exchangeTokenWithBackend(account.access_token, userInfo, providerName);
           }
 
           if (backendToken) {
@@ -139,14 +161,16 @@ function getAuthOptions(): NextAuthOptions {
             token.email = profile?.email;
             token.name = profile?.name;
             token.picture = profile?.picture;
+            token.provider = providerName;
+            console.log(`Token exchange successful for ${providerName}`);
             return token;
           } else {
             // Token exchange failed - this will result in a session without API access
-        
+            console.error(`Token exchange failed for ${providerName}`);
             return token;
           }
         } catch (error) {
-          console.error('JWT callback error for user:', profile?.email, error);
+          console.error('JWT callback error:', error);
           return token;
         }
       }
@@ -193,22 +217,27 @@ function getAuthOptions(): NextAuthOptions {
     },
 
     async signIn({ user, account, profile }) {
-      // Additional security checks
-      if (account?.provider === 'google') {
+      // Additional security checks for all OAuth providers
+      if (account?.provider === 'google' || account?.provider === 'cognito') {
         // Verify email domain if needed (add your domain restrictions here)
         // if (!user.email?.endsWith('@yourdomain.com')) {
         //   return false;
         // }
-        
+
         // Email verification check
-        if (profile?.email_verified === false) {
-          console.error('Email not verified for user:', user.email);
+        // For Cognito, email_verified might be a string "true"/"false"
+        const emailVerified = profile?.email_verified;
+        if (emailVerified === false || emailVerified === 'false') {
+          console.error(`Email not verified for user: ${user.email} (provider: ${account.provider})`);
           return false;
         }
-        
+
+        console.log(`Sign-in approved for ${account.provider}: ${user.email}`);
         return true;
       }
-      
+
+      // Reject unknown providers
+      console.error(`Unknown provider: ${account?.provider}`);
       return false;
     },
   },

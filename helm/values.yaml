@@ -1,16 +1,34 @@
 # Default values for cmbcluster.
 # This is a YAML-formatted file.
+# Supports multi-cloud deployments (GCP and AWS)
 
 global:
-  projectId: "your-gcp-project-id"
-  clusterName: "cmbcluster-dev"  # Used for database bucket naming - set via deploy.sh
+  # === Cloud Provider Selection ===
+  # Options: "gcp" or "aws"
+  cloudProvider: "gcp"
+
+  # === Common Configuration ===
+  clusterName: "cmbcluster-dev"  # Used for resource naming - set via deploy.sh
   registryUrl: "us-central1-docker.pkg.dev/your-gcp-project-id/cmbcluster-images"
   imageTag: "latest"
 
-# Workload Identity configuration
+  # === GCP-specific Configuration ===
+  gcp:
+    projectId: "your-gcp-project-id"
+    region: "us-central1"
+    # Workload Identity service account email
+    workloadIdentityEmail: ""  # Set by deploy.sh (e.g., cmbcluster-workload-sa@PROJECT_ID.iam.gserviceaccount.com)
+
+  # === AWS-specific Configuration ===
+  aws:
+    accountId: ""
+    region: "us-east-1"
+    # IRSA (IAM Roles for Service Accounts) role ARN
+    roleArn: ""  # Set by deploy.sh (e.g., arn:aws:iam::ACCOUNT_ID:role/cmbcluster-eks-workload-role)
+
+# Workload Identity configuration (GCP) - DEPRECATED
+# Use global.gcp.workloadIdentityEmail instead
 workloadIdentity:
-  # The email of the Google Service Account to be impersonated by the pods.
-  # This is set by the deploy.sh script.
   gsaEmail: ""
 
 # Kubernetes Service Account configuration
@@ -19,6 +37,8 @@ serviceAccount:
   create: true
   # The name of the service account to use.
   name: "cmbcluster-ksa"
+  # Annotations for cloud-specific IAM bindings (set automatically by templates)
+  annotations: {}
 
 backend:
   service:
@@ -31,27 +51,77 @@ backend:
     tag: "latest"
     pullPolicy: Always
   config:
+    # Cloud provider setting - propagated to backend pods
+    cloudProvider: "gcp"  # or "aws" - set by deploy.sh
+
+    # API and frontend URLs
     apiUrl: "http://api.cmbagent.cloud"
     frontendUrl: "http://cmbagent.cloud"
+
+    # Authentication provider selection (deployment-agnostic)
+    # Options: "auto", "google", "cognito"
+    authProvider: "auto"
+
+    # Google OAuth credentials
     googleClientId: ""
+    googleClientSecret: ""  # Set via secret
+
+    # AWS Cognito credentials
+    cognitoUserPoolId: ""
+    cognitoClientId: ""
+    cognitoClientSecret: ""  # Set via secret
+    cognitoIssuer: ""
+
+    # JWT configuration
     jwtAlgorithm: "HS256"
     tokenExpireHours: 8
+
+    # Resource limits
     maxInactiveHours: 4
     maxUserPods: 1
+
+    # Environment settings
     devMode: false
     debug: false
+
+    # Security settings
+    tlsEnabled: true
+    rateLimitEnabled: true
+    enableSecurityHeaders: true
+    cspEnabled: true
+
+    # Optional Redis configuration
+    redisEnabled: false
+    redisUrl: ""
+
   # The name of the Kubernetes secret containing sensitive environment variables
-  # like SECRET_KEY and GOOGLE_CLIENT_SECRET, created by deploy.sh.
+  # like SECRET_KEY, GOOGLE_CLIENT_SECRET, COGNITO_CLIENT_SECRET, etc.
+  # Created by deploy.sh
   secretName: "cmbcluster-backend-secrets"
   resources: {}
+
+# Storage configuration
+storage:
+  # GCP storage driver
+  gcp:
+    driver: "gcsfuse.csi.storage.gke.io"
+    # Database bucket naming pattern: {projectId}-{clusterName}-db
+    databaseBucketName: ""  # Auto-generated from global.gcp.projectId and global.clusterName
+    mountOptions: "implicit-dirs,uid=1000,gid=1000,file-mode=770,dir-mode=770,cache-dir=/tmp/gcs-cache,file-cache-max-size-mb=2048,metadata-cache-ttl-secs=600,stat-cache-max-size-mb=-1,max-conns-per-host=100"
+
+  # AWS storage driver
+  aws:
+    driver: "s3.csi.aws.com"
+    # Database bucket naming pattern: {clusterName}-db-{accountId}
+    databaseBucketName: ""  # Auto-generated from global.clusterName and global.aws.accountId
+    mountOptions: "allow-delete,uid=1000,gid=1000"
 
 ingress:
   enabled: true
   className: "nginx"
   # The cert-manager ClusterIssuer to use for TLS certificates.
   clusterIssuer: "letsencrypt-prod"
-  annotations:
-    {}
+  annotations: {}
   # The base domain for the application.
   baseDomain: "cmbagent.cloud"
 
@@ -79,6 +149,18 @@ frontend:
     nextAuthUrl: ""  # Set by deploy.sh
     apiUrl: ""       # Set by deploy.sh
 
+    # Authentication configuration (deployment-agnostic)
+    authProvider: "auto"
+
+    # Google OAuth
+    googleClientId: ""
+    googleClientSecret: ""  # Set via secret
+
+    # AWS Cognito
+    cognitoClientId: ""
+    cognitoClientSecret: ""  # Set via secret
+    cognitoIssuer: ""
+
 # Security configuration
 security:
   enableSecurityHeaders: true
@@ -88,13 +170,25 @@ security:
 
 # Authentication configuration
 auth:
+  # Provider selection (deployment-agnostic)
+  provider: "auto"  # "auto", "google", or "cognito"
+
   jwt:
     algorithm: "HS256"
     expireHours: 8
+
   oauth:
+    # Google OAuth
     googleClientId: ""      # Set by deploy.sh
-    googleClientSecret: ""  # Set by deploy.sh
-  nextAuthSecret: ""        # Set by deploy.sh
+    googleClientSecret: ""  # Set by deploy.sh (in secret)
+
+    # AWS Cognito
+    cognitoUserPoolId: ""
+    cognitoClientId: ""
+    cognitoClientSecret: ""  # Set by deploy.sh (in secret)
+    cognitoIssuer: ""
+
+  nextAuthSecret: ""        # Set by deploy.sh (in secret)
 
 userEnvironment:
   image:
