@@ -8,7 +8,7 @@ PROJECT_ROOT=$(dirname "$SCRIPT_DIR")
 
 PROJECT_ID=${1:-$(gcloud config get-value project)}
 TAG=${2:-"latest"}
-IMAGE_REPO=${3:-"us-central1-docker.pkg.dev/$PROJECT_ID/cmbcluster-images"}
+IMAGE_REPO=${3:-"us-central1-docker.pkg.dev/denario-475319/denario-images"}
 
 if [ -z "$PROJECT_ID" ]; then
     echo "Error: PROJECT_ID is required"
