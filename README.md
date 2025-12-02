@@ -1,678 +1,262 @@
 # CMBCluster
 
-Multi-tenant Streamlit Platform for Research
+**Enterprise-Grade Multi-Tenant Research Computing Platform**
 
-CMBCluster is a multi-tenant Streamlit platform designed specifically for research teams. Built on the proven JupyterHub architecture pattern, it provides isolated, persistent research environments for each user while maintaining enterprise-grade security and scalability.
+CMBCluster is a scalable, secure multi-tenant platform that provides isolated research environments for teams. Built with modern cloud-native technologies (Kubernetes, FastAPI, Next.js), it delivers professional-grade infrastructure for collaborative scientific computing.
 
-### Architecture
-
-The platform follows the JupyterHub architecture pattern with these key components:
+## 🏗️ Architecture Overview
 
 ```mermaid
 graph TB
-    Users[👥 Users] --> Proxy[🌐 Proxy]
-    Proxy --> Hub[🎯 Hub - Authenticate user]
+    Users[👥 Users] --> Ingress[🌐 NGINX Ingress<br/>Load Balancer & TLS]
     
-    Hub --> PV[💾 Pods + Volumes / USER SESSION]
+    Ingress --> Frontend[📊 Next.js Frontend<br/>React-based Dashboard]
+    Ingress --> API[⚙️ FastAPI Backend<br/>REST API Server]
     
-    CloudVolumes[☁️ Cloud Volumes] --> PV
-    ImageRegistry[📦 Image Registry] --> PV
+    API --> Auth[🔐 OAuth 2.0<br/>Google Authentication]
+    API --> DB[(📦 Database<br/>SQLite/PostgreSQL)]
+    API --> K8s[☸️ Kubernetes API<br/>Pod Management]
     
-    Proxy -.->|ROUTE INFOSEND| Hub
-    Hub -.->|SIGNED OUTUSER REDIRECT| Proxy
-    Proxy -.->|SIGNED IN USERREDIRECT| PV
-    Hub -.->|VOLUME PROVIDE/POD CREATE/USER REDIRECT| PV
-    Hub -.->|CULL PODSIF STALE| PV
+    K8s --> ImageRegistry["🐳 Docker Images<br/>• Docker Hub<br/>• Private Registries<br/>• Local Images"]
+    
+    ImageRegistry --> AppPods["🚀 Multi-Agent Research<br/>Environments<br/>• CMBAgent (Agentic)<br/>• Denario (ML)<br/>• Custom Research Apps"]
+    
+    K8s --> Storage[💾 Persistent Volumes<br/>User Workspaces]
+    
+    CloudVolumes[☁️ GCP Cloud Storage<br/>Object Storage] --> AppPods
     
     subgraph "Kubernetes Cluster"
-        Proxy
-        Hub
-        PV
+        Ingress
+        Frontend
+        API
+        Auth
+        DB
+        K8s
+        ImageRegistry
+        AppPods
+        Storage
     end
     
-    style Users fill:#f9f,stroke:#333,stroke-width:2px
-    style Proxy fill:#9f9,stroke:#333,stroke-width:2px
-    style Hub fill:#9f9,stroke:#333,stroke-width:2px
-    style PV fill:#99f,stroke:#333,stroke-width:2px
-    style CloudVolumes fill:#bbf,stroke:#333,stroke-width:2px
-    style ImageRegistry fill:#bbf,stroke:#333,stroke-width:2px
+    style Users fill:#f9f,stroke:#333,stroke-width:2px,color:#000
+    style Ingress fill:#52c41a,stroke:#333,stroke-width:2px,color:#fff
+    style Frontend fill:#1890ff,stroke:#333,stroke-width:2px,color:#fff
+    style API fill:#1890ff,stroke:#333,stroke-width:2px,color:#fff
+    style Auth fill:#ff7a45,stroke:#333,stroke-width:2px,color:#fff
+    style DB fill:#ff7a45,stroke:#333,stroke-width:2px,color:#fff
+    style K8s fill:#52c41a,stroke:#333,stroke-width:2px,color:#fff
+    style ImageRegistry fill:#ff6b6b,stroke:#333,stroke-width:2px,color:#fff
+    style AppPods fill:#faad14,stroke:#333,stroke-width:2px,color:#000
+    style Storage fill:#13c2c2,stroke:#333,stroke-width:2px,color:#fff
 ```
 
-## Features
+## ✨ Key Features
 
-### 🔐 Enterprise Security
-- **Google OAuth Integration**: Seamless single sign-on
-- **RBAC**: Role-based access control with admin/user permissions
-- **Network Policies**: Kubernetes-native network isolation
-- **Pod Security**: Non-root containers with security contexts
+- 🔐 **Enterprise Security** - Google OAuth 2.0, RBAC, TLS 1.3, Network Policies
+- 🚀 **Scalable Infrastructure** - Auto-scaling, load balancing, multi-cloud ready
+- 🔬 **Research-Focused** - Pre-installed scientific libraries, persistent workspaces
+- 📊 **Modern Dashboard** - Next.js-based UI with real-time monitoring
+- ☁️ **Cloud-Native** - Kubernetes-native, Helm charts, CI/CD ready
 
-### 🚀 Scalable Infrastructure
-- **Auto-scaling**: Horizontal pod autoscaling based on demand
-- **Resource Management**: Configurable CPU/memory limits per user
-- **Load Balancing**: NGINX ingress with SSL termination
-- **High Availability**: Multi-replica deployments with health checks
+## 📋 Tech Stack
 
-### 🔬 Research-Focused
-- **Scientific Computing**: Pre-installed research libraries (pandas, numpy, scipy, matplotlib)
-- **Interactive Analysis**: Streamlit-based data exploration interface
-- **Persistent Workspaces**: User data persists across sessions
-- **Collaborative Tools**: Shared data access and project management
+| Component | Technology | Purpose |
+|-----------|-----------|---------|
+| **Frontend** | Next.js (React) | Professional dashboard and management UI |
+| **Backend** | FastAPI (Python) | REST API server with async support |
+| **Authentication** | Google OAuth 2.0 | Enterprise single sign-on |
+| **Orchestration** | Kubernetes | Container orchestration and pod management |
+| **User Environment** | Multi-Agent Research | Isolated multi-agent research environments |
+| **Ingress** | NGINX | Load balancing and TLS termination |
+| **Certificates** | cert-manager + Let's Encrypt | Automated SSL/TLS management |
 
-### ☁️ Cloud-Native
-- **Kubernetes-Native**: Built for modern container orchestration
-- **GKE Optimized**: Tested and optimized for Google Kubernetes Engine
-- **Helm Charts**: Easy deployment and configuration management
-- **CI/CD Ready**: GitHub Actions integration for automated deployments
+## 🚀 Quick Start
 
-## Quick Start
-
-### Prerequisites
-
-- **Google Cloud Platform Account** with billing enabled
-- **Local Development Tools**:
-  ```bash
-  # macOS
-  brew install google-cloud-sdk kubectl helm docker
-  
-  # Ubuntu/Debian
-  sudo apt-get install google-cloud-sdk kubectl helm docker.io
-  
-  # CentOS/RHEL
-  sudo yum install google-cloud-sdk kubectl helm docker
-  ```
-- **Domain Name** (for production deployment)
-
-### 1. Clone Repository
+### Local Development (2 minutes)
 
 ```bash
+# 1. Clone and setup
 git clone https://github.com/archetana/cmbcluster.git
 cd cmbcluster
-```
+cp compose.env.example .env
 
-### 2. Setup Environment
-
-```bash
-# Copy environment template
-cp .env.example .env
-
-# Edit configuration
-vim .env
-```
-
-Required environment variables:
-```bash
-PROJECT_ID=cambridge-infosys
-BASE_DOMAIN=cmbcluster.yourdomain.com
-GOOGLE_CLIENT_ID=your-oauth-client-id
-GOOGLE_CLIENT_SECRET=your-oauth-secret
-SECRET_KEY=your-generated-secret-key
-```
-
-### 3. Choose Deployment Method
-
-#### Option A: Local Development
-```bash
-# Start local environment
-make dev
-
-# Or using docker-compose directly
-docker-compose up --build
-```
-Access at: http://localhost:8501
-
-#### Option B: Production Deployment
-```bash
-# Setup GKE cluster
-make setup PROJECT_ID=your-project DOMAIN=your-domain.com
-
-# Deploy application
-make deploy
-```
-
-## Local Development
-
-### Quick Start
-```bash
-# Start all services
+# 2. Start services
 docker-compose up --build
 
-# Access points:
-# Frontend: http://localhost:8501
-# Backend API: http://localhost:8000
-# API Docs: http://localhost:8000/docs
-# User Environment: http://localhost:8502
+# 3. Access
+# Dashboard:     http://localhost:3000
+# Backend API:   http://localhost:8000
+# API Docs:      http://localhost:8000/docs
 ```
 
-### Development Commands
+### Production Deployment
+
 ```bash
+# Prerequisites: GCP account, kubectl, helm
 
-# Make the script executable
-chmod +x scripts/build-images.sh
-chmod +x scripts/setup-cluster.sh
-chmod +x scripts/deploy.sh
-chmod +x scripts/cleanup.sh
-chmod +x scripts/local-dev.sh
+# 1. Setup infrastructure
+./scripts/setup-cluster.sh YOUR_PROJECT_ID us-central1
 
-# Build images
-make build
+# 2. Configure OAuth in Google Cloud Console
+# Add redirect URI: https://your-domain.com/auth/callback
 
-# Run tests
-make test
-
-# View logs
-make logs
-
-# Stop services
-docker-compose down
-
-# Clean up everything
-make clean
+# 3. Build and deploy
+./scripts/build-images.sh YOUR_PROJECT_ID
+./scripts/deploy.sh YOUR_PROJECT_ID your-domain.com
 ```
 
-### File Structure
+See [DEPLOYMENT.md](docs/DEPLOYMENT.md) for detailed production setup instructions.
+
+## 📁 Project Structure
+
 ```
 cmbcluster/
-├── README.md                # This file
-├── .env.example            # Environment template
-├── .gitignore              # Git ignore rules
-├── docker-compose.yml      # Local development setup
-├── Makefile               # Build and deployment commands
-├── backend/               # FastAPI backend service
-│   ├── Dockerfile
-│   ├── requirements.txt
-│   ├── main.py           # Application entry point
-│   ├── auth.py           # OAuth authentication
-│   ├── pod_manager.py    # Kubernetes pod management
-│   ├── config.py         # Configuration settings
-│   └── models.py         # Data models
-├── frontend/              # Streamlit frontend application
-│   ├── Dockerfile
-│   ├── requirements.txt
-│   ├── main.py           # Main UI application
-│   ├── config.py         # Frontend configuration
-│   ├── components/       # Reusable UI components
-│   │   ├── auth.py
-│   │   └── api_client.py
-│   └── pages/           # Multi-page UI
-│       ├── Dashboard.py
-│       ├── Environment.py
-│       └── Settings.py
-├── user-environment/      # User research environment container
-│   ├── Dockerfile
-│   ├── requirements.txt
-│   └── app.py           # Streamlit research application
-├── k8s/                  # Kubernetes manifests
-│   ├── namespace.yaml
-│   ├── rbac.yaml
-│   ├── backend-deployment.yaml
-│   ├── frontend-deployment.yaml
-│   └── ingress.yaml
-├── helm/                 # Helm chart templates
-│   ├── Chart.yaml
-│   ├── values.yaml
-│   └── templates/
-│       ├── backend.yaml
-│       ├── frontend.yaml
-│       └── ingress.yaml
-├── scripts/              # Deployment and utility scripts
-│   ├── setup-cluster.sh
-│   ├── build-images.sh
-│   ├── deploy.sh
-│   ├── cleanup.sh
-│   └── local-dev.sh
-└── terraform/            # Infrastructure as code (optional)
-    ├── main.tf
-    ├── variables.tf
-    └── outputs.tf
+├── backend/              # FastAPI REST API server
+├── nextjs-frontend/      # Next.js React dashboard
+├── k8s/                  # Kubernetes manifests (dev)
+├── helm/                 # Helm charts (production)
+├── scripts/              # Deployment automation scripts
+├── compose.yml           # Local development with Docker Compose
+├── README.md             # This file
+├── docs/                 # Detailed documentation
+│   ├── ARCHITECTURE.md   # Component architecture
+│   ├── API.md            # API reference
+│   ├── DEPLOYMENT.md     # Production deployment
+│   ├── SECURITY.md       # Security & authentication
+│   └── TROUBLESHOOTING.md # Common issues & debugging
+└── planning/             # Architecture & implementation plans
 ```
 
-## Production Deployment
+## 📚 Documentation
 
-### 1. Setup Google Cloud Infrastructure
+- **[ARCHITECTURE.md](docs/ARCHITECTURE.md)** - Detailed component design and data flow
+- **[API.md](docs/API.md)** - Complete REST API reference with examples
+- **[DEPLOYMENT.md](docs/DEPLOYMENT.md)** - Production deployment on GCP (AWS coming soon)
+- **[SECURITY.md](docs/SECURITY.md)** - Authentication, encryption, and security practices
+- **[TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md)** - Common issues and debugging guides
+- **[TESTING_README.md](TESTING_README.md)** - Test suite and coverage information
+
+## 🔧 Environment Setup
+
+### Required Variables (Production)
 
 ```bash
-# Authenticate with Google Cloud
-gcloud auth login
-gcloud config set project YOUR_PROJECT_ID
-
-# Setup cluster and infrastructure
-./scripts/setup-cluster.sh YOUR_PROJECT_ID
+PROJECT_ID=your-gcp-project-id
+BASE_DOMAIN=your-domain.com
+GOOGLE_CLIENT_ID=your-oauth-client-id
+GOOGLE_CLIENT_SECRET=your-oauth-client-secret
+SECRET_KEY=your-secure-random-key-min-32-chars
 ```
 
-This creates:
-- GKE cluster with autoscaling (1-10 nodes)
-- NGINX Ingress Controller with LoadBalancer
-- cert-manager for automated SSL certificates
-- Required service accounts and RBAC policies
-- Storage classes for persistent volumes
-
-### 2. Configure OAuth
-
-1. Go to [Google Cloud Console](https://console.cloud.google.com/)
-2. Navigate to **APIs & Services > Credentials**
-3. Create **OAuth 2.0 Client ID**
-4. Add authorized redirect URIs:
-   ```
-   https://api.yourdomain.com/auth/callback
-   ```
-5. Update `.env` with client ID and secret
-
-### 3. Deploy Application
+### Optional Configuration
 
 ```bash
-# Build and push container images
-./scripts/build-images.sh YOUR_PROJECT_ID
-
-# Deploy with Helm
-./scripts/deploy.sh YOUR_PROJECT_ID yourdomain.com
+DEV_MODE=false              # Enable development features
+DEBUG=false                 # Enable debug logging
+TOKEN_EXPIRE_HOURS=8        # JWT token expiration
+MAX_USER_PODS=1             # Pods per user
+FREE_TIER_MAX_UPTIME_MINUTES=60  # Free tier uptime limit
 ```
 
-### 4. Configure DNS
+See [Configuration](docs/DEPLOYMENT.md#configuration) for all available options.
 
-Point your domain to the ingress IP:
-```bash
-# Get ingress IP
-kubectl get ingress -n cmbcluster
+## 🎯 Usage
 
-# Create DNS records:
-# A record: yourdomain.com -> INGRESS_IP
-# A record: *.yourdomain.com -> INGRESS_IP  
-# A record: api.yourdomain.com -> INGRESS_IP
+### For End Users
+1. Navigate to your domain and login with Google
+2. Click "Launch Environment" to start a multi-agent research environment
+3. Access your isolated research workspace with pre-installed scientific libraries and agent frameworks
+4. Manage files and environment variables from the dashboard
+
+
 ```
 
-## Usage
+See [SECURITY.md](docs/SECURITY.md) for admin procedures and [TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md) for common tasks.
 
-### For Users
+## 🏗️ Architecture
 
-1. **Access Platform**: Navigate to `https://yourdomain.com`
-2. **Login**: Click "🔐 Login with Google" and authenticate
-3. **Launch Environment**: Click ":material/rocket_launch: Launch Environment" to create your research pod
-4. **Start Research**: Access your isolated Streamlit environment with:
-   - Pre-installed research libraries (pandas, numpy, scipy, matplotlib)
-   - Persistent workspace storage (`/workspace`)
-   - Scientific computing tools (NumPy, SciPy, Matplotlib)
-   - Data visualization capabilities (Plotly, Seaborn)
+CMBCluster consists of:
 
-### User Environment Features
+- **NGINX Ingress**: Load balancing and TLS termination
+- **Next.js Frontend**: React-based management dashboard
+- **FastAPI Backend**: REST API with Kubernetes integration
+- **User Pods**: Isolated multi-agent research environments
+- **Persistent Volumes**: Per-user workspace storage
 
-```python
-# Pre-installed libraries available in user environments
-import numpy as np
-import scipy as sp
-import matplotlib.pyplot as plt
-import pandas as pd
-import plotly.express as px
-import astropy
-import healpy as hp
-import camb
+For detailed architecture diagrams and component responsibilities, see [ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
-# Persistent workspace
-workspace_dir = "/workspace"  # Your files persist here
-```
+## 🔐 Security
 
-### For Administrators
+- Google OAuth 2.0 authentication
+- Role-based access control (RBAC)
+- TLS 1.3 encryption in transit
+- Network policies for pod isolation
+- Content Security Policy headers
+- Encrypted file storage
+- Regular security audits
 
-```bash
-# Monitor deployments
-kubectl get pods -n cmbcluster
+See [SECURITY.md](docs/SECURITY.md) for comprehensive security documentation.
 
-# View logs
-kubectl logs -f deployment/cmbcluster-backend -n cmbcluster
-kubectl logs -f deployment/cmbcluster-frontend -n cmbcluster
+## 🧪 Testing
 
-# Scale deployments
-kubectl scale deployment cmbcluster-backend --replicas=5 -n cmbcluster
-
-# List user environments
-kubectl get pods -l app=cmbcluster-user-env -n cmbcluster
-
-# Clean up inactive environments
-kubectl delete pods -l app=cmbcluster-user-env --field-selector status.phase=Succeeded -n cmbcluster
-```
-
-## Configuration
-
-### Environment Variables
-
-| Variable | Description | Default | Required |
-|----------|-------------|---------|----------|
-| `PROJECT_ID` | GCP Project ID | - | ✅ |
-| `BASE_DOMAIN` | Platform domain | `cmbcluster.local` | ✅ |
-| `GOOGLE_CLIENT_ID` | OAuth Client ID | - | ✅ |
-| `GOOGLE_CLIENT_SECRET` | OAuth Secret | - | ✅ |
-| `SECRET_KEY` | JWT signing key | - | ✅ |
-| `MAX_INACTIVE_HOURS` | Auto-cleanup time | `1H` | ✅ |
-| `MAX_USER_PODS` | Pods per user | `1` | ✅ |
-| `TOKEN_EXPIRE_HOURS` | JWT expiration | `24` | ✅ |
-| `NAMESPACE` | Kubernetes namespace | `cmbcluster` | ✅ |
-| `FILE_ENCRYPTION_KEY` | Environment file encryption key | - | ⚠️ |
-
-> ⚠️ **Important**: The `FILE_ENCRYPTION_KEY` is required for production deployments to encrypt uploaded environment files. See [ENCRYPTION.md](ENCRYPTION.md) for details.
-
-
-### Resource Limits
-
-Default user environment resources:
-```yaml
-userEnvironment:
-  defaultResources:
-    requests:
-      cpu: 100m
-      memory: 256Mi
-    limits:
-      cpu: 2000m
-      memory: 4Gi
-  storage:
-    size: 10Gi
-    storageClass: standard-rwo
-```
-
-### Helm Configuration
-
-Customize deployment in `helm/values.yaml`:
-```yaml
-# Backend scaling
-backend:
-  replicaCount: 2
-  resources:
-    limits:
-      cpu: 1000m
-      memory: 1Gi
-
-# Frontend scaling  
-frontend:
-  replicaCount: 2
-  
-# Auto-scaling
-autoscaling:
-  enabled: true
-  minReplicas: 1
-  maxReplicas: 10
-```
-
-## Architecture Details
-
-### Component Responsibilities
-
-#### 🌐 Proxy (NGINX Ingress)
-- **Route Info Send**: Forward user requests to Hub
-- **User Routing**: Direct authenticated users to their pods
-- **SSL Termination**: Handle HTTPS certificates
-- **Load Balancing**: Distribute traffic across replicas
-
-#### 🎯 Hub (Backend Service)
-- **Authenticate User**: Google OAuth integration
-- **Signed Out User Redirect**: Send unauthenticated users to login
-- **Volume Provide/Pod Create**: Provision user resources
-- **User Redirect**: Route users to their environments
-- **Cull Pods If Stale**: Clean up inactive environments
-
-#### 🔬 Pods + Volumes
-- **Image Pull**: Download user environment containers
-- **User Session**: Maintain persistent workspace state
-- **Resource Isolation**: Dedicated CPU/memory/storage per user
-- **Data Persistence**: User files survive pod restarts
-
-### Data Flow
-
-```
-1. User → Proxy → Hub (check authentication)
-2. Hub → Google OAuth (if not authenticated)  
-3. Hub → Create/Find User Pod
-4. Proxy → User Pod (direct traffic)
-5. User Pod → Streamlit App (research environment)
-```
-
-## Monitoring
-
-### Health Checks
-
-```bash
-# Check all services
-kubectl get pods -n cmbcluster
-
-# Backend health
-curl https://api.yourdomain.com/health
-
-# Frontend health  
-curl https://yourdomain.com/_stcore/health
-```
-
-### Logs
-
-```bash
-# Backend logs
-kubectl logs -f deployment/cmbcluster-backend -n cmbcluster
-
-# Frontend logs
-kubectl logs -f deployment/cmbcluster-frontend -n cmbcluster
-
-# User environment logs
-kubectl logs  -n cmbcluster
-
-# Ingress logs
-kubectl logs -f deployment/ingress-nginx-controller -n ingress-nginx
-```
-
-### Metrics
-
-The platform exposes Prometheus metrics:
-```
-# Backend metrics
-cmbcluster_active_users
-cmbcluster_pods_created_total
-cmbcluster_authentication_requests_total
-
-# Resource metrics  
-cmbcluster_cpu_usage
-cmbcluster_memory_usage
-cmbcluster_storage_usage
-```
-
-## Security
-
-### Authentication Flow
-```mermaid
-sequenceDiagram
-    participant U as User
-    participant P as Proxy
-    participant H as Hub  
-    participant G as Google OAuth
-    
-    U->>P: Access platform
-    P->>H: Check authentication
-    H->>G: Redirect to OAuth
-    G->>H: Return user info
-    H->>H: Create JWT token
-    H->>P: Redirect with token
-    P->>U: Access granted
-```
-
-### Security Features
-- **TLS 1.3**: All traffic encrypted in transit
-- **Network Policies**: Pod-to-pod communication restrictions
-- **Pod Security**: Non-root containers, read-only filesystems
-- **RBAC**: Kubernetes role-based access control
-- **Secrets Management**: Encrypted credential storage
-
-### Data Protection
-- **Workspace Isolation**: Each user has dedicated storage
-- **Encryption at Rest**: Persistent volumes encrypted
-- **Data Retention**: Configurable cleanup policies
-- **Backup Support**: Regular workspace backups
-
-## Troubleshooting
-
-### Common Issues
-
-#### Pod Won't Start
-```bash
-# Check pod status
-kubectl get pods -n cmbcluster
-kubectl describe pod  -n cmbcluster
-kubectl logs  -n cmbcluster
-
-# Common causes:
-# - Image pull errors
-# - Resource constraints  
-# - Storage mounting issues
-```
-
-#### Authentication Errors
-```bash
-# Check OAuth configuration
-kubectl get secret cmbcluster-secrets -n cmbcluster -o yaml
-
-# Verify redirect URLs in Google Cloud Console
-# Ensure domain matches configuration
-```
-
-#### Ingress Issues
-```bash
-# Check ingress status
-kubectl get ingress -n cmbcluster
-kubectl describe ingress cmbcluster-ingress -n cmbcluster
-
-# Verify certificates
-kubectl get certificates -n cmbcluster
-kubectl describe certificate cmbcluster-tls -n cmbcluster
-```
-
-#### Storage Problems
-```bash
-# Check persistent volumes
-kubectl get pv
-kubectl get pvc -n cmbcluster
-
-# Storage class issues
-kubectl get storageclass
-```
-
-### Debug Commands
-
-```bash
-# Get all resources
-kubectl get all -n cmbcluster
-
-# Check events
-kubectl get events -n cmbcluster --sort-by='.lastTimestamp'
-
-# Pod shell access (for debugging)
-kubectl exec -it  -n cmbcluster -- /bin/bash
-
-# Port forwarding for local access
-kubectl port-forward service/cmbcluster-backend 8000:80 -n cmbcluster
-```
-
-## Testing
-
-### Unit Tests
 ```bash
 # Backend tests
-cd backend
-python -m pytest tests/
+cd backend && python -m pytest tests/ -v
 
-# Frontend tests  
-cd frontend
-python -m pytest tests/
+# Frontend tests
+cd nextjs-frontend && npm test
+
+# Local integration test
+docker-compose up -d && sleep 30 && \
+  curl http://localhost:8000/health && \
+  curl http://localhost:3000/api/health
 ```
 
-### Integration Tests
-```bash
-# End-to-end testing
-pytest tests/integration/
+See [TESTING_README.md](TESTING_README.md) for test coverage details.
 
-# Load testing
-locust -f tests/load/locustfile.py
-```
+## 🐛 Troubleshooting
 
-### Development Testing
-```bash
-# Test local deployment
-make dev
-curl http://localhost:8000/health
-curl http://localhost:8501/_stcore/health
-```
+Common issues and solutions are documented in [TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md):
+- Pods won't start
+- Authentication errors
+- DNS/ingress issues
+- Storage problems
+- Performance tuning
 
-## Contributing
+## 📈 Roadmap
 
-We welcome contributions! Please see our [Contributing Guide](CONTRIBUTING.md) for details.
+### 
+- Core platform infrastructure ✅
+- Google OAuth integration ✅
+- Kubernetes pod orchestration ✅
+- Dashboard and API ✅
+- Enhanced monitoring (in progress)
+- Backup system (planned)
+- AWS EKS integration (in development)
+- Custom container images
+- Enterprise SSO (SAML/LDAP)
 
-### Development Workflow
+See full roadmap in [DEPLOYMENT.md](docs/DEPLOYMENT.md#roadmap).
 
-```bash
-# 1. Fork and clone repository
-git clone https://github.com/yourusername/cmbcluster.git
-cd cmbcluster
+## 🤝 Contributing
 
-# 2. Create feature branch
-git checkout -b feature/your-feature-name
+We welcome contributions! Please see our [CONTRIBUTING.md](CONTRIBUTING.md) for:
+- Development setup
+- Code standards
+- Pull request process
+- Testing requirements
 
-# 3. Make changes and test locally
-make dev
-make test
+## 📞 Support
 
-# 4. Commit and push
-git commit -m "Add your feature"
-git push origin feature/your-feature-name
-
-# 5. Create pull request
-```
-
-### Code Standards
-- **Python**: Follow PEP 8, use Black formatter
-- **Docker**: Multi-stage builds, minimal base images
-- **Kubernetes**: Follow security best practices
-- **Documentation**: Update README and inline docs
-
-## Roadmap
-
-### Near Term (Q1 2025)
-- [ ] **GPU Support**: CUDA-enabled environments for ML workloads
-- [ ] **Advanced Monitoring**: Grafana dashboards and alerting
-- [ ] **User Quotas**: Storage and compute limits per user
-- [ ] **Backup System**: Automated workspace backups
-
-### Medium Term (Q2-Q3 2025)
-- [ ] **Multi-cloud Support**: AWS EKS and Azure AKS deployment
-- [ ] **Jupyter Integration**: Built-in Jupyter notebook support
-- [ ] **Collaborative Features**: Real-time collaboration tools
-- [ ] **Data Pipeline Integration**: Connect with external data sources
-
-### Long Term (Q4 2025+)
-- [ ] **Enterprise SSO**: SAML and LDAP integration
-- [ ] **Advanced Analytics**: Usage analytics and cost optimization
-- [ ] **Custom Environments**: User-defined container images
-- [ ] **Federation**: Multi-cluster deployments
-
-## Support
-
-### Getting Help
-
-- 📚 **Documentation**: [GitHub Wiki](https://github.com/archetana/cmbcluster/wiki)
-- 🐛 **Bug Reports**: [Issue Tracker](https://github.com/archetana/cmbcluster/issues)
+- 📚 **Documentation**: See `docs/` directory
+- 🐛 **Bug Reports**: [GitHub Issues](https://github.com/archetana/cmbcluster/issues)
 - 💬 **Discussions**: [GitHub Discussions](https://github.com/archetana/cmbcluster/discussions)
 - 📧 **Email**: [support@cmbcluster.io](mailto:support@cmbcluster.io)
 
-### Community
+## 📄 License
 
-- **Slack**: Join our [CMBCluster Slack](https://cmbcluster.slack.com)
-- **Monthly Meetings**: First Friday of each month at 10 AM PST
-- **Office Hours**: Wednesdays 2-3 PM PST
+MIT License - see [LICENSE](LICENSE) file for details.
 
-## License
+---
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
-## Acknowledgments
-
-- Built on the [JupyterHub](https://jupyter.org/hub) architecture pattern
-- Inspired by the research community needs
-- Special thanks to early adopters and contributors
-- Container orchestration powered by [Kubernetes](https://kubernetes.io/)
-
-**CMBCluster** - Empowering research through scalable, secure, and collaborative computing environments.
-
-For more information, visit our [GitHub repository](https://github.com/archetana/cmbcluster) or contact us at [support@cmbcluster.io](mailto:support@cmbcluster.io).
-
-[1] https://pplx-res.cloudinary.com/image/private/user_uploads/55150389/b6a3b9f3-c4a1-40cc-a9f2-7cca9d35b398/image.jpg
+**Built with:** Kubernetes • FastAPI • Next.js • Docker • Helm  
+**Status:** ✅ Production Ready • **Version:** 1.0.0

@@ -78,7 +78,7 @@ function decodeBackendToken(token: string): { role?: string; [key: string]: any 
 function getAuthOptions(): NextAuthOptions {
   // Only validate at runtime when actually handling requests
   const isHandlingRequest = process.env.NODE_ENV === 'production' && !process.env.SKIP_ENV_VALIDATION;
-  
+
   if (isHandlingRequest) {
     if (!process.env.GOOGLE_CLIENT_ID || !process.env.GOOGLE_CLIENT_SECRET) {
       throw new Error('Missing required OAuth environment variables at runtime');
@@ -86,9 +86,16 @@ function getAuthOptions(): NextAuthOptions {
     if (!process.env.NEXTAUTH_SECRET) {
       throw new Error('NEXTAUTH_SECRET environment variable is required at runtime');
     }
+    if (!process.env.NEXTAUTH_URL) {
+      throw new Error('NEXTAUTH_URL environment variable is required at runtime (must be the public-facing URL)');
+    }
   }
 
   return {
+    // Explicit URL configuration for NextAuth
+    // IMPORTANT: This must be the public-facing URL as seen by the browser, not the internal K8s service URL
+    url: process.env.NEXTAUTH_URL,
+
     providers: [
       GoogleProvider({
         clientId: process.env.GOOGLE_CLIENT_ID || 'build-time-placeholder',
@@ -224,15 +231,20 @@ function getAuthOptions(): NextAuthOptions {
   },
   
   secret: process.env.NEXTAUTH_SECRET || 'build-time-placeholder',
-  
+
   // Security configurations
   useSecureCookies: process.env.NODE_ENV === 'production',
+
+  // Trust the proxy (NGINX Ingress, Load Balancer) for X-Forwarded-* headers
+  // This is critical for NextAuth to correctly identify the request origin when behind a proxy
+  trustHost: true,
+
   cookies: {
     sessionToken: {
       name: process.env.NODE_ENV === 'production' ? '__Secure-next-auth.session-token' : 'next-auth.session-token',
       options: {
         httpOnly: true,
-        sameSite: 'lax',
+        sameSite: 'none',
         path: '/',
         secure: process.env.NODE_ENV === 'production',
         maxAge: 8 * 60 * 60, // 8 hours
@@ -241,7 +253,7 @@ function getAuthOptions(): NextAuthOptions {
     callbackUrl: {
       name: process.env.NODE_ENV === 'production' ? '__Secure-next-auth.callback-url' : 'next-auth.callback-url',
       options: {
-        sameSite: 'lax',
+        sameSite: 'none',
         path: '/',
         secure: process.env.NODE_ENV === 'production',
       },
@@ -250,7 +262,7 @@ function getAuthOptions(): NextAuthOptions {
       name: process.env.NODE_ENV === 'production' ? '__Host-next-auth.csrf-token' : 'next-auth.csrf-token',
       options: {
         httpOnly: true,
-        sameSite: 'lax',
+        sameSite: 'none',
         path: '/',
         secure: process.env.NODE_ENV === 'production',
       },

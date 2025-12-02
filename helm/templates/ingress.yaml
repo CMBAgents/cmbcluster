@@ -53,17 +53,7 @@ spec:
           service:
             name: {{ include "cmbcluster.fullname" . }}-frontend
             port:
-              number: {{ .Values.frontend.service.port }}
-  - host: 22yash-tiwari-gmail-com-69124032.cmbcluster.34.16.97.178.nip.io
-    http:
-      paths:
-      - path: /
-        pathType: Prefix
-        backend:
-          service:
-            name: service-22yash-tiwari-gmail-com-69124032
-            port:
-              number: 80            
+              number: {{ .Values.frontend.service.port }}            
 
 # # Ingress for the dynamic user environments
 # # NOTE: The subdomain (e.g., jane-doe-google-com) must match the sanitized user email (safe_user_id) used in backend pod/service naming and environment URL.

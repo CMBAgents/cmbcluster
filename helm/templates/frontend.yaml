@@ -40,27 +40,15 @@ spec:
           value: "0.0.0.0"
         - name: API_URL
           value: "https://api.{{ .Values.ingress.baseDomain }}"
-        - name: NEXT_PUBLIC_API_URL
-          value: "https://api.{{ .Values.ingress.baseDomain }}"
         - name: BASE_DOMAIN
           value: "{{ .Values.ingress.baseDomain }}"
-        - name: NEXTAUTH_URL
-          value: "https://{{ .Values.ingress.baseDomain }}"
         - name: NEXT_TELEMETRY_DISABLED
           value: "1"
         - name: DEV_MODE
           value: "false"
         # Frontend-specific configuration
-        {{- if .Values.frontend.config }}
-        {{- if .Values.frontend.config.nextAuthUrl }}
-        - name: NEXTAUTH_URL
-          value: {{ .Values.frontend.config.nextAuthUrl | quote }}
-        {{- end }}
-        {{- if .Values.frontend.config.apiUrl }}
-        - name: NEXT_PUBLIC_API_URL
-          value: {{ .Values.frontend.config.apiUrl | quote }}
-        {{- end }}
-        {{- end }}
+        # Note: NEXTAUTH_URL and NEXT_PUBLIC_API_URL are set from secrets below, not from helm values
+        # This ensures they are correctly set by deploy.sh from the .env file
         # Application branding
         - name: NEXT_PUBLIC_APP_TITLE
           value: {{ .Values.frontend.config.appTitle | default "CMBAgent Cloud" | quote }}
