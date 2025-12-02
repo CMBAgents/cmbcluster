@@ -608,13 +608,10 @@ kubectl get secret cmbcluster-tls -n cmbcluster -o jsonpath='{.data.tls\.crt}' |
 
 ## Roadmap
 
-### Q1 2025
+
 - [x] Core infrastructure
 - [x] Basic monitoring
 - [ ] Enhanced alerting
-
-### Q2-Q4 2025
-- [ ] Multi-region deployment
 - [ ] Disaster recovery automation
 - [ ] Advanced cost optimization
 - [ ] Multi-cloud federation
