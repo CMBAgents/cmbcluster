@@ -248,9 +248,8 @@ We welcome contributions! Please see our [CONTRIBUTING.md](CONTRIBUTING.md) for:
 ## 📞 Support
 
 - 📚 **Documentation**: See `docs/` directory
-- 🐛 **Bug Reports**: [GitHub Issues](https://github.com/archetana/cmbcluster/issues)
-- 💬 **Discussions**: [GitHub Discussions](https://github.com/archetana/cmbcluster/discussions)
-- 📧 **Email**: [support@cmbcluster.io](mailto:support@cmbcluster.io)
+- 🐛 **Bug Reports**: [GitHub Issues](https://github.com/CMBAgents/cmbcluster/issues)
+- 💬 **Discussions**: [GitHub Discussions](https://github.com/CMBAgents/cmbcluster/discussions)
 
 ## 📄 License
 
